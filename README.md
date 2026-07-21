@@ -11,8 +11,8 @@ Strikt lagerindelning. Varje lager är frikopplat och byggs nerifrån och upp:
 ```
 Td5        (identifiers, datakonvertering, seed/key)
 KWP2000    (10/27/3E/21 … standardtjänster)
-K-Line     (checksumma, paketformat, fast init, timeout, retries)
-Transport  (rå bytes in/ut — ingen protokollkunskap)   ← implementerat nu
+K-Line     (checksumma, paketformat, fast init, timeout, retries)   ← implementerat
+Transport  (rå bytes in/ut — ingen protokollkunskap)                ← implementerat
 ```
 
 Inget ovanför transportlagret vet *hur* bytesen färdas:
@@ -61,7 +61,7 @@ Testerna kör utan hårdvara via pyserials `loop://`-ekoport.
 ## Status
 
 - [x] Transport (SerialTransport, LoggingTransport, tester)
-- [ ] K-Line (fast init, checksumma, ramformat)
+- [x] K-Line (ramformat + checksumma, fast init, eko-hantering, timeout/retries)
 - [ ] KWP2000 (StartDiagnosticSession, TesterPresent, SecurityAccess, ReadDataByLocalIdentifier, faults)
 - [ ] Td5 (identifiers 21 xx, rpm/coolant/…, seed/key)
 
