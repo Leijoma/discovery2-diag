@@ -1,9 +1,11 @@
 """K-Line-lagret: fast init, ram-I/O, eko-hantering, timeout och retries.
 
 Ligger ovanpå en :class:`~d2diag.transport.base.Transport` och under KWP2000.
-Känner till ramformat och init-handskakning — men ingenting om KWP2000-tjänster
-eller Td5. K-Line är halv-duplex: varje sänd byte ekar tillbaka och sväljs innan
-svaret läses.
+K-Line är halv-duplex: varje sänd byte ekar tillbaka och sväljs innan svaret läses.
+
+Td5-flödet: ``fast_init()`` skickar den *adresserade* StartCommunication-ramen;
+därefter körs sessionen med *oadresserade* ramar via ``request()``. ``read_frame``
+hanterar båda formaten automatiskt (avläser formatbytens adressbitar).
 """
 from __future__ import annotations
 
@@ -67,20 +69,22 @@ class KLine:
 
     # ---- init --------------------------------------------------------- #
     def fast_init(self, start_communication: bytes = DEFAULT_START_COMMUNICATION) -> bytes:
-        """Kör fast init och returnerar StartCommunication-svarets datafält."""
+        """Kör fast init (adresserad StartCommunication) och returnerar svarets
+        datafält (t.ex. nyckelbytes)."""
         send_break = getattr(self._t, "send_break", None)
         if send_break is None:
             raise KLineError("transporten saknar send_break() — krävs för fast init")
         self._flush_input()
         send_break(_FAST_INIT_LOW)   # K-line låg 25 ms
         time.sleep(_FAST_INIT_HIGH)  # K-line hög 25 ms
-        return self.request(start_communication)
+        return self.request(start_communication, addressed=True)
 
     # ---- request/response --------------------------------------------- #
-    def request(self, data: bytes, retries: int = 2) -> bytes:
+    def request(self, data: bytes, retries: int = 2, addressed: bool = False) -> bytes:
         """Skicka ett datafält, returnera svarets datafält. Försöker om vid
-        timeout eller trasig ram."""
-        frame = encode(data, self._target, self._source)
+        timeout eller trasig ram. Sessionstrafik är oadresserad (``addressed=False``);
+        fast init använder ``addressed=True``."""
+        frame = encode(data, self._target, self._source, addressed=addressed)
         last: Exception | None = None
         for _ in range(retries + 1):
             self._flush_input()
@@ -93,13 +97,15 @@ class KLine:
         raise last
 
     def read_frame(self, timeout: "float | None" = None) -> DecodedFrame:
-        """Läs och avkoda en hel ram från transporten."""
+        """Läs och avkoda en hel ram (adresserad eller oadresserad)."""
         deadline = time.monotonic() + (self._timeout if timeout is None else timeout)
         fmt = self._read_exact(1, deadline)
         parts = bytearray(fmt)
-        if ((fmt[0] >> 6) & 0x03) not in (0b10, 0b11):
+        mode = (fmt[0] >> 6) & 0x03
+        if mode in (0b10, 0b11):
+            parts += self._read_exact(2, deadline)  # Tgt + Src
+        elif mode != 0b00:
             raise FrameError(f"ostött adressläge i format 0x{fmt[0]:02X}")
-        parts += self._read_exact(2, deadline)  # Tgt + Src
         length = fmt[0] & 0x3F
         if length == 0:
             length_byte = self._read_exact(1, deadline)

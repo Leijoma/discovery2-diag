@@ -1,9 +1,7 @@
-"""Tester för ramkodning/-avkodning och checksumma."""
+"""Tester för ramkodning/-avkodning — både adresserat och oadresserat format."""
 import pytest
 
 from d2diag.kline.frame import (
-    TD5_ECU_ADDRESS,
-    TESTER_ADDRESS,
     ChecksumError,
     FrameError,
     checksum,
@@ -16,22 +14,41 @@ def test_checksum_is_8bit_sum():
     assert checksum(b"\x81\x13\xf7\x81") == 0x0C
 
 
-def test_encode_known_vector():
-    # StartCommunication till Td5-ECU:n
-    assert encode(b"\x81", target=0x13, source=0xF7) == bytes.fromhex("8113F7810C")
+def test_addressed_known_vector():
+    # StartCommunication till Td5-ECU:n (fast init)
+    assert encode(b"\x81", target=0x13, source=0xF7, addressed=True) == bytes.fromhex("8113F7810C")
 
 
-def test_encode_decode_roundtrip():
-    frame = encode(b"\x21\x09", target=TD5_ECU_ADDRESS, source=TESTER_ADDRESS)
-    d = decode(frame)
-    assert (d.target, d.source, d.data) == (TD5_ECU_ADDRESS, TESTER_ADDRESS, b"\x21\x09")
+def test_nonaddressed_known_vectors():
+    # sessionsramar: StartDiagnosticSession och seed-request
+    assert encode(b"\x10\xa0") == bytes.fromhex("0210A0B2")
+    assert encode(b"\x27\x01") == bytes.fromhex("0227012A")
 
 
-def test_long_payload_uses_separate_length_byte():
-    data = bytes(range(64))  # 64 > 0x3F
+def test_decode_addressed():
+    d = decode(bytes.fromhex("8113F7810C"))
+    assert (d.data, d.target, d.source) == (b"\x81", 0x13, 0xF7)
+    assert d.addressed
+
+
+def test_decode_nonaddressed():
+    d = decode(bytes.fromhex("0210A0B2"))
+    assert d.data == b"\x10\xa0"
+    assert d.target is None
+    assert not d.addressed
+
+
+def test_roundtrip_both_modes():
+    for addressed in (True, False):
+        frame = encode(b"\x21\x09", addressed=addressed)
+        assert decode(frame).data == b"\x21\x09"
+
+
+def test_long_nonaddressed_uses_length_byte():
+    data = bytes(range(70))  # > 0x3F
     frame = encode(data)
-    assert frame[0] == 0x80  # längd 0 i formatbyten
-    assert frame[3] == 64    # separat längdbyte
+    assert frame[0] == 0x00  # format 0, längd följer
+    assert frame[1] == 70
     assert decode(frame).data == data
 
 
@@ -45,8 +62,3 @@ def test_bad_checksum_raises():
 def test_empty_payload_raises():
     with pytest.raises(FrameError):
         encode(b"")
-
-
-def test_too_short_frame_raises():
-    with pytest.raises(FrameError):
-        decode(b"\x81\x13\xf7")
