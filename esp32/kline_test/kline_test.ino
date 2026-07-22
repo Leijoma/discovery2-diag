@@ -10,10 +10,10 @@
 
 #include <Arduino.h>
 
-static const int      PIN_KRX      = 16;
-static const int      PIN_KTX      = 17;
+static const int      PIN_KRX      = 16;   // Q2-kollektor -> GPIO16
+static const int      PIN_KTX      = 17;   // GPIO17 -> 4,7k -> Q1-bas
 static const uint32_t KLINE_BAUD   = 10400;
-static const bool     KLINE_INVERT = false;   // true om din interface inverterar
+static const bool     KLINE_INVERT = true;    // 2-transistorkretsen inverterar båda grenar
 
 // Td5-adresser
 static const uint8_t ECU_ADDR    = 0x13;
@@ -93,11 +93,33 @@ static void klineSelfTest() {
   else                         Serial.println("Self-test: INGET eko — kolla TX/RX/transceiver/pull-up/12V");
 }
 
+// DC-nivådiagnostik: driv TX, läs RX direkt. Visar om loopen sluts alls, om
+// den inverterar, eller om TX/RX är omkastade — oberoende av UART-timing.
+static void klineLineDiag() {
+  Serial2.end();
+  pinMode(PIN_KTX, OUTPUT);
+  pinMode(PIN_KRX, INPUT);
+  digitalWrite(PIN_KTX, HIGH); delay(5);
+  int rxIdle = digitalRead(PIN_KRX);
+  digitalWrite(PIN_KTX, LOW);  delay(5);
+  int rxLow = digitalRead(PIN_KRX);
+  digitalWrite(PIN_KTX, HIGH); delay(5);
+  Serial.print("Linjediag: TX=HIGH -> RX="); Serial.print(rxIdle);
+  Serial.print("   TX=LOW -> RX="); Serial.println(rxLow);
+  if (rxIdle == 1 && rxLow == 0)
+    Serial.println("  => loopen sluts, icke-inverterat (bra); KLINE_INVERT=false ar ratt");
+  else if (rxIdle == 0 && rxLow == 1)
+    Serial.println("  => INVERTERAT => satt KLINE_INVERT=true");
+  else
+    Serial.println("  => RX foljer INTE TX: bruten loop / ingen 12V / TX-RX omkastade");
+  Serial2.begin(KLINE_BAUD, SERIAL_8N1, PIN_KRX, PIN_KTX, KLINE_INVERT);
+}
+
 void setup() {
   Serial.begin(115200);
   delay(500);
   Serial.println("\n== Td5 K-Line bring-up (ESP32 UART2 16/17, 10400 8N1) ==");
-  Serial2.begin(KLINE_BAUD, SERIAL_8N1, PIN_KRX, PIN_KTX, KLINE_INVERT);
+  klineLineDiag();
   delay(50);
   klineSelfTest();
   Serial.println("Skicka valfritt tecken i seriemonitorn for fast init + StartCommunication.");
