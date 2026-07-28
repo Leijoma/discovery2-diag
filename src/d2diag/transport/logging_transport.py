@@ -65,6 +65,14 @@ class LoggingTransport(Transport):
             self._log("RX", data)
         return data
 
+    def __getattr__(self, name: str):
+        # Delegera seriell lågnivåkontroll (send_break, reset_input_buffer,
+        # baudrate …) till den inre transporten, så wrappern inte döljer dem
+        # för K-Line-lagret. Anropas bara för attribut som inte finns här.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return getattr(self._inner, name)
+
     def _log(self, direction: str, data: bytes) -> None:
         line = f"{_timestamp()} {direction} {_hex(data)}"
         if self._fh is not None:

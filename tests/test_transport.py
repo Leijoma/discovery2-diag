@@ -39,3 +39,32 @@ def test_logging_transport_is_a_transport():
     from d2diag.transport import Transport
 
     assert isinstance(LoggingTransport(SerialTransport(url="loop://")), Transport)
+
+
+def test_logging_transport_delegates_serial_hooks():
+    # send_break/reset_input_buffer måste nå den inre transporten, annars döljer
+    # wrappern dem för K-Line-lagrets fast init.
+    from d2diag.transport import Transport
+
+    class _Inner(Transport):
+        def __init__(self):
+            self.broke = None
+
+        def open(self):
+            self._is_open = True
+
+        def close(self):
+            self._is_open = False
+
+        def send(self, data):
+            return len(data)
+
+        def receive(self, size=1, timeout=None):
+            return b""
+
+        def send_break(self, duration=0.025):
+            self.broke = duration
+
+    inner = _Inner()
+    LoggingTransport(inner).send_break(0.025)
+    assert inner.broke == 0.025
