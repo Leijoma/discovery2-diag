@@ -24,8 +24,14 @@ def main() -> int:
         except KLineError as exc:
             print(f"Ingen kontakt: {exc}")
             return 1
-    print(f"StartCommunication-svar: {data.hex(' ')}")
-    print("Kontakt med ECU:n! Nästa steg: StartDiagnosticSession + identifiers.")
+    print(f"Svar: {data.hex(' ')}")
+    if data[:1] == b"\xc1":
+        print(f"POSITIVT StartCommunication — nyckelbytes {data[1:].hex(' ')}")
+        print("ECU:n i diag-läge. Nästa: StartDiagnosticSession (10 A0) + identifiers.")
+    elif data[:1] == b"\x7f":
+        nrc = data[2] if len(data) > 2 else 0
+        print(f"Negativt (NRC 0x{nrc:02X}) — troligen redan i session; "
+              "vänta ut timeouten (~5 s) och kör igen.")
     return 0
 
 

@@ -87,7 +87,9 @@ class KLine:
                 )
             send_break(_FAST_INIT_LOW)
         time.sleep(_FAST_INIT_HIGH)  # K-line hög innan StartCommunication
-        return self.request(start_communication, addressed=True)
+        # Ingen retry: StartCommunication ska skickas EN gång. Lyckas den öppnas
+        # sessionen; en omsändning avvisas då (generalReject "redan i session").
+        return self.request(start_communication, addressed=True, retries=0)
 
     # ---- request/response --------------------------------------------- #
     def request(self, data: bytes, retries: int = 2, addressed: bool = False) -> bytes:
