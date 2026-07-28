@@ -100,8 +100,10 @@ class KLine:
         last: Exception | None = None
         for _ in range(retries + 1):
             self._flush_input()
-            self._send(frame)
+            self._t.send(frame)
             try:
+                if self._echo:
+                    self._skip_echo(frame)  # halv-duplex: kasta vårt eget eko
                 return self.read_frame().data
             except (KLineTimeout, ChecksumError, FrameError) as exc:
                 last = exc
@@ -153,6 +155,8 @@ class KLine:
                     continue
                 length = buf[idx]
                 idx += 1
+            if length < 1:
+                continue  # tom ram = falskt positivt i brus, hoppa
             end = idx + length
             if end + 1 > n:
                 continue  # ofullständig för den här startpunkten
@@ -163,28 +167,23 @@ class KLine:
         return None, 0
 
     # ---- lågnivå ------------------------------------------------------ #
-    def _send(self, frame: bytes) -> None:
-        self._t.send(frame)
-        if self._echo:
-            deadline = time.monotonic() + self._timeout
-            echo = self._read_exact(len(frame), deadline)
-            if echo != frame:
-                raise KLineError(
-                    f"eko matchar inte sänt: {echo.hex(' ')} != {frame.hex(' ')}"
-                )
-
-    def _read_exact(self, n: int, deadline: float) -> bytes:
-        buf = bytearray()
-        while len(buf) < n:
+    def _skip_echo(self, frame: bytes) -> None:
+        """Läs tills vår egen sända ram ekats tillbaka; kasta allt t.o.m. ekot
+        (inkl. ev. glitch-byte före). K-line är halv-duplex."""
+        deadline = time.monotonic() + self._timeout
+        while True:
+            idx = bytes(self._rxbuf).find(frame)
+            if idx >= 0:
+                del self._rxbuf[: idx + len(frame)]
+                return
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise KLineTimeout(f"timeout: fick {len(buf)}/{n} bytes")
-            chunk = self._t.receive(n - len(buf), timeout=remaining)
+                raise KLineTimeout(f"eko uteblev (buffert: {bytes(self._rxbuf).hex(' ')})")
+            chunk = self._t.receive(64, timeout=remaining)
             if chunk:
-                buf += chunk
+                self._rxbuf += chunk
             else:
-                time.sleep(0.001)  # undvik busy-spin i väntan på bytes
-        return bytes(buf)
+                time.sleep(0.001)
 
     def _flush_input(self) -> None:
         self._rxbuf.clear()
