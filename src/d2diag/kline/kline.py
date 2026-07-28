@@ -52,6 +52,7 @@ class KLine:
         self._source = source
         self._timeout = timeout
         self._echo = echo
+        self._rxbuf = bytearray()  # kvarvarande bytes mellan ramar (resync)
 
     # ---- livscykel ---------------------------------------------------- #
     def open(self) -> None:
@@ -97,23 +98,58 @@ class KLine:
         raise last
 
     def read_frame(self, timeout: "float | None" = None) -> DecodedFrame:
-        """Läs och avkoda en hel ram (adresserad eller oadresserad)."""
+        """Läs och avkoda en ram — robust mot skräp i början.
+
+        K-line är halv-duplex, och vid vändningen (vår TX → ECU:ns svar) kan en
+        glitch-byte (t.ex. 0xF8/0x00) smyga in före den riktiga ramen. Istället
+        för att strikt tolka första byten som formatbyte samlar vi bytes och
+        returnerar första ram med **giltig checksumma**. Bytes efter ramen (t.ex.
+        ett efterföljande svar vid responsePending) sparas till nästa anrop.
+        """
         deadline = time.monotonic() + (self._timeout if timeout is None else timeout)
-        fmt = self._read_exact(1, deadline)
-        parts = bytearray(fmt)
-        mode = (fmt[0] >> 6) & 0x03
-        if mode in (0b10, 0b11):
-            parts += self._read_exact(2, deadline)  # Tgt + Src
-        elif mode != 0b00:
-            raise FrameError(f"ostött adressläge i format 0x{fmt[0]:02X}")
-        length = fmt[0] & 0x3F
-        if length == 0:
-            length_byte = self._read_exact(1, deadline)
-            parts += length_byte
-            length = length_byte[0]
-        parts += self._read_exact(length, deadline)  # data
-        parts += self._read_exact(1, deadline)       # checksumma
-        return decode(bytes(parts))
+        while True:
+            frame, consumed = self._scan_for_frame(self._rxbuf)
+            if frame is not None:
+                del self._rxbuf[:consumed]  # ta bort ev. glitch + ramen
+                return frame
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise KLineTimeout(
+                    f"timeout: ingen giltig ram (buffert: {bytes(self._rxbuf).hex(' ')})"
+                )
+            chunk = self._t.receive(64, timeout=remaining)
+            if chunk:
+                self._rxbuf += chunk
+            else:
+                time.sleep(0.001)
+
+    @staticmethod
+    def _scan_for_frame(buf: "bytearray") -> "tuple[DecodedFrame | None, int]":
+        """Sök första giltiga ramen i bufferten. Returnerar (ram, antal bytes att
+        förbruka t.o.m. ramen) eller (None, 0) om ingen komplett giltig ram finns."""
+        n = len(buf)
+        for start in range(n):
+            fmt = buf[start]
+            mode = (fmt >> 6) & 0x03
+            idx = start + 1
+            if mode in (0b10, 0b11):
+                idx += 2  # Tgt + Src
+            elif mode != 0b00:
+                continue  # ostött adressläge — skräp, hoppa fram
+            length = fmt & 0x3F
+            if length == 0:
+                if idx >= n:
+                    continue
+                length = buf[idx]
+                idx += 1
+            end = idx + length
+            if end + 1 > n:
+                continue  # ofullständig för den här startpunkten
+            try:
+                return decode(bytes(buf[start : end + 1])), end + 1
+            except (FrameError, ChecksumError):
+                continue
+        return None, 0
 
     # ---- lågnivå ------------------------------------------------------ #
     def _send(self, frame: bytes) -> None:
@@ -140,6 +176,7 @@ class KLine:
         return bytes(buf)
 
     def _flush_input(self) -> None:
+        self._rxbuf.clear()
         flush = getattr(self._t, "reset_input_buffer", None)
         if flush is not None:
             flush()

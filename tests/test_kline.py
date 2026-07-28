@@ -4,7 +4,6 @@ import pytest
 from d2diag.kline import (
     TD5_ECU_ADDRESS,
     TESTER_ADDRESS,
-    ChecksumError,
     KLine,
     KLineTimeout,
     encode,
@@ -52,10 +51,21 @@ def test_timeout_when_no_response():
             k.request(b"\x81", retries=0)
 
 
-def test_checksum_error_retries_then_raises():
+def test_corrupt_frame_is_skipped_and_times_out():
+    # Med resync hoppas trasiga ramar över; finns ingen giltig ram → timeout.
     req = encode(b"\x21\x08", addressed=False)
     ecu = FakeKLineEcu({req: _session_response(b"\x61\x08\x00")}, corrupt=True)
-    with KLine(ecu) as k:
-        with pytest.raises(ChecksumError):
+    with KLine(ecu, timeout=0.05) as k:
+        with pytest.raises(KLineTimeout):
             k.request(b"\x21\x08", retries=1)
     assert len(ecu.sent) == 2  # ursprungsförsök + 1 retry
+
+
+def test_request_resyncs_past_leading_glitch():
+    # Halvduplex-vändningen kan lägga en glitch-byte före ECU:ns ram — jfr den
+    # riktiga Td5-loggen: F8 före 03 7F 81 10 13. Den ska hoppas över.
+    req = encode(b"\x81", addressed=False)
+    resp = encode(b"\x7f\x81\x10", addressed=False)  # = 03 7F 81 10 13
+    ecu = FakeKLineEcu({req: b"\xf8" + resp})
+    with KLine(ecu) as k:
+        assert k.request(b"\x81") == b"\x7f\x81\x10"
