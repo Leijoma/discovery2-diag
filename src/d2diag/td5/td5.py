@@ -1,12 +1,13 @@
 """Td5-lagret: Td5-specifik logik ovanpå KWP2000.
 
-Just nu: diagnostiksession och SecurityAccess (seed→key). Identifiers och
-datakonvertering (rpm, kylvätsketemp, injektorbalans …) läggs till när vi kan
-verifiera skalningen mot en riktig ECU.
+Diagnostiksession, SecurityAccess (seed→key) och avläsning av identifiers med
+skalning till fysiska värden (rpm, temperaturer, batterispänning, injektorbalans …).
+Skalningen kommer från protokollreferensen — bör bekräftas mot bilen.
 """
 from __future__ import annotations
 
 from ..kwp2000.kwp2000 import KWP2000
+from .identifiers import BY_NAME, LIDS, decode_lid
 from .keygen import key_bytes_from_seed
 
 TD5_DIAGNOSTIC_SESSION = 0xA0
@@ -43,3 +44,32 @@ class Td5:
             raise ValueError(f"oväntad seed-längd: {seed.hex(' ')}")
         key = key_bytes_from_seed(seed[0], seed[1])
         self._kwp.send_key(key, _SECURITY_LEVEL_KEY)
+
+    # ---- avläsning av livedata --------------------------------------- #
+    def read_lid(self, lid: int) -> "dict[str, float]":
+        """Läs en identifier (21 xx) och avkoda alla signaler i den."""
+        return decode_lid(lid, self._kwp.read_local_identifier(lid))
+
+    def read(self, name: str) -> float:
+        """Läs en enskild signal per namn, t.ex. 'rpm' eller 'coolant_temp'."""
+        return self.read_lid(BY_NAME[name].lid)[name]
+
+    def read_all(self) -> "dict[str, float]":
+        """Läs alla kända LID:er → {signalnamn: värde}. En LID som felar hoppas över."""
+        out: "dict[str, float]" = {}
+        for lid in LIDS:
+            try:
+                out.update(self.read_lid(lid))
+            except Exception:  # noqa: BLE001
+                pass
+        return out
+
+    # bekvämlighet
+    def rpm(self) -> float:
+        return self.read("rpm")
+
+    def coolant_temp(self) -> float:
+        return self.read("coolant_temp")
+
+    def battery_voltage(self) -> float:
+        return self.read("battery")
