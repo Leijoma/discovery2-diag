@@ -38,3 +38,12 @@
 identifiers). Ingen källkod därifrån är kopierad — repot saknar licens, så endast
 icke-skyddbara fakta om protokollet har använts. Krediter i det projektet till
 OffTrack (ECU-disassembly) och Luca72 (Arduino-referens).
+
+## muki01/OBD2_K-line_Reader — K-line-referens (MIT)
+
+[muki01/OBD2_K-line_Reader](https://registry.platformio.org/libraries/muki01/OBD2%20K-Line)
+— OBD2 K-line-bibliotek (ISO 9141 / ISO 14230) för Arduino/ESP32, **MIT-licens**.
+En arkiverad kopia (Basic_Code + Schematics) finns i `references/muki01_OBD2_K-line_Reader/`
+som referens för ESP32-porten (fast init-timing, burst-läsning, L9637D-interface). MIT
+tillåter återanvändning med bibehållen upphovsrätts- och licensnotis; behåll denna
+attribution om kod därifrån portas in.

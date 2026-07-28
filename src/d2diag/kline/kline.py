@@ -103,8 +103,8 @@ class KLine:
             self._t.send(frame)
             try:
                 if self._echo:
-                    self._skip_echo(frame)  # halv-duplex: kasta vårt eget eko
-                return self.read_frame().data
+                    self.read_frame()  # konsumera vårt eget eko (första giltiga ram)
+                return self.read_frame().data  # svaret = nästa giltiga ram
             except (KLineTimeout, ChecksumError, FrameError) as exc:
                 last = exc
         assert last is not None
@@ -167,24 +167,6 @@ class KLine:
         return None, 0
 
     # ---- lågnivå ------------------------------------------------------ #
-    def _skip_echo(self, frame: bytes) -> None:
-        """Läs tills vår egen sända ram ekats tillbaka; kasta allt t.o.m. ekot
-        (inkl. ev. glitch-byte före). K-line är halv-duplex."""
-        deadline = time.monotonic() + self._timeout
-        while True:
-            idx = bytes(self._rxbuf).find(frame)
-            if idx >= 0:
-                del self._rxbuf[: idx + len(frame)]
-                return
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise KLineTimeout(f"eko uteblev (buffert: {bytes(self._rxbuf).hex(' ')})")
-            chunk = self._t.receive(64, timeout=remaining)
-            if chunk:
-                self._rxbuf += chunk
-            else:
-                time.sleep(0.001)
-
     def _flush_input(self) -> None:
         self._rxbuf.clear()
         flush = getattr(self._t, "reset_input_buffer", None)

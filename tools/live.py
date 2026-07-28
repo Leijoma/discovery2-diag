@@ -13,7 +13,7 @@ from d2diag.td5 import LIDS, Td5, decode_lid, signals_for_lid
 from d2diag.transport import SerialTransport
 
 
-def open_session(kline: KLine, tries: int = 8) -> bool:
+def open_session(kline: KLine, tries: int = 12) -> bool:
     for i in range(tries):
         try:
             sc = kline.fast_init()
@@ -21,10 +21,14 @@ def open_session(kline: KLine, tries: int = 8) -> bool:
             print(f"  init {i + 1}: brus/timeout, försöker igen")
             continue
         if sc[:1] == b"\xc1":
+            print(f"  init {i + 1}: C1 — färsk session, nyckelbytes {sc[1:].hex(' ')}")
             return True
         if sc[:1] == b"\x7f":
-            print(f"  init {i + 1}: 7F (session redan öppen) — väntar ut timeout")
-            time.sleep(6)
+            # generalReject = sessionen är redan öppen (vi missade C1 i bruset).
+            # Fortsätt — sessionen finns.
+            print(f"  init {i + 1}: 7F — session redan öppen, kör vidare")
+            return True
+        print(f"  init {i + 1}: oväntat {sc.hex(' ') or 'tomt'}")
     return False
 
 
