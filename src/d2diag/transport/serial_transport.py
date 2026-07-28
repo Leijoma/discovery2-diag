@@ -83,11 +83,34 @@ class SerialTransport(Transport):
             self._ser.baudrate = value
 
     def send_break(self, duration: float = 0.025) -> None:
-        """Håll K-Line låg i ``duration`` sekunder (bl.a. för fast init)."""
+        """Håll K-Line låg i ``duration`` sekunder via UART-break.
+
+        OBS: break-längden styrs av OS-schemaläggaren och jittrar på icke-realtids-
+        OS. Föredra :meth:`fast_init_low` för deterministisk init-puls.
+        """
         ser = self._require_open()
         ser.break_condition = True
         time.sleep(duration)
         ser.break_condition = False
+
+    def fast_init_low(self, low_seconds: float = 0.025) -> None:
+        """Deterministisk låg-puls för ISO 14230 fast init — utan OS-timad break.
+
+        Sänk baudraten och skicka EN 0x00-byte: startbit + 8 nollor = 9 låga bitar
+        i rad. Pulslängden bestäms av UART:ens bitklocka (hårdvara), inte av OS:ets
+        schemaläggare, så den är stabil även över USB. 9 bitar / ``low_seconds``
+        ger baudraten (≈360 baud för 25 ms).
+        """
+        ser = self._require_open()
+        baud = max(1, round(9 / low_seconds))
+        original = ser.baudrate
+        try:
+            ser.baudrate = baud
+            ser.write(b"\x00")
+            ser.flush()  # blockera tills byten är fysiskt utsänd
+        finally:
+            ser.baudrate = original
+        ser.reset_input_buffer()  # kasta ekot av puls-byten
 
     def reset_input_buffer(self) -> None:
         self._require_open().reset_input_buffer()

@@ -41,6 +41,14 @@ def test_logging_transport_is_a_transport():
     assert isinstance(LoggingTransport(SerialTransport(url="loop://")), Transport)
 
 
+def test_serial_fast_init_low_restores_baud_and_flushes_echo():
+    # Baud-drop-pulsen: sänk baud, skicka 0x00, återställ baud, töm ekot.
+    with SerialTransport(url="loop://", baudrate=10400, timeout=0.3) as t:
+        t.fast_init_low(0.025)
+        assert t.baudrate == 10400          # baud återställd efteråt
+        assert t.receive(1, timeout=0.05) == b""  # ekot av puls-byten tömt
+
+
 def test_logging_transport_delegates_serial_hooks():
     # send_break/reset_input_buffer måste nå den inre transporten, annars döljer
     # wrappern dem för K-Line-lagrets fast init.

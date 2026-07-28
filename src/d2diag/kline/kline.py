@@ -72,12 +72,21 @@ class KLine:
     def fast_init(self, start_communication: bytes = DEFAULT_START_COMMUNICATION) -> bytes:
         """Kör fast init (adresserad StartCommunication) och returnerar svarets
         datafält (t.ex. nyckelbytes)."""
-        send_break = getattr(self._t, "send_break", None)
-        if send_break is None:
-            raise KLineError("transporten saknar send_break() — krävs för fast init")
         self._flush_input()
-        send_break(_FAST_INIT_LOW)   # K-line låg 25 ms
-        time.sleep(_FAST_INIT_HIGH)  # K-line hög 25 ms
+        # Deterministisk låg-puls: föredra baud-drop (0x00 @ ~360 baud) framför
+        # OS-timad break, vars längd jittrar på icke-realtids-OS och gör att Td5:an
+        # aldrig går in i diag-läge (03 7F 81 10 = generalReject).
+        pulse = getattr(self._t, "fast_init_low", None)
+        if pulse is not None:
+            pulse(_FAST_INIT_LOW)
+        else:
+            send_break = getattr(self._t, "send_break", None)
+            if send_break is None:
+                raise KLineError(
+                    "transporten saknar fast_init_low()/send_break() — krävs för fast init"
+                )
+            send_break(_FAST_INIT_LOW)
+        time.sleep(_FAST_INIT_HIGH)  # K-line hög innan StartCommunication
         return self.request(start_communication, addressed=True)
 
     # ---- request/response --------------------------------------------- #
