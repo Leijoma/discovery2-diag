@@ -7,6 +7,7 @@ kommandon (ej implementerad än).
 from __future__ import annotations
 
 import json
+import queue
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -33,10 +34,14 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         if self.path == "/command":
-            # Framtida läs/skriv av specifika fält (radera felkoder, skriv settings).
-            self._json(
-                {"ok": False, "error": "skrivkommandon ej implementerade än"}, code=501
-            )
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                cmd = json.loads(raw or b"{}")
+            except (ValueError, TypeError):
+                cmd = {}
+            result = self.server.enqueue_command(cmd)
+            self._json(result, code=200 if result.get("ok") else 400)
         else:
             self.send_error(404)
 
@@ -93,10 +98,36 @@ class DiagServer(ThreadingHTTPServer):
             "status": "connecting", "source": source.name, "signals": {}, "faults": []
         }
         self._stop = threading.Event()
+        self._commands: "queue.Queue" = queue.Queue()
         self._poller = threading.Thread(target=self._poll_loop, daemon=True)
+
+    def enqueue_command(self, cmd: "dict", timeout: float = 8.0) -> "dict":
+        """Köa ett skrivkommando till pollertråden och vänta på resultatet.
+
+        Serialiseras med pollningen så K-line-åtkomsten aldrig krockar."""
+        holder = {"result": None, "event": threading.Event()}
+        self._commands.put((cmd, holder))
+        if holder["event"].wait(timeout):
+            return holder["result"]
+        return {"ok": False, "error": "timeout — inget svar från diagnostiklagret"}
+
+    def _drain_commands(self) -> None:
+        while True:
+            try:
+                cmd, holder = self._commands.get_nowait()
+            except queue.Empty:
+                return
+            try:
+                holder["result"] = self.source.command(
+                    cmd.get("action", ""), cmd.get("params")
+                )
+            except Exception as exc:  # noqa: BLE001
+                holder["result"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+            holder["event"].set()
 
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
+            self._drain_commands()  # skrivningar först, serialiserat med poll
             try:
                 self.latest = self.source.poll()
             except Exception as exc:  # noqa: BLE001

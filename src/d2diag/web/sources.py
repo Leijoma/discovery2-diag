@@ -30,15 +30,29 @@ class DataSource(abc.ABC):
     def poll(self) -> "dict":
         """Returnera {status, signals, faults, error?}."""
 
+    def command(self, action: str, params: "dict | None" = None) -> "dict":
+        """Utför ett skrivkommando. Bas: okänt. Returnerar {ok, message|error}.
+
+        Körs i pollertråden (serialiserat med poll) så K-line-åtkomsten aldrig
+        krockar. Skrivningar mot ECU:n är känsliga — bara uttryckligt stödda
+        åtgärder tillåts; riskabla (ställdonstester, settings) exponeras inte här.
+        """
+        return {"ok": False, "error": f"okänt kommando: {action}"}
+
 
 class MockDataSource(DataSource):
     """Simulerad bil för UI-dev: rimliga, rörliga värden + ett aktivt fel."""
 
     name = "mock"
 
+    _ACTIVE_FAULT = "inlet air temp. circuit (Current)"
+    _LOGGED_FAULT = "air flow circuit (Logged Low)"
+
     def __init__(self) -> None:
         self._t = 0.0
         self._coolant = 20.0  # kallstart, värms upp
+        self._faults = [self._LOGGED_FAULT, self._ACTIVE_FAULT]
+        self._cleared_ticks = 0  # >0 = nyss raderat, felen tillfälligt borta
 
     def poll(self) -> "dict":
         self._t += 1
@@ -65,15 +79,25 @@ class MockDataSource(DataSource):
             "balance_4": random.uniform(-4, 4),
             "balance_5": random.uniform(-4, 4),
         }
+        # Efter radering är listan tom några polls, sen återkommer det AKTIVA
+        # felet (fortfarande fel) — demonstrerar "radera och se om det kommer igen".
+        if self._cleared_ticks > 0:
+            self._cleared_ticks -= 1
+            if self._cleared_ticks == 0:
+                self._faults = [self._ACTIVE_FAULT]
         return {
             "status": "connected",
             "source": self.name,
             "signals": _sig(signals),
-            "faults": [
-                "air flow circuit (Logged Low)",
-                "inlet air temp. circuit (Current)",
-            ],
+            "faults": list(self._faults),
         }
+
+    def command(self, action: str, params: "dict | None" = None) -> "dict":
+        if action == "clear_faults":
+            self._faults = []
+            self._cleared_ticks = 4  # tomt i ~4 polls, sen återkommer aktivt fel
+            return {"ok": True, "message": "Felkoder raderade (mock)"}
+        return {"ok": False, "error": f"okänt kommando: {action}"}
 
 
 class Td5DataSource(DataSource):
@@ -129,3 +153,15 @@ class Td5DataSource(DataSource):
             self._td5 = None
             return {"status": "error", "source": self.name, "signals": {}, "faults": [],
                     "error": f"{type(exc).__name__}: {exc}"}
+
+    def command(self, action: str, params: "dict | None" = None) -> "dict":
+        if action == "clear_faults":
+            if self._td5 is None:
+                return {"ok": False, "error": "inte ansluten till ECU:n"}
+            try:
+                self._td5.clear_faults()
+                self._fault_tick = 0  # tvinga om-läsning av felkoder nästa poll
+                return {"ok": True, "message": "Felkoder raderade"}
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        return {"ok": False, "error": f"okänt kommando: {action}"}

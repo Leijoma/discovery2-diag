@@ -41,6 +41,14 @@
   .fault.logged { border-left-color:var(--warn); }
   .fault .tag { font-size:11px; color:var(--muted); margin-left:8px; }
   .none { color:var(--muted); font-size:14px; }
+  .btn { font-size:12px; font-weight:600; color:var(--fg); background:var(--card2);
+         border:1px solid #3a4652; border-radius:8px; padding:5px 11px;
+         margin-left:10px; cursor:pointer; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .cmd { font-size:13px; margin-top:10px; min-height:18px; }
+  .cmd.ok { color:var(--ok); }
+  .cmd.bad { color:var(--err); }
   .err { color:var(--err); font-size:13px; margin-top:8px; }
   footer { color:var(--muted); font-size:11px; text-align:center; padding:20px; }
 </style>
@@ -57,8 +65,9 @@
     <div class="grid" id="signals"></div>
   </section>
   <section>
-    <h2>Felkoder</h2>
+    <h2>Felkoder <button id="clearBtn" class="btn" title="Radera lagrade felkoder i ECU:n">Radera felkoder</button></h2>
     <div class="faults" id="faults"></div>
+    <div id="cmdResult" class="cmd"></div>
   </section>
   <div class="err" id="error"></div>
 </main>
@@ -122,6 +131,30 @@
     es.onerror = () => { $("dot").className = "dot connecting"; $("status").textContent = "återansluter…"; };
   }
   connect();
+
+  function showCmd(msg, ok) {
+    const el = $("cmdResult");
+    el.textContent = msg;
+    el.className = "cmd " + (ok ? "ok" : "bad");
+    setTimeout(() => { el.textContent = ""; el.className = "cmd"; }, 5000);
+  }
+
+  $("clearBtn").onclick = async () => {
+    if (!confirm("Radera lagrade felkoder i ECU:n?\n(Aktuella fel som fortfarande föreligger kommer tillbaka.)")) return;
+    const btn = $("clearBtn");
+    btn.disabled = true; btn.textContent = "Raderar…";
+    try {
+      const r = await fetch("/command", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear_faults" }),
+      });
+      const d = await r.json();
+      showCmd(d.ok ? (d.message || "Klart") : ("Fel: " + (d.error || "okänt")), !!d.ok);
+    } catch (e) {
+      showCmd("Nätverksfel: " + e, false);
+    }
+    btn.disabled = false; btn.textContent = "Radera felkoder";
+  };
 </script>
 </body>
 </html>
