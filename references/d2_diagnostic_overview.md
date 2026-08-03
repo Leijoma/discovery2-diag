@@ -47,8 +47,18 @@ Detta antyder att SLABS-felminnet kan avkodas med **samma teknik som Td5**
 lista (47 typer) finns i Nancom-firmware men är inte publikt dumpad — **läses ut
 när vi väl kopplar upp mot SLABS.**
 
+## Bussavsökning 2026-08-03 (BELAGT) — SLABS kräver slow init
+`tools/probe_addresses.py` mot bilen (stillastående, tändning på):
+- **Endast 0x13 (motorn) svarar på fast init** (positivt C1).
+- Med motorsessionen dormant och 0x13 orörd: **ingen adress 0x01–0x3F svarar på
+  fast init.** ⇒ SLABS m.fl. använder **inte** fast init.
+- (Obs: en ÖPPEN motorsession generalRejectar alla adresser och maskerar bussen —
+  motorn måste vara dormant vid skanning, och 0x13 får ej adresseras.)
+- **Slutsats:** SLABS/BCU m.fl. kräver **5-baud slow init (ISO 9141)** — nästa
+  bygge. Referenskod finns: muki01 `send5baud()` + `references/.../exempelkod`.
+
 ## Nästa steg för att nå en ny modul (mönster)
-1. **Adress + init:** bussavsökning på pin 7 (stillastående — SLABS tappar comms
-   >8 km/h). Prova fast/slow init mot kandidatadresser, se vem som svarar.
+1. **Implementera 5-baud slow init** i transportlagret (adressbyte @ 5 baud →
+   ECU svarar 0x55 + 2 keybytes → skicka inverterad keybyte). Sedan slow-init-skanning.
 2. **Tjänster:** identifiera läs-DTC / read-inputs / clear (KWP2000-tjänster).
 3. **Tunt modul-lager** ovanpå det generiska KWP2000-lagret (återanvänd Td5-mönstret).
