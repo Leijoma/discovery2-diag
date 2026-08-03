@@ -9,9 +9,14 @@
 Öppna sedan http://localhost:8080 (eller Pi:ns adress i bilen från mobilen).
 """
 import argparse
+import os
+import sys
 
-from d2diag.web import MockDataSource, Td5DataSource
-from d2diag.web.server import DiagServer
+# Gör verktyget körbart som "python3 tools/dashboard.py" utan PYTHONPATH=src.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+
+from d2diag.web import MockDataSource, Td5DataSource  # noqa: E402
+from d2diag.web.server import DiagServer  # noqa: E402
 
 
 def main() -> int:
