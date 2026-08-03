@@ -41,6 +41,17 @@
   .fault.logged { border-left-color:var(--warn); }
   .fault .tag { font-size:11px; color:var(--muted); margin-left:8px; }
   .none { color:var(--muted); font-size:14px; }
+  .schema { background:var(--card); border:1px solid #262e3a; border-radius:14px; padding:8px; overflow-x:auto; }
+  #engine { width:100%; min-width:560px; height:auto; display:block; }
+  #engine .box, #engine .block { fill:var(--card2); stroke:#3a4652; stroke-width:1.5; }
+  #engine .block { fill:#1c232e; }
+  #engine .cyl { fill:#2a3340; stroke:#3a4652; stroke-width:1; }
+  #engine .lbl { fill:var(--muted); font-size:11px; }
+  #engine .val { fill:var(--fg); font-size:15px; font-weight:700; }
+  #engine .val2 { fill:var(--accent); font-size:12px; font-weight:600; }
+  #engine .flow line { stroke:#5b6b80; stroke-width:2; }
+  #engine .fault .box, #engine rect.fault { stroke:var(--err); stroke-width:2.5; }
+  #engine .fault .val, #engine .fault .lbl { fill:var(--err); }
   .btn { font-size:12px; font-weight:600; color:var(--fg); background:var(--card2);
          border:1px solid #3a4652; border-radius:8px; padding:5px 11px;
          margin-left:10px; cursor:pointer; }
@@ -60,6 +71,55 @@
 </header>
 <main>
   <div class="hero" id="hero"></div>
+  <section>
+    <h2>Motorschema</h2>
+    <div class="schema">
+    <svg viewBox="0 0 720 380" id="engine" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ar--" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#5b6b80"/>
+        </marker>
+      </defs>
+      <!-- luftflöde -->
+      <g class="flow">
+        <line x1="150" y1="52" x2="196" y2="52" marker-end="url(#ar--)"/>
+        <line x1="288" y1="52" x2="322" y2="52" marker-end="url(#ar--)"/>
+        <line x1="432" y1="52" x2="470" y2="52" marker-end="url(#ar--)"/>
+        <line x1="580" y1="80" x2="580" y2="150" marker-end="url(#ar--)"/>
+      </g>
+      <!-- insug / MAF-IAT (highlightas vid fel) -->
+      <g id="node_intake">
+        <rect class="box" x="16" y="28" width="134" height="48" rx="8"/>
+        <text class="lbl" x="24" y="45">Insug · MAF/IAT</text>
+        <text class="val" id="e_air_temp" x="24" y="66">–</text>
+        <text class="val2" id="e_maf" x="96" y="66">–</text>
+      </g>
+      <!-- turbo -->
+      <rect class="box" x="196" y="28" width="92" height="48" rx="8"/>
+      <text class="lbl" x="204" y="45">Turbo</text>
+      <text class="val" id="e_boost" x="204" y="66">–</text>
+      <!-- intercooler -->
+      <rect class="box" x="322" y="28" width="110" height="48" rx="8"/>
+      <text class="lbl" x="330" y="45">Intercooler</text>
+      <!-- grenrör -->
+      <rect class="box" x="470" y="28" width="220" height="48" rx="8"/>
+      <text class="lbl" x="478" y="45">Grenrör (MAP)</text>
+      <text class="val" id="e_map" x="478" y="66">–</text>
+      <!-- motorblock -->
+      <rect class="block" x="150" y="150" width="470" height="150" rx="12"/>
+      <text class="lbl" x="164" y="172">Motorblock</text>
+      <text class="val2" id="e_coolant" x="164" y="286">kyl –</text>
+      <text class="val2" id="e_fuel" x="270" y="286">bränsle –</text>
+      <text class="val2" id="e_rpm" x="470" y="286">– rpm</text>
+      <!-- 5 cylindrar / injektorer -->
+      <g id="cyls"></g>
+      <!-- batteri -->
+      <rect class="box" x="16" y="150" width="110" height="48" rx="8"/>
+      <text class="lbl" x="24" y="167">Batteri</text>
+      <text class="val" id="e_batt" x="24" y="188">–</text>
+    </svg>
+    </div>
+  </section>
   <section>
     <h2>Alla signaler</h2>
     <div class="grid" id="signals"></div>
@@ -110,6 +170,7 @@
     $("error").textContent = d.error || "";
     const sig = d.signals || {};
     $("hero").innerHTML = HERO.map(k => heroCard(k, sig)).join("");
+    updateEngine(sig, d.faults || []);
     $("signals").innerHTML = Object.keys(sig).sort().map(k => {
       const s = sig[k];
       return `<div class="row"><span class="n">${LABELS[k]||k}</span>
@@ -123,6 +184,38 @@
       return `<div class="fault ${cur?'current':'logged'}">${name}
               <span class="tag">${tagMatch?tagMatch[1]:""}</span></div>`;
     }).join("") : '<span class="none">Inga aktiva felkoder</span>';
+  }
+
+  // bygg 5 cylindrar/injektorer i motorblocket (en gång)
+  (function buildCylinders() {
+    const g = document.getElementById("cyls");
+    for (let i = 0; i < 5; i++) {
+      const x = 172 + i * 90;
+      g.insertAdjacentHTML("beforeend",
+        `<rect class="cyl" x="${x}" y="190" width="76" height="72" rx="6"/>` +
+        `<text class="lbl" x="${x+11}" y="210">Inj ${i+1}</text>` +
+        `<text class="val2" id="e_inj${i+1}" x="${x+11}" y="236">–</text>`);
+    }
+  })();
+
+  function setText(id, txt) { const el = document.getElementById(id); if (el) el.textContent = txt; }
+
+  function updateEngine(sig, faults) {
+    const air = sig.air_temp, maf = sig.maf_raw, map = sig.manifold_press, amb = sig.ambient_press_1;
+    setText("e_air_temp", air ? `${fmt(air.v)}°C` : "–");
+    setText("e_maf", maf ? `MAF ${fmt(maf.v)}` : "");
+    setText("e_map", map ? `${map.v.toFixed(2)} bar` : "–");
+    setText("e_boost", (map && amb) ? `+${(map.v-amb.v).toFixed(2)}` : (map ? map.v.toFixed(2) : "–"));
+    setText("e_coolant", sig.coolant_temp ? `kyl ${fmt(sig.coolant_temp.v)}°C` : "kyl –");
+    setText("e_fuel", sig.fuel_temp ? `bränsle ${fmt(sig.fuel_temp.v)}°C` : "bränsle –");
+    setText("e_rpm", sig.rpm ? `${Math.round(sig.rpm.v)} rpm` : "– rpm");
+    setText("e_batt", sig.battery ? `${sig.battery.v.toFixed(1)} V` : "–");
+    for (let i = 1; i <= 5; i++) {
+      const b = sig["balance_" + i];
+      setText("e_inj" + i, b ? (b.v > 0 ? "+" : "") + b.v.toFixed(1) : "–");
+    }
+    const faulted = (faults || []).some(f => /inlet air temp|air flow/i.test(f));
+    document.getElementById("node_intake").classList.toggle("fault", faulted);
   }
 
   function connect() {
