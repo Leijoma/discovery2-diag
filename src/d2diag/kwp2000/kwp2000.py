@@ -14,6 +14,7 @@ STOP_DIAGNOSTIC_SESSION = 0x20
 TESTER_PRESENT = 0x3E
 SECURITY_ACCESS = 0x27
 READ_DATA_BY_LOCAL_ID = 0x21
+START_ROUTINE_BY_LOCAL_ID = 0x31
 
 _POSITIVE = 0x40  # positivt svar = tjänste-ID | 0x40
 NEGATIVE_RESPONSE = 0x7F
@@ -160,3 +161,8 @@ class KWP2000:
     def read_local_identifier(self, lid: int) -> bytes:
         """Returnerar datafältet (utan den ekade identifieraren)."""
         return self.request(READ_DATA_BY_LOCAL_ID, bytes([lid]))[1:]
+
+    def start_routine(self, routine: int, params: bytes = b"") -> bytes:
+        """StartRoutineByLocalIdentifier (0x31). Returnerar svaret utan positiv SID
+        (dvs börjar med den ekade rutin-identifieraren)."""
+        return self.request(START_ROUTINE_BY_LOCAL_ID, bytes([routine]) + bytes(params))

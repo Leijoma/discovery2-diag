@@ -35,9 +35,12 @@
 
 [EA2EGA/Ekaitza_Itzali](https://github.com/EA2EGA/Ekaitza_Itzali) har använts som
 **referens för protokollfakta** (ramformat, ECU-adresser, init-sekvens,
-identifiers). Ingen källkod därifrån är kopierad — repot saknar licens, så endast
-icke-skyddbara fakta om protokollet har använts. Krediter i det projektet till
-OffTrack (ECU-disassembly) och Luca72 (Arduino-referens).
+identifiers + skalning, samt felkodskartan för `21 3B` — offset/bitmask →
+feltext, som är fakta om ECU:ns diagnostik). Ingen källkod därifrån är kopierad —
+repot saknar licens, så endast icke-skyddbara fakta om protokollet har använts.
+Init-/session-/security-/felkodssekvenserna är dessutom verifierade mot repots
+sniff-loggar (`Sniffing/*.log`). Krediter i det projektet till OffTrack
+(ECU-disassembly) och Luca72 (Arduino-referens).
 
 ## muki01/OBD2_K-line_Reader — K-line-referens (MIT)
 

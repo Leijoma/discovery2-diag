@@ -18,6 +18,13 @@ TD5_DIAGNOSTIC_SESSION = 0xA0
 _SECURITY_LEVEL_SEED = 0x01
 _SECURITY_LEVEL_KEY = 0x02
 
+# Felkoder: Td5 läser dem som ett statusblock via ReadDataByLocalIdentifier 0x3B
+# (inte standard-DTC-tjänster) och raderar via StartRoutine 0xDD med 18 nollbytes.
+# Härlett ur Ekaitza-sniffen (Read_Faults.log / Read_Faults_and_clear.log).
+FAULT_LID = 0x3B
+_CLEAR_FAULTS_ROUTINE = 0xDD
+_CLEAR_FAULTS_PADDING = b"\x00" * 18
+
 # Standardvärden för establish(): bus-idle innan init och antal helomförsök.
 _DEFAULT_IDLE = 5.0
 _DEFAULT_ATTEMPTS = 6
@@ -114,6 +121,24 @@ class Td5:
             except Exception:  # noqa: BLE001
                 pass
         return out
+
+    # ---- felkoder ----------------------------------------------------- #
+    def read_faults_raw(self) -> bytes:
+        """Läs Td5:ans felstatusblock (rå bytes efter ``61 3B``) via 0x21 0x3B.
+
+        Kräver upplåst session. Blocket är bitkodat; namngiven avkodning görs av
+        :func:`d2diag.td5.faults.decode_faults`."""
+        return self._kwp.read_local_identifier(FAULT_LID)
+
+    def read_faults(self) -> "list[str]":
+        """Läs och avkoda aktiva fel till en lista med beskrivningar."""
+        from .faults import decode_faults
+
+        return decode_faults(self.read_faults_raw())
+
+    def clear_faults(self) -> None:
+        """Radera lagrade felkoder (StartRoutine 0xDD). Kräver upplåst session."""
+        self._kwp.start_routine(_CLEAR_FAULTS_ROUTINE, _CLEAR_FAULTS_PADDING)
 
     # bekvämlighet
     def rpm(self) -> float:

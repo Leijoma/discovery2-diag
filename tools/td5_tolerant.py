@@ -36,6 +36,21 @@ def main() -> int:
                 continue
             body = ", ".join(f"{k}={v:.2f}" for k, v in vals.items())
             print(f"21 {lid:02X}: {body}")
+
+        print("\n--- felkoder (21 3B) ---")
+        try:
+            faults = td5.read_faults()
+        except (NegativeResponse, KWP2000Error) as exc:
+            print(f"  felläsning misslyckades: {exc}")
+        else:
+            named = [f for f in faults if not f.startswith("byte")]
+            for f in named:
+                print(f"  {f}")
+            if not named:
+                print("  inga namngivna fel")
+            generic = [f for f in faults if f.startswith("byte")]
+            if generic:
+                print(f"  ({len(generic)} odefinierade bitar: {', '.join(generic)})")
     return 0
 
 
