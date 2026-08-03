@@ -62,14 +62,14 @@ def test_decode_real_sniff_fault_block():
     block = resp[3 : 3 + 35]
     faults = decode_faults(block)
     named = [f for f in faults if not f.startswith("byte")]
-    # offset 0 = 0xc0 → bit 0x40 + 0x80
-    assert "air flow circuit (L)" in named
-    assert "manifold pressure circuit (L)" in named
-    # temp-kretsar tända både lagrat och aktuellt
-    assert "coolant temp. circuit (L)" in named
-    assert "coolant temp. circuit (C)" in named
-    assert "road speed missing (L)" in named
-    assert "high speed crank (L)" in named
+    # offset 0 = 0xc0 → bit 0x40 + 0x80, Logged Low
+    assert "air flow circuit (Logged Low)" in named
+    assert "manifold pressure circuit (Logged Low)" in named
+    # coolant-kretsen tänd både lagrat (High, offset 3) och aktuellt (offset 5)
+    assert "coolant temp. circuit (Logged High)" in named
+    assert "coolant temp. circuit (Current)" in named
+    assert "road speed missing (Logged)" in named
+    assert "high speed crank (Logged)" in named
     assert len(named) == 32  # hela blocket → 32 namngivna fel
     # odefinierade bitar tappas inte tyst
     assert any(f.startswith("byte") for f in faults)

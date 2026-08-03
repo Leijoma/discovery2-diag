@@ -42,6 +42,11 @@ Init-/session-/security-/felkodssekvenserna är dessutom verifierade mot repots
 sniff-loggar (`Sniffing/*.log`). Krediter i det projektet till OffTrack
 (ECU-disassembly) och Luca72 (Arduino-referens).
 
+Td5-felkodskartan (`21 3B`) är dessutom **korsvaliderad mot en publik lista över
+reference tool v1.12:s Td5-felkoder** — samma namn på samma offset/bit, vilket också gav
+den mer precisa statusdistinktionen Logged Low / Logged High / Current. Endast
+faktauppgifter (offset/bit → feltext) har använts.
+
 ## muki01/OBD2_K-line_Reader — K-line-referens (MIT)
 
 [muki01/OBD2_K-line_Reader](https://registry.platformio.org/libraries/muki01/OBD2%20K-Line)
