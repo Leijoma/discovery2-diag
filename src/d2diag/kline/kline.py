@@ -69,9 +69,8 @@ class KLine:
         self.close()
 
     # ---- init --------------------------------------------------------- #
-    def fast_init(self, start_communication: bytes = DEFAULT_START_COMMUNICATION) -> bytes:
-        """Kör fast init (adresserad StartCommunication) och returnerar svarets
-        datafält (t.ex. nyckelbytes)."""
+    def _fast_init_pulse(self) -> None:
+        """Den fysiska init-pulsen: linjen låg 25 ms, sedan hög 25 ms."""
         self._flush_input()
         # Deterministisk låg-puls: föredra baud-drop (0x00 @ ~360 baud) framför
         # OS-timad break, vars längd jittrar på icke-realtids-OS och gör att Td5:an
@@ -87,9 +86,32 @@ class KLine:
                 )
             send_break(_FAST_INIT_LOW)
         time.sleep(_FAST_INIT_HIGH)  # K-line hög innan StartCommunication
+
+    def fast_init(self, start_communication: bytes = DEFAULT_START_COMMUNICATION) -> bytes:
+        """Kör fast init (adresserad StartCommunication) och returnerar svarets
+        datafält (t.ex. nyckelbytes). Strikt ram-läsning."""
+        self._fast_init_pulse()
         # Ingen retry: StartCommunication ska skickas EN gång. Lyckas den öppnas
         # sessionen; en omsändning avvisas då (generalReject "redan i session").
         return self.request(start_communication, addressed=True, retries=0)
+
+    def fast_init_tolerant(
+        self, start_communication: bytes = DEFAULT_START_COMMUNICATION
+    ) -> bytes:
+        """Fast init med tolerant burst-läsning: sök 0xC1 i hela svarsbursten.
+
+        Returnerar bursten från och med 0xC1 (C1 + nyckelbytes, ev. följt av
+        glitch). Höjer :class:`KLineTimeout` om inget C1 syns. Poängen: en
+        brusskadad C1-ram (t.ex. ``03 c1 38 0e f8 00``) INNEHÅLLER ändå 0xC1, så
+        vi ser "session öppen" på första försöket och slipper init-om-loopen som
+        annars öppnar sessionen upprepat och låser ECU:n (``7F`` generalReject).
+        """
+        self._fast_init_pulse()
+        raw = self.converse(start_communication, addressed=True)
+        i = raw.find(0xC1)
+        if i < 0:
+            raise KLineTimeout(f"ingen C1 i bursten: {raw.hex(' ') or 'tom'}")
+        return raw[i:]
 
     # ---- request/response --------------------------------------------- #
     def request(self, data: bytes, retries: int = 2, addressed: bool = False) -> bytes:
@@ -109,6 +131,43 @@ class KLine:
                 last = exc
         assert last is not None
         raise last
+
+    # ---- tolerant burst-I/O (brusiga billiga KKL-kablar) -------------- #
+    def converse(
+        self,
+        data: bytes,
+        addressed: bool = False,
+        gap: float = 0.06,
+        overall: float = 1.0,
+    ) -> bytes:
+        """Skicka ett datafält och läs HELA svarsbursten rått (eko + svar +
+        ev. glitchbytes) — utan checksum-avvisning.
+
+        Motsatsen till :meth:`request`: här valideras ingen ram. Callern söker
+        själv efter förväntad svarsbyte i bursten. Avsett för billiga KKL-kablar
+        där turnaround-glitch shreddar enstaka ramar men rätt byte ändå finns med.
+        """
+        frame = encode(data, self._target, self._source, addressed=addressed)
+        self._flush_input()
+        self._t.send(frame)
+        return self._burst_read(gap, overall)
+
+    def _burst_read(self, gap: float, overall: float) -> bytes:
+        """Samla bytes tills det blir tyst i ``gap`` s (inter-byte-gap), dock högst
+        ``overall`` s totalt. muki01-stil: läs hela bursten, tolka den sedan."""
+        buf = bytearray()
+        start = time.monotonic()
+        got = False
+        while time.monotonic() - start < overall:
+            chunk = self._t.receive(64, timeout=gap)
+            if chunk:
+                buf += chunk
+                got = True
+            elif got:
+                break  # tystnad efter data → bursten är klar
+            else:
+                time.sleep(0.002)  # väntar fortfarande på första byten
+        return bytes(buf)
 
     def read_frame(self, timeout: "float | None" = None) -> DecodedFrame:
         """Läs och avkoda en ram — robust mot skräp i början.

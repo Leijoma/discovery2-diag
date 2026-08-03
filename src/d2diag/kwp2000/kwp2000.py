@@ -47,9 +47,13 @@ class NegativeResponse(KWP2000Error):
 
 
 class KWP2000:
-    def __init__(self, kline: KLine, max_pending: int = 6) -> None:
+    def __init__(self, kline: KLine, max_pending: int = 6, tolerant: bool = False) -> None:
         self._k = kline
         self._max_pending = max_pending
+        # tolerant=True: läs hela svarsbursten och SÖK efter positiv/negativ SID
+        # istället för att kräva en checksum-giltig ram. För billiga, brusiga
+        # KKL-kablar där turnaround-glitch shreddar enstaka ramar.
+        self._tolerant = tolerant
 
     # ---- livscykel (delegeras nedåt) ---------------------------------- #
     def open(self) -> None:
@@ -72,8 +76,11 @@ class KWP2000:
         Hanterar responsePending (0x78) genom att vänta in nästa svar utan att
         skicka om, och höjer :class:`NegativeResponse` vid 0x7F.
         """
-        resp = self._k.request(bytes([service]) + bytes(payload))
-        resp = self._resolve_pending(resp)
+        payload = bytes(payload)
+        if self._tolerant:
+            resp = self._request_tolerant(service, payload)
+        else:
+            resp = self._resolve_pending(self._k.request(bytes([service]) + payload))
         if not resp:
             raise KWP2000Error(f"tomt svar på tjänst 0x{service:02X}")
         if resp[0] == NEGATIVE_RESPONSE:
@@ -85,6 +92,37 @@ class KWP2000:
             )
         return resp[1:]
 
+    def _request_tolerant(self, service: int, payload: bytes) -> bytes:
+        """Skicka via burst-läsning; plocka svaret ur bursten utan checksum.
+
+        Returnerar bytes från och med den funna SID:en (positiv eller negativ),
+        så att den gemensamma tolkningen i :meth:`request` fungerar oförändrad.
+        """
+        raw = self._k.converse(bytes([service]) + payload)
+        return self._extract_response(raw, service, payload)
+
+    @staticmethod
+    def _extract_response(raw: bytes, service: int, payload: bytes) -> bytes:
+        """Hitta svaret i en rå burst (eko + svar + glitch).
+
+        Positivt svar: SID = service | 0x40. Föredra en 2-byte-träff
+        [SID, ekad första payloadbyte] (t.ex. ``61 <lid>`` / ``67 <nivå>``) för
+        precision, annars enbart SID (t.ex. ``50`` som saknar ekad subfunktion).
+        Ekot stör inte: dess SID är service (0x21/0x27/…), inte service|0x40.
+        """
+        sid = service | _POSITIVE
+        pos = -1
+        if payload:
+            pos = raw.find(bytes([sid, payload[0]]))
+        if pos < 0:
+            pos = raw.find(bytes([sid]))
+        neg = raw.find(bytes([NEGATIVE_RESPONSE, service]))
+        if pos >= 0 and (neg < 0 or pos <= neg):
+            return raw[pos:]
+        if neg >= 0:
+            return raw[neg:]
+        return b""
+
     def _resolve_pending(self, resp: bytes) -> bytes:
         pending = 0
         while len(resp) >= 3 and resp[0] == NEGATIVE_RESPONSE and resp[2] == NRC_RESPONSE_PENDING:
@@ -95,6 +133,14 @@ class KWP2000:
         return resp
 
     # ---- tjänster ----------------------------------------------------- #
+    def start_communication(self, tolerant: "bool | None" = None) -> bytes:
+        """Fast init / StartCommunication. Returnerar svarets datafält (C1 …).
+
+        ``tolerant`` styr burst- vs strikt läsning; ``None`` följer KWP2000:ans
+        eget läge (satt i konstruktorn)."""
+        use_tolerant = self._tolerant if tolerant is None else tolerant
+        return self._k.fast_init_tolerant() if use_tolerant else self._k.fast_init()
+
     def start_diagnostic_session(self, sub: int = 0xA0) -> bytes:
         return self.request(START_DIAGNOSTIC_SESSION, bytes([sub]))
 
