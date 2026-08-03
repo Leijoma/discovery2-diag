@@ -68,8 +68,8 @@ SIGNALS = [
     Signal("pedal_track2", 0x1B, 2, scale=1 / 1000, unit="V"),
     Signal("pedal_demand", 0x1B, 4, scale=1 / 100, unit="%"),
     Signal("pedal_supply", 0x1B, 6, scale=1 / 1000, unit="V"),
-    # LID 1C@0: grenrörstryck (MAP) enligt Ekaitza-etikett. boost = MAP − ambient(23).
-    # Etiketten obekräftad utan capture under laddtryck (vid tomgång ≈ omgivning).
+    # LID 1C@0: grenrörstryck (MAP). BEKRÄFTAT mot bilen 2026-08-03 — steg
+    # 1.0→1.2 bar under acceleration. boost = MAP − ambient(23).
     Signal("manifold_press", 0x1C, 0, scale=1 / 10000, unit="bar"),
     # 1C@4: ingen MAF-givare på denna tidiga Td5-ROM → EJ luftmassa (går 50→0
     # av→igång). Behållet som rått fält; tolka inte som mg.
