@@ -142,6 +142,10 @@ class KWP2000:
         use_tolerant = self._tolerant if tolerant is None else tolerant
         return self._k.fast_init_tolerant() if use_tolerant else self._k.fast_init()
 
+    def slow_init(self, address: int) -> "tuple[int, int]":
+        """5-baud slow init mot en modul (SLABS m.fl.). Returnerar keybytes (KW1, KW2)."""
+        return self._k.slow_init(address)
+
     def start_diagnostic_session(self, sub: int = 0xA0) -> bytes:
         return self.request(START_DIAGNOSTIC_SESSION, bytes([sub]))
 

@@ -126,13 +126,30 @@ class SerialTransport(Transport):
         bits.append(1)
         return bits
 
-    def slow_init(self, address: int, bit_seconds: float = 0.2, read_timeout: float = 0.6) -> bytes:
-        """ISO 9141 / ISO 14230 **5-baud slow init**.
+    @staticmethod
+    def parse_slow_init(raw: bytes) -> "tuple[int, int] | None":
+        """Plocka (KW1, KW2) ur ett slow-init-svar som börjar med 0x55. Ren + testbar."""
+        if len(raw) >= 3 and raw[0] == 0x55:
+            return raw[1], raw[2]
+        return None
 
-        Skickar adressbyten vid 5 baud genom att bit-banga break-villkoret
-        (linjen låg = break på, hög = break av; 200 ms/bit). OS-timing duger på
-        200 ms-nivå. Läser sedan ECU:ns svar (0x55 + keybytes) vid ordinarie baud.
-        Returnerar de råa svarsbytesen (tomt = ingen modul svarade på adressen).
+    def slow_init(
+        self,
+        address: int,
+        bit_seconds: float = 0.2,
+        w4: float = 0.03,
+        read_timeout: float = 0.5,
+    ) -> bytes:
+        """ISO 9141 / ISO 14230 **5-baud slow init** — full handskakning.
+
+        1. Skicka adressbyten vid 5 baud genom att bit-banga break-villkoret
+           (linjen låg = break på, hög = break av; 200 ms/bit; OS-timing duger).
+        2. Läs ECU:ns ``0x55`` sync + KW1 + KW2 vid ordinarie baud.
+        3. Vänta W4 och skicka ``~KW2`` (invers). 4. Läs ``~address``-bekräftelsen.
+
+        Returnerar ALLA mottagna bytes (sync + keybytes [+ eko + ~address]). Tomt
+        eller utan ledande 0x55 = ingen modul svarade på adressen. Använd
+        :meth:`parse_slow_init` för att plocka ut KW1/KW2.
         """
         ser = self._require_open()
         bits = self.slow_init_bits(address)
@@ -145,7 +162,15 @@ class SerialTransport(Transport):
         ser.break_condition = False  # tillbaka till idle
         ser.reset_input_buffer()  # kasta RX-skräp från vår egen bit-bang
         ser.timeout = read_timeout
-        return ser.read(16)
+        got = bytearray(ser.read(3))  # 0x55, KW1, KW2
+        if len(got) >= 3 and got[0] == 0x55:
+            kw2 = got[2]
+            time.sleep(w4)
+            ser.reset_input_buffer()
+            ser.write(bytes([(~kw2) & 0xFF]))  # ~KW2 tillbaka till ECU:n
+            ser.flush()
+            got += ser.read(3)  # halvduplex-eko + ~address-bekräftelse
+        return bytes(got)
 
     def reset_input_buffer(self) -> None:
         self._require_open().reset_input_buffer()

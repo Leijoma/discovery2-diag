@@ -29,7 +29,8 @@ def main() -> int:
                 print(f"0x{addr:02X}: FEL {type(exc).__name__}: {exc}")
                 break
             if resp:
-                marker = "  <-- 0x55 SYNC!" if 0x55 in resp else ""
+                kw = SerialTransport.parse_slow_init(resp)
+                marker = f"  <-- SYNC! KW1={kw[0]:#04x} KW2={kw[1]:#04x}" if kw else ""
                 print(f"0x{addr:02X}: {resp.hex(' ')}{marker}")
                 hits.append((addr, resp))
             time.sleep(0.4)  # kort tystnad mellan adresser

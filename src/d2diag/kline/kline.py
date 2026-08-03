@@ -113,6 +113,25 @@ class KLine:
             raise KLineTimeout(f"ingen C1 i bursten: {raw.hex(' ') or 'tom'}")
         return raw[i:]
 
+    def slow_init(self, address: int) -> "tuple[int, int]":
+        """5-baud slow init mot en modul (t.ex. SLABS — motorn använder fast init).
+
+        Returnerar keybytes (KW1, KW2). Höjer :class:`KLineTimeout` om ingen modul
+        svarar (inget 0x55 i svaret). Kräver att transporten stöder ``slow_init``.
+        """
+        slow = getattr(self._t, "slow_init", None)
+        parse = getattr(self._t, "parse_slow_init", None)
+        if slow is None or parse is None:
+            raise KLineError("transporten saknar slow_init()/parse_slow_init()")
+        self._flush_input()
+        raw = slow(address)
+        kw = parse(raw)
+        if kw is None:
+            raise KLineTimeout(
+                f"ingen slow-init-respons på 0x{address:02X}: {raw.hex(' ') or 'tomt'}"
+            )
+        return kw
+
     # ---- request/response --------------------------------------------- #
     def request(self, data: bytes, retries: int = 2, addressed: bool = False) -> bytes:
         """Skicka ett datafält, returnera svarets datafält. Försöker om vid

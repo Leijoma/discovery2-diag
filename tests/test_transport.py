@@ -16,6 +16,15 @@ def test_slow_init_bits_frame():
     assert b13[1:8] == [1, 1, 0, 0, 1, 0, 0]          # 0x13 = 0010011 LSB-först
 
 
+def test_parse_slow_init():
+    # 0x55 sync + KW1 KW2 → (KW1, KW2); annars None
+    assert SerialTransport.parse_slow_init(b"\x55\x8f\xea\x15") == (0x8F, 0xEA)
+    assert SerialTransport.parse_slow_init(b"\x55\x01\x02") == (0x01, 0x02)
+    assert SerialTransport.parse_slow_init(b"") is None
+    assert SerialTransport.parse_slow_init(b"\x00\x8f\xea") is None  # ingen 0x55
+    assert SerialTransport.parse_slow_init(b"\x55\x8f") is None       # för kort
+
+
 def test_serial_loopback_send_receive():
     with SerialTransport(url="loop://", timeout=1.0) as t:
         payload = b"\x81\x13\xf7\x81\x0c"
