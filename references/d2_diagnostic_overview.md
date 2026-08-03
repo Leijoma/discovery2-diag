@@ -57,6 +57,21 @@ när vi väl kopplar upp mot SLABS.**
 - **Slutsats:** SLABS/BCU m.fl. kräver **5-baud slow init (ISO 9141)** — nästa
   bygge. Referenskod finns: muki01 `send5baud()` + `references/.../exempelkod`.
 
+## Sniffning — bästa vägen till okända protokoll
+K-line är en tråd, halvduplex → en **passiv RX-lyssnare fångar hela samtalet**
+(både verktygets frågor och ECU:ns svar). Med ett lånat verktyg (reference tool/a commercial tool/
+a commercial tool) som läser SLABS får vi adress, init, tjänstebytes och felstruktur ur
+verklig trafik — precis så Ekaitzas `Sniffing/*.log` (och därmed vår Td5-kunskap)
+skapades.
+- **Inkoppling:** OBD-splitter (piggyback) — lånat verktyg i ena grenen, vår
+  lyssnare i andra. Kräver att splittern kopplar igenom **pin 7** (K-line).
+- **Lyssnare:** ESP32 + L9637D i ren RX (bäst), eller KKL enbart RX. **Bara RX —
+  sänd aldrig**, annars krockar man med verktyget.
+- **Verktyg:** `tools/sniff.py` (RX-only, tidsstämplar, ramar på tystnadsgap,
+  annoterar tjänster). Kärna i `d2diag/sniff.py` (`frame_by_gaps`, `describe`).
+- 5-baud-adressen syns inte i UART-strömmen (200 ms/bit) — ta den med `probe_slow`
+  eller sampla linjenivån; men tjänsterna/felstrukturen (det svåra) fås ur sniffen.
+
 ## Nästa steg för att nå en ny modul (mönster)
 1. **Implementera 5-baud slow init** i transportlagret (adressbyte @ 5 baud →
    ECU svarar 0x55 + 2 keybytes → skicka inverterad keybyte). Sedan slow-init-skanning.
