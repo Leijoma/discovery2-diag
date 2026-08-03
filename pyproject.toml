@@ -17,6 +17,9 @@ dev = ["pytest>=7"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"d2diag.web" = ["dashboard.html"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
 testpaths = ["tests"]

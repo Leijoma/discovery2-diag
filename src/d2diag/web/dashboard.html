@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discovery 2 · Td5 diagnostik</title>
+<style>
+  :root { --bg:#0f1216; --card:#1a1f27; --card2:#212833; --fg:#e7edf3; --muted:#8b97a7;
+          --accent:#4aa3ff; --ok:#37d67a; --warn:#f5a623; --err:#ff5b5b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:14px 18px;
+           border-bottom:1px solid #2a3240; position:sticky; top:0; background:var(--bg); z-index:2; }
+  header h1 { font-size:16px; margin:0; font-weight:600; letter-spacing:.3px; }
+  .pill { display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--muted);
+          margin-left:auto; }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--muted); }
+  .dot.connected { background:var(--ok); box-shadow:0 0 8px var(--ok); }
+  .dot.connecting { background:var(--warn); }
+  .dot.error { background:var(--err); }
+  main { padding:16px; max-width:1000px; margin:0 auto; }
+  .hero { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; }
+  .card { background:var(--card); border:1px solid #262e3a; border-radius:14px; padding:14px 16px; }
+  .card .k { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+  .card .v { font-size:30px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .card .u { font-size:13px; color:var(--muted); font-weight:500; margin-left:4px; }
+  .card.rpm .v { font-size:44px; color:var(--accent); }
+  section { margin-top:22px; }
+  section h2 { font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;
+               margin:0 0 10px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
+  .row { background:var(--card2); border-radius:10px; padding:9px 12px; display:flex;
+         justify-content:space-between; align-items:baseline; }
+  .row .n { font-size:13px; color:var(--muted); }
+  .row .val { font-variant-numeric:tabular-nums; font-weight:600; }
+  .faults { display:flex; flex-direction:column; gap:8px; }
+  .fault { padding:10px 13px; border-radius:10px; background:var(--card2);
+           border-left:4px solid var(--muted); font-size:14px; }
+  .fault.current { border-left-color:var(--err); }
+  .fault.logged { border-left-color:var(--warn); }
+  .fault .tag { font-size:11px; color:var(--muted); margin-left:8px; }
+  .none { color:var(--muted); font-size:14px; }
+  .err { color:var(--err); font-size:13px; margin-top:8px; }
+  footer { color:var(--muted); font-size:11px; text-align:center; padding:20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Discovery 2 · Td5</h1>
+  <span class="pill"><span id="dot" class="dot connecting"></span><span id="status">ansluter…</span></span>
+</header>
+<main>
+  <div class="hero" id="hero"></div>
+  <section>
+    <h2>Alla signaler</h2>
+    <div class="grid" id="signals"></div>
+  </section>
+  <section>
+    <h2>Felkoder</h2>
+    <div class="faults" id="faults"></div>
+  </section>
+  <div class="err" id="error"></div>
+</main>
+<footer>Uppdateras i realtid via SSE · discovery2-diag</footer>
+<script>
+  const LABELS = {
+    rpm:"Varvtal", speed:"Fart", battery:"Batteri", coolant_temp:"Kylvätska",
+    air_temp:"Insugsluft", fuel_temp:"Bränsle", ext_temp:"Omgivning",
+    manifold_press:"Grenrörstryck", ambient_press_1:"Omgivningstryck",
+    ambient_press_2:"Tryck 2", maf_raw:"MAF (rå)", rpm_error:"Varvfel",
+    pedal_track1:"Pedal 1", pedal_track2:"Pedal 2", pedal_demand:"Pedalbegäran",
+    pedal_supply:"Pedal 5V", balance_1:"Injektor 1", balance_2:"Injektor 2",
+    balance_3:"Injektor 3", balance_4:"Injektor 4", balance_5:"Injektor 5",
+  };
+  const HERO = ["rpm","speed","coolant_temp","__boost","battery"];
+  const $ = id => document.getElementById(id);
+  const fmt = x => (Math.abs(x) >= 100 ? Math.round(x) : x.toFixed(1));
+
+  function heroCard(key, sig) {
+    let label, value, unit;
+    if (key === "__boost") {
+      const m = sig.manifold_press, a = sig.ambient_press_1;
+      if (!m) return "";
+      const boost = a ? (m.v - a.v) : m.v;
+      label = "Laddtryck"; value = boost.toFixed(2); unit = "bar";
+    } else {
+      const s = sig[key]; if (!s) return "";
+      label = LABELS[key] || key; value = fmt(s.v); unit = s.u || "";
+    }
+    const cls = key === "rpm" ? "card rpm" : "card";
+    return `<div class="${cls}"><div class="k">${label}</div>
+            <div class="v">${value}<span class="u">${unit}</span></div></div>`;
+  }
+
+  function render(d) {
+    const st = d.status || "connecting";
+    $("dot").className = "dot " + st;
+    $("status").textContent = ({connected:"ansluten",connecting:"ansluter…",error:"fel"}[st] || st)
+        + (d.source ? " · " + d.source : "");
+    $("error").textContent = d.error || "";
+    const sig = d.signals || {};
+    $("hero").innerHTML = HERO.map(k => heroCard(k, sig)).join("");
+    $("signals").innerHTML = Object.keys(sig).sort().map(k => {
+      const s = sig[k];
+      return `<div class="row"><span class="n">${LABELS[k]||k}</span>
+              <span class="val">${fmt(s.v)} <span class="u">${s.u||""}</span></span></div>`;
+    }).join("") || '<span class="none">—</span>';
+    const faults = d.faults || [];
+    $("faults").innerHTML = faults.length ? faults.map(f => {
+      const cur = /current/i.test(f);
+      const tagMatch = f.match(/\(([^)]+)\)\s*$/);
+      const name = f.replace(/\s*\([^)]+\)\s*$/, "");
+      return `<div class="fault ${cur?'current':'logged'}">${name}
+              <span class="tag">${tagMatch?tagMatch[1]:""}</span></div>`;
+    }).join("") : '<span class="none">Inga aktiva felkoder</span>';
+  }
+
+  function connect() {
+    const es = new EventSource("/events");
+    es.onmessage = e => { try { render(JSON.parse(e.data)); } catch(_) {} };
+    es.onerror = () => { $("dot").className = "dot connecting"; $("status").textContent = "återansluter…"; };
+  }
+  connect();
+</script>
+</body>
+</html>
