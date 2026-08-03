@@ -2,6 +2,20 @@
 from d2diag.transport import LoggingTransport, SerialTransport
 
 
+def test_slow_init_bits_frame():
+    # 5-baud init-ram för adress 0x33 (klassisk ISO 9141): start, 7 databitar
+    # LSB-först, udda paritet (samma logik som muki01/exempelkod), stopp.
+    bits = SerialTransport.slow_init_bits(0x33)
+    assert len(bits) == 10
+    assert bits[0] == 0 and bits[9] == 1              # start / stopp
+    assert bits[1:8] == [1, 1, 0, 0, 1, 1, 0]         # 0x33 LSB-först
+    assert bits[8] == 0                                # paritetsbit per referensen
+    # adress 0x13 (motorn använder visserligen fast init, men testa bitmönstret)
+    b13 = SerialTransport.slow_init_bits(0x13)
+    assert b13[0] == 0 and b13[9] == 1
+    assert b13[1:8] == [1, 1, 0, 0, 1, 0, 0]          # 0x13 = 0010011 LSB-först
+
+
 def test_serial_loopback_send_receive():
     with SerialTransport(url="loop://", timeout=1.0) as t:
         payload = b"\x81\x13\xf7\x81\x0c"

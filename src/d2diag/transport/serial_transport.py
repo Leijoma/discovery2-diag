@@ -112,6 +112,41 @@ class SerialTransport(Transport):
             ser.baudrate = original
         ser.reset_input_buffer()  # kasta ekot av puls-byten
 
+    @staticmethod
+    def slow_init_bits(address: int) -> "list[int]":
+        """5-baud init-ram för ``address``: startbit(0), 7 databitar LSB-först,
+        udda paritet, stoppbit(1). Ren funktion → testbar utan hårdvara."""
+        bits = [0]
+        parity = 1  # udda paritet
+        for i in range(7):
+            b = (address >> i) & 1
+            bits.append(b)
+            parity ^= b
+        bits.append(1 if parity == 0 else 0)
+        bits.append(1)
+        return bits
+
+    def slow_init(self, address: int, bit_seconds: float = 0.2, read_timeout: float = 0.6) -> bytes:
+        """ISO 9141 / ISO 14230 **5-baud slow init**.
+
+        Skickar adressbyten vid 5 baud genom att bit-banga break-villkoret
+        (linjen låg = break på, hög = break av; 200 ms/bit). OS-timing duger på
+        200 ms-nivå. Läser sedan ECU:ns svar (0x55 + keybytes) vid ordinarie baud.
+        Returnerar de råa svarsbytesen (tomt = ingen modul svarade på adressen).
+        """
+        ser = self._require_open()
+        bits = self.slow_init_bits(address)
+        ser.break_condition = False  # linjen idle (hög) före start
+        ser.reset_input_buffer()
+        time.sleep(bit_seconds)
+        for bit in bits:
+            ser.break_condition = bit == 0  # 0 → break (låg), 1 → idle (hög)
+            time.sleep(bit_seconds)
+        ser.break_condition = False  # tillbaka till idle
+        ser.reset_input_buffer()  # kasta RX-skräp från vår egen bit-bang
+        ser.timeout = read_timeout
+        return ser.read(16)
+
     def reset_input_buffer(self) -> None:
         self._require_open().reset_input_buffer()
 
