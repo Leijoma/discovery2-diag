@@ -92,15 +92,18 @@ class Td5:
             try:
                 c1 = self._kwp.start_communication(tolerant=True)
             except KLineError as exc:
+                # Ingen ren C1. Vanligast: ECU:n svarar 7F (generalReject) för att
+                # sessionen REDAN är öppen från ett tidigare försök — då är
+                # kommunikationen uppe och vi kan gå direkt på session+unlock.
+                # Prova det innan vi init:ar om (en omsändning bara håller låset).
                 last = exc
-                sleep(1.0)
-                continue
+                c1 = b""
             try:
                 self.connect()
                 return c1
             except (KWP2000Error, KLineError, ValueError) as exc:
                 last = exc
-                sleep(8.0)
+                sleep(8.0)  # lät connect misslyckas → låt sessionen dö före nästa init
         raise KWP2000Error(f"kunde inte etablera Td5-session efter {attempts} försök: {last}")
 
     # ---- avläsning av livedata --------------------------------------- #

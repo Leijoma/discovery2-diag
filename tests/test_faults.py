@@ -46,6 +46,14 @@ def test_decode_faults_named_bits_from_map(monkeypatch):
     assert set(decode_faults(b"\xc0")) == {"test-fel", "byte0.bit6"}
 
 
+def test_decode_faults_ignores_bytes_beyond_block():
+    from d2diag.td5.faults import FAULT_BLOCK_LEN
+
+    block = bytearray(FAULT_BLOCK_LEN + 3)
+    block[FAULT_BLOCK_LEN] = 0xFF  # checksumma/glitch efter blocket → ska ignoreras
+    assert decode_faults(bytes(block)) == []
+
+
 def test_decode_real_sniff_fault_block():
     # Verkligt felblock ur Ekaitza Read_Faults.log: 25 61 3b <35 bytes> <cksum>.
     resp = bytes.fromhex(

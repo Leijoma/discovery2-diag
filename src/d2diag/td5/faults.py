@@ -22,6 +22,10 @@ class Fault:
     name: str
 
 
+# Statusblocket är 35 bytes (offset 0–34). Den toleranta läsningen kan släpa med
+# ramens checksumma/glitch efter blocket — de ska INTE avkodas som fel.
+FAULT_BLOCK_LEN = 35
+
 # Felkarta ur Ekaitza (210 namngivna bitar, offset 0–34). BELAGD.
 FAULTS: "list[Fault]" = [
     Fault(0, 0x01, "egr inlet throttle diagnostics (L)"),
@@ -244,6 +248,7 @@ def decode_faults(block: bytes) -> "list[str]":
     rapporteras generiskt som ``byte<off>.bit<n>`` så att en okänd felbit aldrig
     försvinner tyst.
     """
+    block = block[:FAULT_BLOCK_LEN]  # kapa bort ev. checksumma/glitch efter blocket
     active: "list[str]" = []
     known_mask: "dict[int, int]" = {}
     for f in FAULTS:
