@@ -54,17 +54,26 @@ SIGNALS = [
     Signal("rpm", 0x09, 0, "u16", unit="rpm"),
     Signal("speed", 0x0D, 0, "u8", unit="km/h"),
     Signal("battery", 0x10, 0, "u16", scale=1 / 1000, unit="V"),
+    # LID 1A: fyra temperaturer på JÄMNA offset (0/4/8/12), u16/10−273.2 °C.
+    # De udda offseten (2/6/10/14) är råa givarfält, inte temperaturer.
     Signal("coolant_temp", 0x1A, 0, **_TEMP),
     Signal("air_temp", 0x1A, 4, **_TEMP),
+    # OBS: omgivningsluftgivaren är inte monterad på denna ECU-variant → ECU:n
+    # rapporterar konstant default 0x1088 = 150,0 °C. Ignorera värdet (oansluten).
     Signal("ext_temp", 0x1A, 8, **_TEMP),
     Signal("fuel_temp", 0x1A, 12, **_TEMP),
-    Signal("throttle_p1", 0x1B, 0, scale=1 / 1000, unit="V"),
-    Signal("throttle_p2", 0x1B, 2, scale=1 / 1000, unit="V"),
-    Signal("throttle_p3", 0x1B, 4, scale=1 / 1000, unit="V"),
-    Signal("throttle_p4", 0x1B, 6, scale=1 / 1000, unit="V"),
-    Signal("throttle_supply", 0x1B, 8, scale=1 / 1000, unit="V"),
-    Signal("aap", 0x1C, 0, scale=1 / 10000, unit="bar"),
-    Signal("maf", 0x1C, 4, "u16", unit="mg"),
+    # LID 1B: gaspedalgivare (accelerator), 4 fält — svaret är 8 databytes.
+    # Två redundanta potentiometerspår, beräknad pedalbegäran (%), 5V-referens.
+    Signal("pedal_track1", 0x1B, 0, scale=1 / 1000, unit="V"),
+    Signal("pedal_track2", 0x1B, 2, scale=1 / 1000, unit="V"),
+    Signal("pedal_demand", 0x1B, 4, scale=1 / 100, unit="%"),
+    Signal("pedal_supply", 0x1B, 6, scale=1 / 1000, unit="V"),
+    # LID 1C@0: grenrörstryck (MAP) enligt Ekaitza-etikett. boost = MAP − ambient(23).
+    # Etiketten obekräftad utan capture under laddtryck (vid tomgång ≈ omgivning).
+    Signal("manifold_press", 0x1C, 0, scale=1 / 10000, unit="bar"),
+    # 1C@4: ingen MAF-givare på denna tidiga Td5-ROM → EJ luftmassa (går 50→0
+    # av→igång). Behållet som rått fält; tolka inte som mg.
+    Signal("maf_raw", 0x1C, 4, "u16", unit=""),
     Signal("rpm_error", 0x21, 0, "s16", unit="rpm"),
     Signal("ambient_press_1", 0x23, 0, scale=1 / 10000, unit="bar"),
     Signal("ambient_press_2", 0x23, 2, scale=1 / 10000, unit="bar"),
