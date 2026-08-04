@@ -89,11 +89,13 @@ class DiagServer(ThreadingHTTPServer):
         port: int = 8080,
         poll_interval: float = 0.5,
         stream_interval: float = 0.5,
+        logger=None,
     ) -> None:
         super().__init__((host, port), _Handler)
         self.source = source
         self.poll_interval = poll_interval
         self.stream_interval = stream_interval
+        self.logger = logger  # valfri SnapshotLogger → loggar varje poll till fil
         self.latest: "dict" = {
             "status": "connecting", "source": source.name, "signals": {}, "faults": []
         }
@@ -135,6 +137,11 @@ class DiagServer(ThreadingHTTPServer):
                     "status": "error", "source": self.source.name,
                     "signals": {}, "faults": [], "error": f"{type(exc).__name__}: {exc}",
                 }
+            if self.logger is not None:
+                try:
+                    self.logger.log(self.latest)
+                except Exception:  # noqa: BLE001 — loggfel får aldrig fälla poll-loopen
+                    pass
             self._stop.wait(self.poll_interval)
 
     def start_polling(self) -> None:

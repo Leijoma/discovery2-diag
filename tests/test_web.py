@@ -18,6 +18,28 @@ def test_mock_source_shape():
     assert isinstance(d["faults"], list) and d["faults"]
 
 
+def test_snapshot_logger_throttle_and_fault_change(tmp_path):
+    from d2diag.web.logger import SnapshotLogger
+
+    p = tmp_path / "log.jsonl"
+    lg = SnapshotLogger(str(p), min_interval=999)  # hög throttle → bara feländring/förstalog
+    snap = {"status": "connected",
+            "signals": {"rpm": {"v": 800, "u": "rpm"}},
+            "faults": ["air flow circuit (Current)"]}
+    lg.log(snap)               # första → skrivs
+    lg.log(snap)               # oförändrat + throttlat → skrivs INTE
+    snap2 = dict(snap, faults=snap["faults"] + ["road speed missing (Logged)"])
+    lg.log(snap2)              # feländring → skrivs trots throttle
+
+    lines = p.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2
+    r0, r1 = json.loads(lines[0]), json.loads(lines[1])
+    assert r0["signals"]["rpm"] == 800
+    assert r0["faults"] == ["air flow circuit (Current)"]
+    assert r1.get("fault_change") is True
+    assert "road speed missing (Logged)" in r1["faults"]
+
+
 def test_resolve_serial_explicit_passthrough():
     from d2diag.web.sources import resolve_serial_port
     assert resolve_serial_port("/dev/ttyUSB3") == "/dev/ttyUSB3"

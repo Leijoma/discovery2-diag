@@ -26,6 +26,10 @@ def main() -> int:
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8080, help="HTTP-port (default 8080)")
     ap.add_argument("--interval", type=float, default=0.5, help="poll-/strömintervall (s)")
+    ap.add_argument("--log-file", help="logga data till denna JSONL-fil")
+    ap.add_argument("--log-dir", help="logga till DIR/session-<tid>.jsonl (auto-namn)")
+    ap.add_argument("--log-interval", type=float, default=2.0,
+                    help="min sekunder mellan loggrader (feländring loggas alltid)")
     args = ap.parse_args()
 
     if args.serial and not args.mock:
@@ -33,11 +37,23 @@ def main() -> int:
     else:
         source = MockDataSource()
 
+    logger = None
+    log_path = args.log_file
+    if not log_path and args.log_dir:
+        import datetime as _dt
+        stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        log_path = os.path.join(args.log_dir, f"session-{stamp}.jsonl")
+    if log_path:
+        from d2diag.web.logger import SnapshotLogger
+        logger = SnapshotLogger(log_path, min_interval=args.log_interval)
+
     srv = DiagServer(
         source, host=args.host, port=args.port,
-        poll_interval=args.interval, stream_interval=args.interval,
+        poll_interval=args.interval, stream_interval=args.interval, logger=logger,
     )
     print(f"Dashboard: http://localhost:{args.port}   (källa: {source.name})")
+    if log_path:
+        print(f"Loggar data → {log_path}")
     print("Ctrl-C för att avsluta.")
     try:
         srv.serve()
