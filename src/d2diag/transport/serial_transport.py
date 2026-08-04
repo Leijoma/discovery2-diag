@@ -114,15 +114,16 @@ class SerialTransport(Transport):
 
     @staticmethod
     def slow_init_bits(address: int) -> "list[int]":
-        """5-baud init-ram för ``address``: startbit(0), 7 databitar LSB-först,
-        udda paritet, stoppbit(1). Ren funktion → testbar utan hårdvara."""
+        """5-baud init-ram för ``address``: startbit(0), **8 databitar LSB-först**,
+        stoppbit(1) — 8N1, ingen paritet (KWP2000 slow init). Ren + testbar.
+
+        RÄTTAT 2026-08-04: tidigare 7 databitar + felräknad "udda paritet" gav fel
+        byte för adresser med udda antal ettor (0x29→0xA9, 0x34→0xB4) — vilket hade
+        fått en slow-init-skanning att missa just de intressanta kandidaterna. 0x33
+        råkade bli rätt och dolde buggen."""
         bits = [0]
-        parity = 1  # udda paritet
-        for i in range(7):
-            b = (address >> i) & 1
-            bits.append(b)
-            parity ^= b
-        bits.append(1 if parity == 0 else 0)
+        for i in range(8):
+            bits.append((address >> i) & 1)
         bits.append(1)
         return bits
 

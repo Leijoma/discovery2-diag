@@ -3,17 +3,15 @@ from d2diag.transport import LoggingTransport, SerialTransport
 
 
 def test_slow_init_bits_frame():
-    # 5-baud init-ram för adress 0x33 (klassisk ISO 9141): start, 7 databitar
-    # LSB-först, udda paritet (samma logik som muki01/exempelkod), stopp.
-    bits = SerialTransport.slow_init_bits(0x33)
-    assert len(bits) == 10
-    assert bits[0] == 0 and bits[9] == 1              # start / stopp
-    assert bits[1:8] == [1, 1, 0, 0, 1, 1, 0]         # 0x33 LSB-först
-    assert bits[8] == 0                                # paritetsbit per referensen
-    # adress 0x13 (motorn använder visserligen fast init, men testa bitmönstret)
-    b13 = SerialTransport.slow_init_bits(0x13)
-    assert b13[0] == 0 and b13[9] == 1
-    assert b13[1:8] == [1, 1, 0, 0, 1, 0, 0]          # 0x13 = 0010011 LSB-först
+    # 5-baud init-ram: startbit(0), 8 databitar LSB-först, stoppbit(1) — 8N1.
+    for addr in (0x33, 0x13, 0x29, 0x34, 0x00, 0xFF):
+        bits = SerialTransport.slow_init_bits(addr)
+        assert len(bits) == 10
+        assert bits[0] == 0 and bits[9] == 1          # start / stopp
+        data = bits[1:9]                               # 8 databitar LSB-först
+        assert sum(b << i for i, b in enumerate(data)) == addr
+    # regressionsvakt: 0x29 skickas nu som 0x29 (inte 0xA9 som med gamla paritetsbuggen)
+    assert SerialTransport.slow_init_bits(0x29)[1:9] == [1, 0, 0, 1, 0, 1, 0, 0]
 
 
 def test_parse_slow_init():

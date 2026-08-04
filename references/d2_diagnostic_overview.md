@@ -18,12 +18,12 @@ a commercial vendor modul-guider (protokollfakta; ingen kod kopierad).
 | Modul | Vad | Källor / status |
 |---|---|---|
 | **Td5 EDC** (motor) | Adress 0x13, fast init, seed/key. **KLART** i d2diag. | Ekaitza + reference tool (felkarta korsvaliderad) |
-| **Wabco SLABS** | ABS/SLS/EBD/ETC/HDC/EAS. 47 feltyper, Current/Intermittent + räknare. | `wabco_slabs_capabilities.md`. Adress/init okänt → probe |
+| **Wabco SLABS** | ABS/SLS/EBD/ETC/HDC/EAS. 47 feltyper, Current/Intermittent + räknare. | `wabco_slabs_capabilities.md`. **FAST init** (ej slow!); kandidatadress **0x29** → `probe_slabs.py` |
 | **Valeo BCU** | Centralelektronik + **immobiliser/larm/EKA/nyckelprogrammering**. | `valeo_bcu_capabilities.md`. Adress/init okänt |
 | **SRS/airbag** | Krockkuddar. | Ej kartlagt |
 | **ACE** | Active Cornering Enhancement (krängningsstyrning). | Egen K-line-diagnostikstift; ej kartlagt |
 | **HEVAC** | Klimat. | Ej kartlagt |
-| **EAT** | Automatlåda (ej relevant — vår bil är manuell). | — |
+| **EAT** | Automatlåda — **bilen är AUTOMAT**, så modulen är relevant. | Ej kartlagt |
 
 ## Resurs: reference tool/a commercial vendor modul-guider (funktionella kapabiliteter)
 a commercial vendor publicerar per-modul-guider (PDF) som beskriver *vad* varje
@@ -47,15 +47,24 @@ Detta antyder att SLABS-felminnet kan avkodas med **samma teknik som Td5**
 lista (47 typer) finns i Nancom-firmware men är inte publikt dumpad — **läses ut
 när vi väl kopplar upp mot SLABS.**
 
-## Bussavsökning 2026-08-03 (BELAGT) — SLABS kräver slow init
+## Bussavsökning 2026-08-03 (korrigerad 2026-08-04)
 `tools/probe_addresses.py` mot bilen (stillastående, tändning på):
-- **Endast 0x13 (motorn) svarar på fast init** (positivt C1).
-- Med motorsessionen dormant och 0x13 orörd: **ingen adress 0x01–0x3F svarar på
-  fast init.** ⇒ SLABS m.fl. använder **inte** fast init.
+- **Endast 0x13 (motorn) svarar på fysisk fast init** (`81 <addr> F7 81`, positivt C1).
+- Med motorsessionen dormant + 0x13 orörd: ingen adress **0x01–0x3F** svarade.
 - (Obs: en ÖPPEN motorsession generalRejectar alla adresser och maskerar bussen —
-  motorn måste vara dormant vid skanning, och 0x13 får ej adresseras.)
-- **Slutsats:** SLABS/BCU m.fl. kräver **5-baud slow init (ISO 9141)** — nästa
-  bygge. Referenskod finns: muki01 `send5baud()` + `references/.../exempelkod`.
+  motorn måste vara dormant, och 0x13 får ej adresseras.)
+
+**Korrekt (mildrad) slutsats:** *ingen annan modul svarade på just **fysisk fast
+init med testare F7 i 0x01–0x3F** under denna skanning.* Det **bevisar inte** slow
+init. **Motbevis (LR-forum + pyTD5Tester):** SLABS använder **KWP2000 fast init** —
+någon läste hjulhastighet/switchar + styrde utgångar den vägen. Konkret kandidat:
+**`81 29 F7 81 22`** (fysisk 0x29, F7) och funktionell **`C1 34 F1 81 67`** (0x34, F1).
+Skanningen missade dem (utanför 0x01–0x3F, annan testaradress, ev. funktionell init).
+Läs-DTC via standardtjänsten ger "invalid function" på SLABS; **clear (0x14) fungerar**
+→ felläsning sker via icke-standardtjänst, troligen `21 xx` (som Td5).
+**Nästa test:** `tools/probe_slabs.py` (riktat mot 0x29/0x34, lång tystnad, ≥5 s mellan).
+Slow init behövs alltså troligen INTE för SLABS (men `slow_init` finns kvar, buggen
+med 7→8 databitar rättad 2026-08-04, för ev. andra moduler).
 
 ## Sniffning — bästa vägen till okända protokoll
 K-line är en tråd, halvduplex → en **passiv RX-lyssnare fångar hela samtalet**
@@ -73,7 +82,9 @@ skapades.
   eller sampla linjenivån; men tjänsterna/felstrukturen (det svåra) fås ur sniffen.
 
 ## Nästa steg för att nå en ny modul (mönster)
-1. **Implementera 5-baud slow init** i transportlagret (adressbyte @ 5 baud →
-   ECU svarar 0x55 + 2 keybytes → skicka inverterad keybyte). Sedan slow-init-skanning.
-2. **Tjänster:** identifiera läs-DTC / read-inputs / clear (KWP2000-tjänster).
+1. **Prova fast init först** (D2 använder mest fast init): riktade StartCommunication
+   mot kandidatadresser — för SLABS `tools/probe_slabs.py` (0x29/0x34). Slow init
+   (`SerialTransport.slow_init`, nu 8N1) är fallback för moduler som kräver det.
+2. **Tjänster:** identifiera read-inputs/läs-DTC/clear. OBS: standard-läs-DTC kan ge
+   "invalid function" (som SLABS) → prova `21 xx` ReadDataByLocalIdentifier (Td5-mönstret).
 3. **Tunt modul-lager** ovanpå det generiska KWP2000-lagret (återanvänd Td5-mönstret).
