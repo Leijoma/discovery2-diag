@@ -157,6 +157,10 @@ class Td5DataSource(DataSource):
             if self._td5 is None:
                 self._td5 = self._connect()
             signals = self._td5.read_all()
+            if not signals:
+                # sessionen "uppe" men alla läsningar föll (brus/tappad kabel) →
+                # behandla som tappad kontakt så vi återansluter nästa poll.
+                raise RuntimeError("inga signaler lästes — brus eller tappad kontakt")
             # läs felkoder mer sällan (dyrt); var ~10:e poll
             if self._read_faults and self._fault_tick % 10 == 0:
                 try:
