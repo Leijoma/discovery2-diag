@@ -13,7 +13,7 @@ def test_mock_source_shape():
     assert d["status"] == "connected"
     assert d["source"] == "mock"
     assert "rpm" in d["signals"]
-    assert set(d["signals"]["rpm"]) == {"v", "u"}
+    assert set(d["signals"]["rpm"]) == {"v", "u", "s"}
     assert d["signals"]["battery"]["u"] == "V"
     assert isinstance(d["faults"], list) and d["faults"]
 
