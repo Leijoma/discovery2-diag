@@ -16,27 +16,41 @@ import time
 from d2diag.kline import KLine
 from d2diag.transport import SerialTransport
 
+# Kandidaterna FÖRST (motorn hålls dormant → ingen öppen motorsession maskerar);
+# motor-kontrollen SIST (den öppnar motorsessionen, men då är kandidaterna redan klara).
 CANDIDATES = [
-    ("motor 0x13 (kontroll)",         bytes.fromhex("8113f7810c")),
     ("SLABS? fast init 0x29 (F7)",    bytes.fromhex("8129f78122")),
     ("SLABS? funktionell 0x34 (F1)",  bytes.fromhex("c134f18167")),
+    ("motor 0x13 (kontroll, SIST)",   bytes.fromhex("8113f7810c")),
 ]
+
+
+def classify(raw: bytes, frame: bytes) -> "tuple[bytes, str]":
+    """Plocka svaret EFTER vårt eko och klassificera (undvik falskt C1 i ekot)."""
+    idx = raw.find(frame)
+    resp = raw[idx + len(frame):] if idx >= 0 else raw
+    if 0xC1 in resp:
+        return resp, "C1! POSITIVT SVAR"
+    if b"\x7f\x81" in resp:
+        return resp, "7F 81 (generalReject — troligen motorn maskerar)"
+    if 0x7F in resp:
+        return resp, "7F"
+    return resp, ("(inget svar)" if not resp.strip(b"\x00") else "brus/okänt")
 
 
 def main() -> int:
     port = sys.argv[1] if len(sys.argv) > 1 else "/dev/ttyUSB0"
     kl = KLine(SerialTransport(port, timeout=1.0))
     with kl:
-        print("håller linjen tyst 20 s...")
-        time.sleep(20)
         for name, frame in CANDIDATES:
+            print(f"håller linjen tyst 20 s (låt ev. session dö)...")
+            time.sleep(20)
             kl._fast_init_pulse()          # 25 ms låg + 25 ms hög
             kl._flush_input()
             kl._t.send(frame)              # skicka rå kandidatram
             raw = kl._burst_read(0.06, 1.2)
-            tag = "C1! (positivt)" if 0xC1 in raw else ("7F (svar-men-avvisat)" if 0x7F in raw else "")
-            print(f"{name:32s} TX {frame.hex(' ')} → RX {raw.hex(' ') or 'tyst'}  {tag}")
-            time.sleep(5)                  # ≥3–5 s mellan försök (K-line-ref)
+            resp, tag = classify(raw, frame)
+            print(f"{name:32s} TX {frame.hex(' ')} → svar {resp.hex(' ') or 'tyst'}  {tag}")
     return 0
 
 

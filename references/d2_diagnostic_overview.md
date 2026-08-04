@@ -47,6 +47,24 @@ Detta antyder att SLABS-felminnet kan avkodas med **samma teknik som Td5**
 lista (47 typer) finns i Nancom-firmware men är inte publikt dumpad — **läses ut
 när vi väl kopplar upp mot SLABS.**
 
+## Biltest 2026-08-04 (fler init-varianter) — SLABS ligger på pin 7
+`probe_slabs.py` + `probe_addresses.py 40 FF` + F1-varianter mot bilen (motorn C1 felfri):
+- **0x29/0x34 (F7 fysisk + F1 fysisk + funktionell): tyst.**
+- **Hela 0x01–0xFF fysisk fast init F7: tyst** utom 0x13.
+- Motorns kontroll gav `03 c1 57 8f aa` varje gång → uppkoppling/tajming utmärkt.
+
+**BELÄGG (LR OBD-pinout + community): pin 7:s K-line på D2 delas av ECM, ABS,
+SLABS, HVAC, farthållare, instrument** — INGEN separat kroppssystem-K-line (pin 15
+= L-line, knappt använd, bara ECM). reference tools **Blue-lead** når alla; NCOM13/NCOM15
+= mjukvarulås, ej olika kablar. ⇒ **SLABS ÄR nåbar på pin 7 (vår tråd) — det är
+protokoll/adress, inte stift.** (Tidigare "separat stift"-hypotes förkastad.)
+
+**Kvar att prova (multi-läges, `tools/probe_scan.py`):** fast **F1** (hela 0x01–0xFF),
+**funktionell (C1)** F1/F7, samt **slow init** (nu rättad 8N1 — SLABS kan trots
+forumet använda ISO 9141 0,4 kb/s). Kreativt: **passiv sniff vid nyckel-på** (BCU=
+gateway kan väcka/pinga moduler → adresser utan att gissa init). Total tystnad hittills
+tyder ändå på ovanlig init/adress → **sniffa ett lånat verktyg** är fortsatt säkraste vägen.
+
 ## Bussavsökning 2026-08-03 (korrigerad 2026-08-04)
 `tools/probe_addresses.py` mot bilen (stillastående, tändning på):
 - **Endast 0x13 (motorn) svarar på fysisk fast init** (`81 <addr> F7 81`, positivt C1).
