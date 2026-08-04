@@ -18,6 +18,42 @@ def test_mock_source_shape():
     assert isinstance(d["faults"], list) and d["faults"]
 
 
+def test_resolve_serial_explicit_passthrough():
+    from d2diag.web.sources import resolve_serial_port
+    assert resolve_serial_port("/dev/ttyUSB3") == "/dev/ttyUSB3"
+
+
+def test_resolve_serial_auto_prefers_known_chip(monkeypatch):
+    import d2diag.web.sources as s
+
+    mapping = {
+        "/dev/serial/by-id/*": [
+            "/dev/serial/by-id/usb-Prolific_PL2303-if00",
+            "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A1-if00-port0",
+        ],
+        "/dev/ttyUSB*": ["/dev/ttyUSB0", "/dev/ttyUSB1"],
+        "/dev/ttyACM*": [],
+    }
+    monkeypatch.setattr(s.glob, "glob", lambda pat: mapping.get(pat, []))
+    # föredrar FTDI-matchen bland by-id-länkarna
+    assert "FTDI" in s.resolve_serial_port("auto")
+
+
+def test_resolve_serial_auto_falls_back_to_ttyusb(monkeypatch):
+    import d2diag.web.sources as s
+    mapping = {"/dev/ttyUSB*": ["/dev/ttyUSB0"]}
+    monkeypatch.setattr(s.glob, "glob", lambda pat: mapping.get(pat, []))
+    assert s.resolve_serial_port("auto") == "/dev/ttyUSB0"
+
+
+def test_resolve_serial_auto_none_raises(monkeypatch):
+    import d2diag.web.sources as s
+    import pytest
+    monkeypatch.setattr(s.glob, "glob", lambda pat: [])
+    with pytest.raises(FileNotFoundError):
+        s.resolve_serial_port("auto")
+
+
 def test_mock_clear_faults_command():
     src = MockDataSource()
     assert src.poll()["faults"]  # har fel från början

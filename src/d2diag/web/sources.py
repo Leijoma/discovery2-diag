@@ -7,10 +7,35 @@ UI-utveckling utan hårdvara. ``Td5DataSource`` läser den riktiga Td5-ECU:n.
 from __future__ import annotations
 
 import abc
+import glob
 import math
 import random
 
 from ..td5.identifiers import BY_NAME
+
+# Chip-ledtrådar för att känna igen en KKL/OBD-kabel bland flera USB-seriella enheter.
+_KKL_HINTS = ("ft232", "ftdi", "ch340", "cp210", "usb-serial", "usb_uart", "obd", "kkl")
+
+
+def resolve_serial_port(spec: "str | None") -> str:
+    """Returnera en konkret serieport.
+
+    ``spec`` som är en riktig sökväg returneras oförändrad. ``None`` eller
+    ``"auto"`` autodetekterar en USB-seriell enhet — föredrar de **stabila**
+    ``/dev/serial/by-id/``-länkarna (helst en känd KKL-chip), sedan ``ttyUSB*`` /
+    ``ttyACM*``. Höjer :class:`FileNotFoundError` om ingen hittas (t.ex. kabeln
+    inte inkopplad än) — anropas om vid varje anslutningsförsök.
+    """
+    if spec and spec != "auto":
+        return spec
+    by_id = sorted(glob.glob("/dev/serial/by-id/*"))
+    preferred = [p for p in by_id if any(h in p.lower() for h in _KKL_HINTS)]
+    for candidates in (preferred, by_id,
+                       sorted(glob.glob("/dev/ttyUSB*")),
+                       sorted(glob.glob("/dev/ttyACM*"))):
+        if candidates:
+            return candidates[0]
+    raise FileNotFoundError("ingen USB-seriell enhet hittad (KKL ej ansluten?)")
 
 # Enhetskarta från identifier-tabellen (namn → enhet).
 UNITS = {name: sig.unit for name, sig in BY_NAME.items()}
@@ -121,7 +146,8 @@ class Td5DataSource(DataSource):
         from ..td5 import Td5
         from ..transport import SerialTransport
 
-        td5 = Td5(KWP2000(KLine(SerialTransport(self._port, timeout=1.0)), tolerant=True))
+        port = resolve_serial_port(self._port)  # autodetektera vid varje försök
+        td5 = Td5(KWP2000(KLine(SerialTransport(port, timeout=1.0)), tolerant=True))
         td5.open()
         td5.establish()
         return td5
