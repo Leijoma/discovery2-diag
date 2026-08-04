@@ -11,7 +11,7 @@ import glob
 import math
 import random
 
-from ..td5.identifiers import BY_NAME
+from ..td5.identifiers import BY_NAME, signal_status
 
 # Chip-ledtrådar för att känna igen en KKL/OBD-kabel bland flera USB-seriella enheter.
 _KKL_HINTS = ("ft232", "ftdi", "ch340", "cp210", "usb-serial", "usb_uart", "obd", "kkl")
@@ -42,8 +42,12 @@ UNITS = {name: sig.unit for name, sig in BY_NAME.items()}
 
 
 def _sig(values: "dict[str, float]") -> "dict[str, dict]":
-    """Paketera {namn: värde} → {namn: {"v": värde, "u": enhet}}."""
-    return {k: {"v": round(v, 2), "u": UNITS.get(k, "")} for k, v in values.items()}
+    """Paketera {namn: värde} → {namn: {"v", "u", "s"}} där s = ok/low/high/None."""
+    out = {}
+    for k, v in values.items():
+        vr = round(v, 2)
+        out[k] = {"v": vr, "u": UNITS.get(k, ""), "s": signal_status(k, vr)}
+    return out
 
 
 class DataSource(abc.ABC):

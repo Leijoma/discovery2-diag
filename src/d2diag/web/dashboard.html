@@ -41,6 +41,13 @@
   .fault.logged { border-left-color:var(--warn); }
   .fault .tag { font-size:11px; color:var(--muted); margin-left:8px; }
   .none { color:var(--muted); font-size:14px; }
+  .s-high { color:var(--err) !important; }
+  .s-low { color:var(--warn) !important; }
+  .anom { display:flex; flex-wrap:wrap; gap:8px; }
+  .anom .item { padding:8px 12px; border-radius:10px; background:var(--card2);
+                border-left:4px solid var(--warn); font-size:14px; font-variant-numeric:tabular-nums; }
+  .anom .item.high { border-left-color:var(--err); }
+  .anom .item .arrow { font-size:11px; color:var(--muted); margin-left:6px; }
   .schema { background:var(--card); border:1px solid #262e3a; border-radius:14px; padding:8px; overflow-x:auto; }
   #engine { width:100%; min-width:560px; height:auto; display:block; }
   #engine .box, #engine .block { fill:var(--card2); stroke:#3a4652; stroke-width:1.5; }
@@ -71,6 +78,10 @@
 </header>
 <main>
   <div class="hero" id="hero"></div>
+  <section>
+    <h2>Avvikelser</h2>
+    <div class="anom" id="anom"></div>
+  </section>
   <section>
     <h2>Motorschema</h2>
     <div class="schema">
@@ -147,7 +158,7 @@
   const fmt = x => (Math.abs(x) >= 100 ? Math.round(x) : x.toFixed(1));
 
   function heroCard(key, sig) {
-    let label, value, unit;
+    let label, value, unit, vcls = "";
     if (key === "__boost") {
       const m = sig.manifold_press, a = sig.ambient_press_1;
       if (!m) return "";
@@ -156,10 +167,11 @@
     } else {
       const s = sig[key]; if (!s) return "";
       label = LABELS[key] || key; value = fmt(s.v); unit = s.u || "";
+      if (s.s === "low" || s.s === "high") vcls = " s-" + s.s;
     }
     const cls = key === "rpm" ? "card rpm" : "card";
     return `<div class="${cls}"><div class="k">${label}</div>
-            <div class="v">${value}<span class="u">${unit}</span></div></div>`;
+            <div class="v${vcls}">${value}<span class="u">${unit}</span></div></div>`;
   }
 
   function render(d) {
@@ -171,10 +183,18 @@
     const sig = d.signals || {};
     $("hero").innerHTML = HERO.map(k => heroCard(k, sig)).join("");
     updateEngine(sig, d.faults || []);
+    // avvikelser (signaler utanför driftsintervallet)
+    const anoms = Object.keys(sig).filter(k => sig[k].s === "low" || sig[k].s === "high").sort();
+    $("anom").innerHTML = anoms.length ? anoms.map(k => {
+      const s = sig[k];
+      return `<div class="item ${s.s}">${LABELS[k]||k}: <b>${fmt(s.v)} ${s.u||""}</b>` +
+             `<span class="arrow">${s.s === "high" ? "▲ högt" : "▼ lågt"}</span></div>`;
+    }).join("") : '<span class="none">Inga avvikelser</span>';
     $("signals").innerHTML = Object.keys(sig).sort().map(k => {
       const s = sig[k];
+      const cls = (s.s === "low" || s.s === "high") ? " s-" + s.s : "";
       return `<div class="row"><span class="n">${LABELS[k]||k}</span>
-              <span class="val">${fmt(s.v)} <span class="u">${s.u||""}</span></span></div>`;
+              <span class="val${cls}">${fmt(s.v)} <span class="u">${s.u||""}</span></span></div>`;
     }).join("") || '<span class="none">—</span>';
     const faults = d.faults || [];
     $("faults").innerHTML = faults.length ? faults.map(f => {

@@ -18,6 +18,34 @@ def test_mock_source_shape():
     assert isinstance(d["faults"], list) and d["faults"]
 
 
+def test_signal_status_ranges():
+    from d2diag.td5.identifiers import signal_status
+    assert signal_status("battery", 13.5) == "ok"
+    assert signal_status("battery", 10.0) == "low"
+    assert signal_status("coolant_temp", 120) == "high"
+    assert signal_status("ext_temp", 150) is None   # oansluten givare → flaggas ej
+    assert signal_status("maf_raw", 999) is None
+    assert signal_status("okänd", 1) is None
+
+
+def test_mock_signals_include_status_and_flag_iat():
+    d = MockDataSource().poll()
+    assert "s" in d["signals"]["rpm"]
+    assert d["signals"]["air_temp"]["s"] == "high"   # mock IAT 120 °C → högt
+    assert d["signals"]["battery"]["s"] == "ok"
+
+
+def test_logger_records_anomalies(tmp_path):
+    from d2diag.web.logger import SnapshotLogger
+    p = tmp_path / "a.jsonl"
+    lg = SnapshotLogger(str(p), min_interval=999)
+    lg.log({"status": "connected", "faults": [], "signals": {
+        "air_temp": {"v": 120, "u": "°C", "s": "high"},
+        "battery": {"v": 13.5, "u": "V", "s": "ok"}}})
+    row = json.loads(p.read_text(encoding="utf-8").strip())
+    assert row["anom"] == ["air_temp"]
+
+
 def test_snapshot_logger_throttle_and_fault_change(tmp_path):
     from d2diag.web.logger import SnapshotLogger
 

@@ -87,6 +87,44 @@ SIGNALS = [
 BY_NAME = {s.name: s for s in SIGNALS}
 LIDS = sorted({s.lid for s in SIGNALS})
 
+# Rimliga driftsintervall (min_ok, max_ok) för avvikelseflaggning. Signaler utan
+# post flaggas inte (ext_temp = oansluten givare 150 °C; maf_raw = okänd skala).
+LIMITS = {
+    "rpm": (0, 4800),
+    "speed": (0, 200),
+    "battery": (11.5, 15.5),
+    "coolant_temp": (-40, 105),      # bara högt = överhettning; kallstart lågt är ok
+    "air_temp": (-30, 80),
+    "fuel_temp": (-30, 90),
+    "manifold_press": (0.8, 2.6),
+    "ambient_press_1": (0.8, 1.1),
+    "ambient_press_2": (0.8, 1.1),
+    "rpm_error": (-300, 300),
+    "pedal_track1": (0.0, 5.1),
+    "pedal_track2": (0.0, 5.1),
+    "pedal_demand": (0.0, 100.0),
+    "pedal_supply": (4.7, 5.3),      # 5V-referens; utanför = matningsproblem
+    "balance_1": (-12, 12),
+    "balance_2": (-12, 12),
+    "balance_3": (-12, 12),
+    "balance_4": (-12, 12),
+    "balance_5": (-12, 12),
+}
+
+
+def signal_status(name: str, value: "float | None") -> "str | None":
+    """Returnera 'ok' / 'low' / 'high' mot driftsintervallet, eller None om
+    signalen saknar intervall (flaggas ej)."""
+    lim = LIMITS.get(name)
+    if lim is None or value is None:
+        return None
+    lo, hi = lim
+    if value < lo:
+        return "low"
+    if value > hi:
+        return "high"
+    return "ok"
+
 
 def signals_for_lid(lid: int) -> "list[Signal]":
     return [s for s in SIGNALS if s.lid == lid]
