@@ -86,6 +86,23 @@ init** (ISO 9141) svarar flera moduler med **komplett, reproducerbar handskaknin
 | **0x33** | `08 08` | ISO 9141-2 | 3/3 komplett (~addr 0xCC ✓) |
 | **0x40** | `e5 8f` | KWP2000 (KW2=8F) | 2/3 komplett (~addr 0xBF ✓) |
 
+**IDENTITET (research 2026-08-05, community + strömdomän) — omtolkar 0x33:**
+- **0x33 = generisk OBD-II** (INTE en chassimodul). `0x33` är *standard*-5-baud-OBD-II-
+  adressen (ISO 9141-2), och `55 08 08` är textbok-ISO9141-2-svaret. ⇒ Detta är
+  **Td5-motorns OBD-II-sida** (samma ECM som svarar fast init på 0x13). Community:
+  "cheap devices only read engine codes" — 0x33 är just den generiska motoringången.
+- **0x40 = trolig BCU (Valeo).** KWP2000 + svarar med nyckel HELT AV = permanent
+  batterimatad; enda D2-modulen som är det (larm/immobiliser). Medel-hög konfidens.
+- **0x18 = oklart.** ISO9141-2 (KW 08 08) som 0x33, tändningsmatat. Antingen en riktig
+  proprietär modul (SLABS/EAT/SRS?) ELLER motorns OBD-sida på en andra adress. Låg konf.
+- **SLABS/EAT/SRS ännu EJ lokaliserade.** VIKTIGT: slow-init-scanet testade bara en
+  KANDIDATLISTA (0x08/14/18/28/29/33/34/38/40/44/50), inte hela 0x01–0xFF. SLABS kan
+  ligga på en oskannad slow-adress. **Nästa biltest: `tools/slow_sweep.py <port>`** —
+  uttömmande slow-svep 0x01–0xFF med handskakningsklassning (KOMPLETT/SYNC/tyst) +
+  auto-omverifiering (3×/8 s) + KW/protokoll-tolkning. Ett kommando, ~13 min, tändning på.
+Källor: discoii.wordpress OBDII, a commercial vendor SM016, reference tool Valeo-BCU/Wabco-guider,
+obd-cable ISO9141-5-baud (0x33 std-adress, 55 08 08=ISO9141 / 55 8F..=KWP).
+
 **Strömdomän-fingeravtryck (3 nyckellägen, 2026-08-05):** 0x40 svarar **även i läge 0
 (nyckel helt av)** = **permanent batterimatad** → **BCU (Valeo)** i praktiken bekräftad
 (alltid live för larm/immobiliser; flakig i läge 0 = väcks ur sleep). 0x18 & 0x33 tysta
