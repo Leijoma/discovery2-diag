@@ -62,7 +62,15 @@ Grupperat efter reference tool-skärm (värden = exempel):
 | `13` | rear left (`31 22 13 c0 c1 f4`) |
 | `12` | rear right (`31 22 12 30 c1 f4`) |
 | `14` | module bleed steg 4 |
-Andra byten (`0c/03/c0/30` + `c1 f4`) kodar in/ut-ventil + tid — kvar att fullt tolka.
+**Flagg-byten = 2-bitars-mask per hjul (avkodat 2026-08-07):** `03`=HF (bit 0–1),
+`0c`=VF (bit 2–3), `30`=HB (bit 4–5), `c0`=VB (bit 6–7) — dvs 2 bitar (in-/ut-ventil)
+per hjul i ordningen HF, VF, HB, VB. `sub` = `0x10 + hjulindex` (HF=0…VB=3). `c1 f4`
+konstant (trolig varaktighet/timeout). Live-data är också hjulvis: `21 43`=4
+hjulhastigheter, `21 50`=4 givarspänningar → passar en hjul-orienterad UI perfekt.
+
+**OBS — lamptester saknas rent:** instrumentlamptesterna (TC/ABS/HDC/broms/SLS-lampor)
+kördes bara i den FÖRSTA sessionen (baud-krock → skräp). Byten är obrukbara; funktionen
+finns men måste **loggas om** (lista gärna reference tool-ordningen samtidigt).
 
 ## Att bygga i d2diag (allt underlag finns nu)
 `Slabs(KWP2000(KLine(...)))`: establish() via fast init 0x29 → C1 57 8F; keepalive 3E;
