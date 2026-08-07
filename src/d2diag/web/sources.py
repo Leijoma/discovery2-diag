@@ -59,6 +59,9 @@ class DataSource(abc.ABC):
     def poll(self) -> "dict":
         """Returnera {status, signals, faults, error?}."""
 
+    def disconnect(self) -> None:
+        """Släpp ev. K-line-session/port (vid modulbyte). Bas: inget att göra."""
+
     def command(self, action: str, params: "dict | None" = None) -> "dict":
         """Utför ett skrivkommando. Bas: okänt. Returnerar {ok, message|error}.
 
@@ -155,6 +158,14 @@ class Td5DataSource(DataSource):
         td5.open()
         td5.establish()
         return td5
+
+    def disconnect(self) -> None:
+        try:
+            if self._td5 is not None:
+                self._td5.close()
+        except Exception:  # noqa: BLE001
+            pass
+        self._td5 = None
 
     def poll(self) -> "dict":
         try:
@@ -321,6 +332,14 @@ class SlabsDataSource(DataSource):
         slabs.open()
         slabs.establish()
         return slabs
+
+    def disconnect(self) -> None:
+        try:
+            if self._slabs is not None:
+                self._slabs.close()
+        except Exception:  # noqa: BLE001
+            pass
+        self._slabs = None
 
     def poll(self) -> "dict":
         try:

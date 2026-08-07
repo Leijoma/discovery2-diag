@@ -173,13 +173,19 @@
   };
   const HERO = ["rpm","speed","coolant_temp","battery"];
 
-  // ---- flikar ----
-  let activeTab = "motor";
-  document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
-    activeTab = t.dataset.tab;
-    document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === t));
-    document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + activeTab));
-  });
+  // ---- flikar = välj modul (etablerar session på bilen; K-line har en session åt gången) ----
+  function showTab(name) {
+    document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === name));
+    document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
+  }
+  async function selectModule(name) {
+    showTab(name);
+    try {
+      await fetch("/command", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ action:"select_module", params:{ module:name } }) });
+    } catch(_) {}
+  }
+  document.querySelectorAll(".tab").forEach(t => t.onclick = () => selectModule(t.dataset.tab));
 
   function render(d) {
     const st = d.status || "connecting";
@@ -187,11 +193,10 @@
     $("status").textContent = ({connected:"ansluten",connecting:"ansluter…",error:"fel"}[st] || st) + (d.source ? " · " + d.source : "");
     $("error").textContent = d.error || "";
     const sig = d.signals || {}, faults = d.faults || [];
-    const isSlabs = (d.source || "").indexOf("slabs") >= 0;
-    // auto-hoppa till rätt flik första gången data kommer
-    if (!render._picked && st === "connected") { render._picked = true;
-      document.querySelector(`.tab[data-tab="${isSlabs?'slabs':'motor'}"]`).click(); }
-    if (isSlabs) renderSlabs(sig, faults); else renderMotor(sig, faults);
+    const mod = d.module || ((d.source || "").indexOf("slabs") >= 0 ? "slabs" : "motor");
+    // synka fliken till serverns aktiva modul EN gång vid start (sedan styr klick)
+    if (!render._init) { render._init = true; showTab(mod); }
+    if (mod === "slabs") renderSlabs(sig, faults); else renderMotor(sig, faults);
   }
 
   function renderMotor(sig, faults) {

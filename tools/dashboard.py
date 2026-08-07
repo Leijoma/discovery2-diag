@@ -40,12 +40,13 @@ def main() -> int:
     args = ap.parse_args()
 
     live = args.serial and not args.mock
-    if args.slabs:
-        source = SlabsDataSource(args.serial) if live else MockSlabsDataSource()
-    elif live:
-        source = Td5DataSource(args.serial)
+    # Multi-modul: både motor och SLABS finns, men bara EN är aktiv (K-line = delad
+    # buss). Flikvalet i UI:t byter aktiv modul (etablerar session vid val).
+    if live:
+        modules = {"motor": Td5DataSource(args.serial), "slabs": SlabsDataSource(args.serial)}
     else:
-        source = MockDataSource()
+        modules = {"motor": MockDataSource(), "slabs": MockSlabsDataSource()}
+    active = "slabs" if args.slabs else "motor"
 
     logger = None
     log_path = args.log_file
@@ -58,10 +59,11 @@ def main() -> int:
         logger = SnapshotLogger(log_path, min_interval=args.log_interval)
 
     srv = DiagServer(
-        source, host=args.host, port=args.port,
+        modules, host=args.host, port=args.port,
         poll_interval=args.interval, stream_interval=args.interval, logger=logger,
+        active=active,
     )
-    print(f"Dashboard: http://localhost:{args.port}   (källa: {source.name})")
+    print(f"Dashboard: http://localhost:{args.port}   (moduler: {', '.join(modules)} · aktiv: {active})")
     if log_path:
         print(f"Loggar data → {log_path}")
     print("Ctrl-C för att avsluta.")

@@ -84,20 +84,30 @@ class DiagServer(ThreadingHTTPServer):
 
     def __init__(
         self,
-        source: DataSource,
+        source: "DataSource | dict",
         host: str = "0.0.0.0",
         port: int = 8080,
         poll_interval: float = 0.5,
         stream_interval: float = 0.5,
         logger=None,
+        active: "str | None" = None,
     ) -> None:
         super().__init__((host, port), _Handler)
-        self.source = source
+        # source kan vara en enda DataSource (bakåtkompat) eller en dict
+        # {modulnamn: DataSource}. Bara en modul är aktiv åt gången — K-line är
+        # en delad buss, så att byta flik = släppa gammal session och etablera ny.
+        if isinstance(source, dict):
+            self._modules: "dict[str, DataSource]" = dict(source)
+        else:
+            self._modules = {source.name: source}
+        self._active = active if active in self._modules else next(iter(self._modules))
+        self.source = self._modules[self._active]
         self.poll_interval = poll_interval
         self.stream_interval = stream_interval
         self.logger = logger  # valfri SnapshotLogger → loggar varje poll till fil
         self.latest: "dict" = {
-            "status": "connecting", "source": source.name, "signals": {}, "faults": []
+            "status": "connecting", "source": self.source.name,
+            "module": self._active, "signals": {}, "faults": [],
         }
         self._stop = threading.Event()
         self._commands: "queue.Queue" = queue.Queue()
@@ -113,16 +123,38 @@ class DiagServer(ThreadingHTTPServer):
             return holder["result"]
         return {"ok": False, "error": "timeout — inget svar från diagnostiklagret"}
 
+    def modules(self) -> "list[str]":
+        return list(self._modules)
+
+    def _select(self, name: "str | None") -> "dict":
+        """Byt aktiv modul: släpp gamla sessionen, aktivera den nya (etableras
+        lazily vid nästa poll). K-line är en delad buss → bara en session åt gången."""
+        if name not in self._modules:
+            return {"ok": False, "error": f"okänd modul: {name}"}
+        if name != self._active:
+            try:
+                self.source.disconnect()  # släpp K-line-porten/sessionen
+            except Exception:  # noqa: BLE001
+                pass
+            self._active = name
+            self.source = self._modules[name]
+            self.latest = {"status": "connecting", "source": self.source.name,
+                           "module": name, "signals": {}, "faults": []}
+        return {"ok": True, "message": f"modul: {name}", "module": name}
+
     def _drain_commands(self) -> None:
         while True:
             try:
                 cmd, holder = self._commands.get_nowait()
             except queue.Empty:
                 return
+            action = cmd.get("action", "")
             try:
-                holder["result"] = self.source.command(
-                    cmd.get("action", ""), cmd.get("params")
-                )
+                if action == "select_module":
+                    params = cmd.get("params") or {}
+                    holder["result"] = self._select(params.get("module") or cmd.get("module"))
+                else:
+                    holder["result"] = self.source.command(action, cmd.get("params"))
             except Exception as exc:  # noqa: BLE001
                 holder["result"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
             holder["event"].set()
@@ -130,13 +162,16 @@ class DiagServer(ThreadingHTTPServer):
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
             self._drain_commands()  # skrivningar först, serialiserat med poll
+            active = self._active
             try:
-                self.latest = self.source.poll()
+                snap = self.source.poll()
             except Exception as exc:  # noqa: BLE001
-                self.latest = {
+                snap = {
                     "status": "error", "source": self.source.name,
                     "signals": {}, "faults": [], "error": f"{type(exc).__name__}: {exc}",
                 }
+            snap["module"] = active  # vilken flik datan hör till
+            self.latest = snap
             if self.logger is not None:
                 try:
                     self.logger.log(self.latest)
