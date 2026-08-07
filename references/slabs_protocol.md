@@ -1,0 +1,71 @@
+# Wabco SLABS — komplett K-line-protokoll (sniffat från reference tool 1)
+
+Fångat 2026-08-07 via passiv ESP32-tapp (RX-only, GPIO16) på pin 7, medan en lånad
+**reference tool 1** körde hela funktionsuppsättningen. Rå logg + markörer:
+`logs/session.log` (avkodas med `tools/decode_session.py`). Detta är **belagt ur
+verklig trafik**, inte gissat.
+
+## Grundläggande
+- **Adress `0x29`, FAST init:** `81 29 F7 81 22` → svar `C1 57 8F` (KWP2000, KW2=8F).
+- **Session:** oadresserade, längd-prefixade ramar `<len> <SID> <data…> <cs>`
+  (checksumma = byte-summa & 0xFF), samma stil som Td5-sessionen.
+- **Keepalive:** `01 3E` → `7E` (TesterPresent), ~1 s.
+- Kräver **tändning PÅ** (tändningsmatad modul). Comms dör >8–20 km/h.
+
+## ReadEcuIdentification — `1A xx`
+| Req | Svar | Innehåll |
+|---|---|---|
+| `1A 8A` | 28 byte `00 37 44 60 44 03 10 ff 31 90 10 86 40 ff 06 29 …` | hårdvaru-/config-ID |
+| `1A 8B` | ASCII | **mjukvarumoduler:** `KRTE49B0 HDTE16A0 EBTE87A0 CDTE91A0 KWTP11A0` |
+| `1A 8D` | ASCII | **VIN:** `SALLXXXXXXXXXXXXX` ✅ (bekräftar avkodningen) |
+
+## Felkoder
+- **`21 11`** → 16-byte block = **LOGGADE fel** (bit-per-fel). Före clear: bitar satta
+  i byte 3 (`0x10`) + byte 10 (`0x10`) = **två fel = baslinjens `020` RF-givare +
+  `027` shuttle valve**. Efter clear: allt `00`. ⇒ `21 11` ÄR loggat-fel-blocket.
+- **`21 47`** → 16-byte block = **AKTUELLA fel** (var `00` = inga aktuella nu).
+- **`14 FF FF`** → `54` = **ClearFaults** (säker write; nollställde `21 11`).
+- Byte↔nummer-mappning: 2 bitar (byte3.bit4, byte10.bit4) = fel 020+027. Fler
+  ankarpunkter fås med "framkalla känt fel"-tekniken.
+
+## Live-data — ReadDataByLocalIdentifier `21 xx`
+Grupperat efter reference tool-skärm (värden = exempel):
+- **SLS inputs:** `21 53`=`d2 d2 0f 0f` · `21 54`=`91 9c 0f 0f` (höjder, ändrades live) ·
+  `21 55`=`00 00 00 02` · `21 45`=`7f` · `21 46`=`78 76` · `21 49`=`00 00 01` ·
+  `21 59`=`00 0f 0f 0f`
+- **ABS inputs:** `21 43`=`7c 00 7c 00 7c 00 7c 00` (**4 hjulhastigheter**) ·
+  `21 44`=`00 80 01 02 01 01 02 01 02 02 03 04 …` · `21 50`=`72 73 73 72`
+  (**givarspänningar?**) · `21 57`=`06 0f 0f 0f` · `21 49`=`00 00 01`
+- **ABS-SLS switch:** `21 42`=`82` · `21 48`=`94 61` · `21 56`=`01 0f 0f 0f` ·
+  `21 58`=`32 0f 0f 0f`
+
+## Ställdon / tester — StartRoutine `31 xx` → svar `71 xx 20`
+**Detta är skriv-/styrprotokollet.** Alla svarar `71 <rid> 20`.
+| Kommando | Funktion |
+|---|---|
+| `31 25 <p>` | **ABS-pumprelä** (`31 25 08 fa 5c`=på, `31 25 02 fa 56`) |
+| `31 2F 28` | **SLS avluftningsventil** (exhaust valve) |
+| `31 30 28` | **SLS kompressor** |
+| `31 31 0a` | **SLS summer** |
+| `31 33 28` | **höj vänster** |
+| `31 34 28` | **höj höger** |
+| `31 35 28` | **sänk vänster** |
+| `31 36 28` | **sänk höger** |
+| `31 22 <sub> <p…>` | **ABS bleed + hjultester** (12-byte param) |
+
+**`31 22`-subkommandon** (byte efter `22` väljer krets, sedan `<flags> c1 f4 …`):
+| sub | funktion (ur markörer) |
+|---|---|
+| `04` | ABS power bleed (`31 22 04 00 49 c4 …`) |
+| `11` | front left / module bleed steg 1 (`31 22 11 0c c1 f4` = FL-test; `…11 00 c0 7d 00 bb` = bleed) |
+| `10` | front right (`31 22 10 03 c1 f4`) |
+| `13` | rear left (`31 22 13 c0 c1 f4`) |
+| `12` | rear right (`31 22 12 30 c1 f4`) |
+| `14` | module bleed steg 4 |
+Andra byten (`0c/03/c0/30` + `c1 f4`) kodar in/ut-ventil + tid — kvar att fullt tolka.
+
+## Att bygga i d2diag (allt underlag finns nu)
+`Slabs(KWP2000(KLine(...)))`: establish() via fast init 0x29 → C1 57 8F; keepalive 3E;
+`read_faults()` = `21 11`/`21 47` (bit-per-fel, karta i `slabs_fault_codes.md`);
+`clear_faults()` = `14 FF FF`; live via `21 xx`; ställdon via `31 xx`. Återanvänd
+Td5-lagrets toleranta läsning + samma sessionsmönster.
