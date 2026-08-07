@@ -27,6 +27,11 @@ Mål: fånga **Valeo BCU**-trafiken passivt med ESP32-tappen medan reference too
 - [ ] `bcu faults` — läs felkoder
 - [ ] `bcu inputs` — lås/CDL, tändningslägen 1/2/3, fönster, backljus, mileage…
 - [ ] `bcu settings` — ljus/fönster/marknadskonfig (bara LÄS)
+- [ ] `bcu market` — **läs marknads-/build-inställningen** (styr DRL m.m.; svensk bil
+      bör vara Skandinavien). NOTERA värdet som markör.
+- [ ] `bcu drl setting` — **läs DRL-inställningen** (RDL 016 = disabled; ⛔ ändra INTE).
+      Bakgrund: fabriks-DRL lämnas av — bilen har eftermarknads-SEPAB-box (se
+      register `blinkersspak-ljus.md` avsnitt 6). Vi vill bara **bekräfta** värdena.
 
 ## ⛔ RÖR ALDRIG
 - Nyckel-/transponderprogrammering (brick-zon).
