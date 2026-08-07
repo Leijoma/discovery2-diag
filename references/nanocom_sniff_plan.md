@@ -32,7 +32,16 @@ Källor: reference tool Evolution User Guide (v1.3), reference tool Wabco-SLABS-
 - [ ] Stillastående, **tändning på, motor av**. (SLABS tappar comms >8–20 km/h.)
 - [ ] Testa att `sniff.py` loggar tidsstämplat.
 
-## FAS 1 — Validera riggen på KÄND modul (motorn)
+## FAS 1a — Enumerera täckning (VIKTIGT — enheten är en reference tool 1)
+Originalet (reference tool 1) är oftast mest ett **Td5-motorverktyg**; bred D2-täckning
+(SLABS/BCU/EAT/ACE/SRS) hör ihop med **Evolution** OCH kräver **unlock-koder per
+systemgrupp** aktiverade på just denna enhet. Vi vet inte i förväg vad den kan.
+- [ ] Koppla in, **notera vilka system menyn erbjuder** för D2:an (bara motor? eller fler?).
+- [ ] Notera om moduler visas som **låsta** (kräver unlock-kod) vs tillgängliga.
+- Bara Td5 → vi validerar riggen (steg nedan) men når inte SLABS/BCU denna gång.
+- Fler system → kör hela per-modul-planen. **Allt utöver motorn = ren vinst.**
+
+## FAS 1b — Validera riggen på KÄND modul (motorn)
 
 - [ ] Ny logg `sniff_engine.log`. reference tool → **Td5 Engine (EDC)** → Read faults + live.
 - [ ] Bekräfta i loggen: `81 13 F7 81`, `C1 57 8F`, ev. `27 01→seed`, `21 xx`.
