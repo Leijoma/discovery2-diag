@@ -1,300 +1,251 @@
-<!doctype html>
-<html lang="sv">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Discovery 2 · Td5 diagnostik</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Discovery 2 · diagnostik</title>
 <style>
-  :root { --bg:#0f1216; --card:#1a1f27; --card2:#212833; --fg:#e7edf3; --muted:#8b97a7;
-          --accent:#4aa3ff; --ok:#37d67a; --warn:#f5a623; --err:#ff5b5b; }
-  * { box-sizing:border-box; }
+  :root {
+    --bg:#0e1116; --card:#161b22; --card2:#1c232e; --fg:#e6edf3; --muted:#8b98a5;
+    --accent:#4aa3ff; --ok:#3fb950; --warn:#d29922; --err:#f85149; --line:#262e3a;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body { margin:0; background:var(--bg); color:var(--fg);
-         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-  header { display:flex; align-items:center; gap:12px; padding:14px 18px;
-           border-bottom:1px solid #2a3240; position:sticky; top:0; background:var(--bg); z-index:2; }
-  header h1 { font-size:16px; margin:0; font-weight:600; letter-spacing:.3px; }
-  .pill { display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--muted);
-          margin-left:auto; }
+    font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:12px 16px; position:sticky; top:0; background:var(--bg); z-index:5; }
+  header h1 { font-size:16px; margin:0; font-weight:650; }
+  .pill { display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--muted); }
   .dot { width:9px; height:9px; border-radius:50%; background:var(--muted); }
-  .dot.connected { background:var(--ok); box-shadow:0 0 8px var(--ok); }
+  .dot.connected { background:var(--ok); } .dot.error { background:var(--err); }
   .dot.connecting { background:var(--warn); }
-  .dot.error { background:var(--err); }
-  main { padding:16px; max-width:1000px; margin:0 auto; }
-  .hero { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; }
-  .card { background:var(--card); border:1px solid #262e3a; border-radius:14px; padding:14px 16px; }
-  .card .k { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
-  .card .v { font-size:30px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
-  .card .u { font-size:13px; color:var(--muted); font-weight:500; margin-left:4px; }
-  .card.rpm .v { font-size:44px; color:var(--accent); }
-  section { margin-top:22px; }
-  section h2 { font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;
-               margin:0 0 10px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
-  .row { background:var(--card2); border-radius:10px; padding:9px 12px; display:flex;
-         justify-content:space-between; align-items:baseline; }
-  .row .n { font-size:13px; color:var(--muted); }
-  .row .val { font-variant-numeric:tabular-nums; font-weight:600; }
-  .faults { display:flex; flex-direction:column; gap:8px; }
-  .fault { padding:10px 13px; border-radius:10px; background:var(--card2);
-           border-left:4px solid var(--muted); font-size:14px; }
-  .fault.current { border-left-color:var(--err); }
-  .fault.logged { border-left-color:var(--warn); }
-  .fault .tag { font-size:11px; color:var(--muted); margin-left:8px; }
-  .none { color:var(--muted); font-size:14px; }
-  .s-high { color:var(--err) !important; }
-  .s-low { color:var(--warn) !important; }
-  .anom { display:flex; flex-wrap:wrap; gap:8px; }
-  .anom .item { padding:8px 12px; border-radius:10px; background:var(--card2);
-                border-left:4px solid var(--warn); font-size:14px; font-variant-numeric:tabular-nums; }
-  .anom .item.high { border-left-color:var(--err); }
-  .anom .item .arrow { font-size:11px; color:var(--muted); margin-left:6px; }
-  .schema { background:var(--card); border:1px solid #262e3a; border-radius:14px; padding:8px; overflow-x:auto; }
-  #engine { width:100%; min-width:560px; height:auto; display:block; }
-  #engine .box, #engine .block { fill:var(--card2); stroke:#3a4652; stroke-width:1.5; }
-  #engine .block { fill:#1c232e; }
-  #engine .cyl { fill:#2a3340; stroke:#3a4652; stroke-width:1; }
-  #engine .lbl { fill:var(--muted); font-size:11px; }
-  #engine .val { fill:var(--fg); font-size:15px; font-weight:700; }
-  #engine .val2 { fill:var(--accent); font-size:12px; font-weight:600; }
-  #engine .flow line { stroke:#5b6b80; stroke-width:2; }
-  #engine .fault .box, #engine rect.fault { stroke:var(--err); stroke-width:2.5; }
-  #engine .fault .val, #engine .fault .lbl { fill:var(--err); }
-  .btn { font-size:12px; font-weight:600; color:var(--fg); background:var(--card2);
-         border:1px solid #3a4652; border-radius:8px; padding:5px 11px;
-         margin-left:10px; cursor:pointer; }
-  .btn:hover { border-color:var(--accent); color:var(--accent); }
-  .btn:disabled { opacity:.5; cursor:default; }
-  .cmd { font-size:13px; margin-top:10px; min-height:18px; }
-  .cmd.ok { color:var(--ok); }
-  .cmd.bad { color:var(--err); }
+  /* flikar */
+  .tabs { display:flex; gap:6px; padding:0 12px 10px; position:sticky; top:44px; background:var(--bg); z-index:4; }
+  .tab { flex:1; text-align:center; padding:10px; border-radius:11px; background:var(--card);
+    color:var(--muted); font-weight:600; font-size:14px; border:1px solid var(--line); cursor:pointer; }
+  .tab.active { background:var(--accent); color:#04121f; border-color:var(--accent); }
+  main { padding:4px 12px 40px; max-width:560px; margin:0 auto; }
+  .view { display:none; } .view.active { display:block; }
+  .hint { color:var(--muted); text-align:center; padding:40px 10px; font-size:14px; }
+  section { margin-top:16px; }
+  section h2 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin:0 0 8px; }
+  /* signalkort */
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .row { display:flex; justify-content:space-between; padding:9px 12px; background:var(--card); border-radius:9px; }
+  .row .n { color:var(--muted); } .row .val { font-weight:650; } .u { color:var(--muted); font-size:.8em; }
+  .s-low { color:var(--accent); } .s-high { color:var(--err); }
+  .hero { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .card { background:var(--card); border-radius:12px; padding:12px 14px; }
+  .card .k { color:var(--muted); font-size:12px; } .card .v { font-size:26px; font-weight:700; }
+  /* felkoder */
+  .faults { display:flex; flex-direction:column; gap:7px; }
+  .fault { padding:10px 12px; border-radius:9px; background:var(--card2); border-left:4px solid var(--warn); }
+  .fault.current { border-left-color:var(--err); } .fault .tag { font-size:11px; color:var(--muted); margin-left:6px; }
+  .none { color:var(--muted); }
+  /* knappar */
+  .btns { display:flex; flex-wrap:wrap; gap:8px; }
+  .btn { flex:1; min-width:calc(50% - 4px); padding:13px 10px; border-radius:11px; border:1px solid var(--line);
+    background:var(--card); color:var(--fg); font-size:14px; font-weight:600; cursor:pointer; }
+  .btn:active { background:var(--card2); } .btn.warn { border-color:var(--warn); color:var(--warn); }
+  .btn.wide { min-width:100%; }
+  .cmd { margin-top:8px; font-size:13px; min-height:18px; } .cmd.ok { color:var(--ok); } .cmd.bad { color:var(--err); }
   .err { color:var(--err); font-size:13px; margin-top:8px; }
-  footer { color:var(--muted); font-size:11px; text-align:center; padding:20px; }
+  /* bil ovanifrån */
+  .carwrap { display:flex; justify-content:center; }
+  #car { width:100%; max-width:320px; }
+  #car .body { fill:var(--card); stroke:var(--line); stroke-width:2; }
+  #car .abs { fill:var(--card2); stroke:#3a4652; stroke-width:1.5; }
+  #car .wheel { fill:#0b0e13; stroke:#3a4652; stroke-width:1.5; }
+  #car .lbl { fill:var(--muted); font-size:9px; } #car .val { fill:var(--fg); font-size:12px; font-weight:700; }
+  #car .val2 { fill:var(--accent); font-size:10px; } #car .cap { fill:var(--muted); font-size:8px; text-transform:uppercase; letter-spacing:.5px; }
+  footer { color:var(--muted); font-size:11px; text-align:center; padding:16px; }
 </style>
-</head>
-<body>
+
 <header>
-  <h1 id="title">Discovery 2 · Td5</h1>
+  <h1 id="title">Discovery 2</h1>
   <span class="pill"><span id="dot" class="dot connecting"></span><span id="status">ansluter…</span></span>
 </header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="motor">Motor</div>
+  <div class="tab" data-tab="slabs">SLABS</div>
+</div>
+
 <main>
-  <div class="hero" id="hero"></div>
-  <section>
-    <h2>Avvikelser</h2>
-    <div class="anom" id="anom"></div>
-  </section>
-  <section id="schemaSection">
-    <h2>Motorschema</h2>
-    <div class="schema">
-    <svg viewBox="0 0 720 380" id="engine" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <marker id="ar--" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
-          <path d="M0,0 L6,3 L0,6 Z" fill="#5b6b80"/>
-        </marker>
-      </defs>
-      <!-- luftflöde -->
-      <g class="flow">
-        <line x1="150" y1="52" x2="196" y2="52" marker-end="url(#ar--)"/>
-        <line x1="288" y1="52" x2="322" y2="52" marker-end="url(#ar--)"/>
-        <line x1="432" y1="52" x2="470" y2="52" marker-end="url(#ar--)"/>
-        <line x1="580" y1="80" x2="580" y2="150" marker-end="url(#ar--)"/>
-      </g>
-      <!-- insug / MAF-IAT (highlightas vid fel) -->
-      <g id="node_intake">
-        <rect class="box" x="16" y="28" width="134" height="48" rx="8"/>
-        <text class="lbl" x="24" y="45">Insug · MAF/IAT</text>
-        <text class="val" id="e_air_temp" x="24" y="66">–</text>
-        <text class="val2" id="e_maf" x="96" y="66">–</text>
-      </g>
-      <!-- turbo -->
-      <rect class="box" x="196" y="28" width="92" height="48" rx="8"/>
-      <text class="lbl" x="204" y="45">Turbo</text>
-      <text class="val" id="e_boost" x="204" y="66">–</text>
-      <!-- intercooler -->
-      <rect class="box" x="322" y="28" width="110" height="48" rx="8"/>
-      <text class="lbl" x="330" y="45">Intercooler</text>
-      <!-- grenrör -->
-      <rect class="box" x="470" y="28" width="220" height="48" rx="8"/>
-      <text class="lbl" x="478" y="45">Grenrör (MAP)</text>
-      <text class="val" id="e_map" x="478" y="66">–</text>
-      <!-- motorblock -->
-      <rect class="block" x="150" y="150" width="470" height="150" rx="12"/>
-      <text class="lbl" x="164" y="172">Motorblock</text>
-      <text class="val2" id="e_coolant" x="164" y="286">kyl –</text>
-      <text class="val2" id="e_fuel" x="270" y="286">bränsle –</text>
-      <text class="val2" id="e_rpm" x="470" y="286">– rpm</text>
-      <!-- 5 cylindrar / injektorer -->
-      <g id="cyls"></g>
-      <!-- batteri -->
-      <rect class="box" x="16" y="150" width="110" height="48" rx="8"/>
-      <text class="lbl" x="24" y="167">Batteri</text>
-      <text class="val" id="e_batt" x="24" y="188">–</text>
-    </svg>
+  <!-- ===================== MOTOR ===================== -->
+  <div class="view active" id="view-motor">
+    <div id="motor-hint" class="hint">Väntar på motordata… (kör dashboarden mot Td5)</div>
+    <div id="motor-body" style="display:none">
+      <div class="hero" id="hero"></div>
+      <section><h2>Alla signaler</h2><div class="grid" id="signals"></div></section>
+      <section>
+        <h2>Felkoder</h2>
+        <div class="btns"><button class="btn wide warn" data-cmd="clear_faults" data-confirm="Radera lagrade felkoder i ECU:n?">Radera felkoder</button></div>
+        <div class="faults" id="m_faults" style="margin-top:10px"></div>
+      </section>
     </div>
-  </section>
-  <section>
-    <h2>Alla signaler</h2>
-    <div class="grid" id="signals"></div>
-  </section>
-  <section>
-    <h2>Felkoder <button id="clearBtn" class="btn" title="Radera lagrade felkoder i ECU:n">Radera felkoder</button>
-        <button id="buzzerBtn" class="btn" style="display:none" title="Aktivera SLS-summern (ofarlig skriv-verifiering)">🔔 Summer-test</button></h2>
-    <div class="faults" id="faults"></div>
-    <div id="cmdResult" class="cmd"></div>
-  </section>
+  </div>
+
+  <!-- ===================== SLABS ===================== -->
+  <div class="view" id="view-slabs">
+    <div id="slabs-hint" class="hint">Väntar på SLABS-data… (kör med <code>--slabs</code>)</div>
+    <div id="slabs-body" style="display:none">
+      <section>
+        <h2>Bilen ovanifrån</h2>
+        <div class="carwrap">
+        <svg id="car" viewBox="0 0 200 340" xmlns="http://www.w3.org/2000/svg">
+          <text class="cap" x="100" y="12" text-anchor="middle">Fram</text>
+          <rect class="body" x="46" y="20" width="108" height="300" rx="20"/>
+          <!-- hjul -->
+          <rect class="wheel" x="24" y="46" width="24" height="52" rx="6"/>
+          <rect class="wheel" x="152" y="46" width="24" height="52" rx="6"/>
+          <rect class="wheel" x="24" y="242" width="24" height="52" rx="6"/>
+          <rect class="wheel" x="152" y="242" width="24" height="52" rx="6"/>
+          <!-- ABS-modulator (mitten fram = motorrummet) -->
+          <rect class="abs" x="66" y="34" width="68" height="46" rx="8"/>
+          <text class="cap" x="100" y="49" text-anchor="middle">ABS-block</text>
+          <text class="val2" id="c_abs" x="100" y="66" text-anchor="middle">–</text>
+          <!-- hjuldata -->
+          <text class="lbl" x="30" y="112">VF</text><text class="val" id="c_fl_s" x="30" y="126">–</text><text class="val2" id="c_fl_v" x="30" y="138">–</text>
+          <text class="lbl" x="158" y="112">HF</text><text class="val" id="c_fr_s" x="158" y="126">–</text><text class="val2" id="c_fr_v" x="158" y="138">–</text>
+          <text class="lbl" x="30" y="228">VB</text><text class="val" id="c_rl_s" x="30" y="242">–</text><text class="val2" id="c_rl_v" x="30" y="254">–</text>
+          <text class="lbl" x="158" y="228">HB</text><text class="val" id="c_rr_s" x="158" y="242">–</text><text class="val2" id="c_rr_v" x="158" y="254">–</text>
+          <!-- höjder (luftfjädring) -->
+          <text class="cap" x="100" y="176" text-anchor="middle">Höjd (luftfjädring)</text>
+          <text class="val" id="c_h_l" x="76" y="196" text-anchor="middle">–</text>
+          <text class="val" id="c_h_r" x="124" y="196" text-anchor="middle">–</text>
+          <text class="lbl" x="76" y="208" text-anchor="middle">vänster</text>
+          <text class="lbl" x="124" y="208" text-anchor="middle">höger</text>
+        </svg>
+        </div>
+      </section>
+
+      <section>
+        <h2>ABS-block</h2>
+        <div class="btns">
+          <button class="btn warn" data-cmd="pump_on" data-confirm="Aktivera ABS-pumpen?">Pump på</button>
+          <button class="btn" data-cmd="pump_off">Pump av</button>
+        </div>
+        <h2 style="margin-top:14px">Ventiltest per hjul ⚠️</h2>
+        <div class="btns">
+          <button class="btn warn" data-cmd="wheel_fl" data-confirm="Ventiltest vänster fram?">VF</button>
+          <button class="btn warn" data-cmd="wheel_fr" data-confirm="Ventiltest höger fram?">HF</button>
+          <button class="btn warn" data-cmd="wheel_rl" data-confirm="Ventiltest vänster bak?">VB</button>
+          <button class="btn warn" data-cmd="wheel_rr" data-confirm="Ventiltest höger bak?">HB</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Luftfjädring ⚠️</h2>
+        <div class="btns">
+          <button class="btn warn" data-cmd="raise_left" data-confirm="Höj vänster?">Höj vä</button>
+          <button class="btn warn" data-cmd="lower_left" data-confirm="Sänk vänster?">Sänk vä</button>
+          <button class="btn warn" data-cmd="raise_right" data-confirm="Höj höger?">Höj hö</button>
+          <button class="btn warn" data-cmd="lower_right" data-confirm="Sänk höger?">Sänk hö</button>
+        </div>
+        <div class="btns" style="margin-top:8px">
+          <button class="btn warn" data-cmd="compressor" data-confirm="Kör kompressorn?">Kompressor</button>
+          <button class="btn warn" data-cmd="exhaust" data-confirm="Öppna avluftningsventilen?">Avluft</button>
+          <button class="btn" data-cmd="buzzer">🔔 Summer</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Felkoder</h2>
+        <div class="btns"><button class="btn wide warn" data-cmd="clear_faults" data-confirm="Radera SLABS-felkoder?">Radera felkoder</button></div>
+        <div class="faults" id="s_faults" style="margin-top:10px"></div>
+      </section>
+    </div>
+  </div>
+
+  <div id="cmdResult" class="cmd"></div>
   <div class="err" id="error"></div>
 </main>
-<footer>Uppdateras i realtid via SSE · discovery2-diag</footer>
+<footer>Realtid via SSE · discovery2-diag</footer>
+
 <script>
-  const LABELS = {
-    rpm:"Varvtal", speed:"Fart", battery:"Batteri", coolant_temp:"Kylvätska",
-    air_temp:"Insugsluft", fuel_temp:"Bränsle", ext_temp:"Omgivning",
-    manifold_press:"Grenrörstryck", ambient_press_1:"Omgivningstryck",
-    ambient_press_2:"Tryck 2", maf_raw:"MAF (rå)", rpm_error:"Varvfel",
-    pedal_track1:"Pedal 1", pedal_track2:"Pedal 2", pedal_demand:"Pedalbegäran",
-    pedal_supply:"Pedal 5V", balance_1:"Injektor 1", balance_2:"Injektor 2",
-    balance_3:"Injektor 3", balance_4:"Injektor 4", balance_5:"Injektor 5",
-    height_left:"Höjd vänster (rå)", height_right:"Höjd höger (rå)",
-    height_left_mm:"Höjd vänster", height_right_mm:"Höjd höger",
-  };
-  const HERO = ["rpm","speed","coolant_temp","__boost","battery"];
   const $ = id => document.getElementById(id);
   const fmt = x => (Math.abs(x) >= 100 ? Math.round(x) : x.toFixed(1));
+  const LABELS = {
+    rpm:"Varvtal", speed:"Fart", battery:"Batteri", coolant_temp:"Kylvätska",
+    air_temp:"Insugsluft", fuel_temp:"Bränsle", manifold_press:"Grenrörstryck",
+    ambient_press_1:"Omgivningstryck", maf_raw:"MAF (rå)", rpm_error:"Varvfel",
+    balance_1:"Injektor 1", balance_2:"Injektor 2", balance_3:"Injektor 3",
+    balance_4:"Injektor 4", balance_5:"Injektor 5",
+    height_left_mm:"Höjd vänster", height_right_mm:"Höjd höger",
+  };
+  const HERO = ["rpm","speed","coolant_temp","battery"];
 
-  function heroCard(key, sig) {
-    let label, value, unit, vcls = "";
-    if (key === "__boost") {
-      const m = sig.manifold_press, a = sig.ambient_press_1;
-      if (!m) return "";
-      const boost = a ? (m.v - a.v) : m.v;
-      label = "Laddtryck"; value = boost.toFixed(2); unit = "bar";
-    } else {
-      const s = sig[key]; if (!s) return "";
-      label = LABELS[key] || key; value = fmt(s.v); unit = s.u || "";
-      if (s.s === "low" || s.s === "high") vcls = " s-" + s.s;
-    }
-    const cls = key === "rpm" ? "card rpm" : "card";
-    return `<div class="${cls}"><div class="k">${label}</div>
-            <div class="v${vcls}">${value}<span class="u">${unit}</span></div></div>`;
-  }
+  // ---- flikar ----
+  let activeTab = "motor";
+  document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+    activeTab = t.dataset.tab;
+    document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === t));
+    document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + activeTab));
+  });
 
   function render(d) {
     const st = d.status || "connecting";
     $("dot").className = "dot " + st;
-    $("status").textContent = ({connected:"ansluten",connecting:"ansluter…",error:"fel"}[st] || st)
-        + (d.source ? " · " + d.source : "");
+    $("status").textContent = ({connected:"ansluten",connecting:"ansluter…",error:"fel"}[st] || st) + (d.source ? " · " + d.source : "");
     $("error").textContent = d.error || "";
-    const sig = d.signals || {};
-    // Källmedveten: SLABS har inget motorschema/hero-kort.
+    const sig = d.signals || {}, faults = d.faults || [];
     const isSlabs = (d.source || "").indexOf("slabs") >= 0;
-    $("title").textContent = "Discovery 2 · " + (isSlabs ? "SLABS" : "Td5");
-    $("hero").style.display = isSlabs ? "none" : "";
-    $("schemaSection").style.display = isSlabs ? "none" : "";
-    $("buzzerBtn").style.display = isSlabs ? "" : "none";
-    if (!isSlabs) {
-      $("hero").innerHTML = HERO.map(k => heroCard(k, sig)).join("");
-      updateEngine(sig, d.faults || []);
-    }
-    // avvikelser (signaler utanför driftsintervallet)
-    const anoms = Object.keys(sig).filter(k => sig[k].s === "low" || sig[k].s === "high").sort();
-    $("anom").innerHTML = anoms.length ? anoms.map(k => {
-      const s = sig[k];
-      return `<div class="item ${s.s}">${LABELS[k]||k}: <b>${fmt(s.v)} ${s.u||""}</b>` +
-             `<span class="arrow">${s.s === "high" ? "▲ högt" : "▼ lågt"}</span></div>`;
-    }).join("") : '<span class="none">Inga avvikelser</span>';
-    $("signals").innerHTML = Object.keys(sig).sort().map(k => {
-      const s = sig[k];
-      const cls = (s.s === "low" || s.s === "high") ? " s-" + s.s : "";
-      return `<div class="row"><span class="n">${LABELS[k]||k}</span>
-              <span class="val${cls}">${fmt(s.v)} <span class="u">${s.u||""}</span></span></div>`;
-    }).join("") || '<span class="none">—</span>';
-    const faults = d.faults || [];
-    $("faults").innerHTML = faults.length ? faults.map(f => {
-      const cur = /current/i.test(f);
-      const tagMatch = f.match(/\(([^)]+)\)\s*$/);
-      const name = f.replace(/\s*\([^)]+\)\s*$/, "");
-      return `<div class="fault ${cur?'current':'logged'}">${name}
-              <span class="tag">${tagMatch?tagMatch[1]:""}</span></div>`;
-    }).join("") : '<span class="none">Inga aktiva felkoder</span>';
+    // auto-hoppa till rätt flik första gången data kommer
+    if (!render._picked && st === "connected") { render._picked = true;
+      document.querySelector(`.tab[data-tab="${isSlabs?'slabs':'motor'}"]`).click(); }
+    if (isSlabs) renderSlabs(sig, faults); else renderMotor(sig, faults);
   }
 
-  // bygg 5 cylindrar/injektorer i motorblocket (en gång)
-  (function buildCylinders() {
-    const g = document.getElementById("cyls");
-    for (let i = 0; i < 5; i++) {
-      const x = 172 + i * 90;
-      g.insertAdjacentHTML("beforeend",
-        `<rect class="cyl" x="${x}" y="190" width="76" height="72" rx="6"/>` +
-        `<text class="lbl" x="${x+11}" y="210">Inj ${i+1}</text>` +
-        `<text class="val2" id="e_inj${i+1}" x="${x+11}" y="236">–</text>`);
-    }
-  })();
-
-  function setText(id, txt) { const el = document.getElementById(id); if (el) el.textContent = txt; }
-
-  function updateEngine(sig, faults) {
-    const air = sig.air_temp, maf = sig.maf_raw, map = sig.manifold_press, amb = sig.ambient_press_1;
-    setText("e_air_temp", air ? `${fmt(air.v)}°C` : "–");
-    setText("e_maf", maf ? `MAF ${fmt(maf.v)}` : "");
-    setText("e_map", map ? `${map.v.toFixed(2)} bar` : "–");
-    setText("e_boost", (map && amb) ? `+${(map.v-amb.v).toFixed(2)}` : (map ? map.v.toFixed(2) : "–"));
-    setText("e_coolant", sig.coolant_temp ? `kyl ${fmt(sig.coolant_temp.v)}°C` : "kyl –");
-    setText("e_fuel", sig.fuel_temp ? `bränsle ${fmt(sig.fuel_temp.v)}°C` : "bränsle –");
-    setText("e_rpm", sig.rpm ? `${Math.round(sig.rpm.v)} rpm` : "– rpm");
-    setText("e_batt", sig.battery ? `${sig.battery.v.toFixed(1)} V` : "–");
-    for (let i = 1; i <= 5; i++) {
-      const b = sig["balance_" + i];
-      setText("e_inj" + i, b ? (b.v > 0 ? "+" : "") + b.v.toFixed(1) : "–");
-    }
-    const faulted = (faults || []).some(f => /inlet air temp|air flow/i.test(f));
-    document.getElementById("node_intake").classList.toggle("fault", faulted);
+  function renderMotor(sig, faults) {
+    $("motor-hint").style.display = Object.keys(sig).length ? "none" : "";
+    $("motor-body").style.display = Object.keys(sig).length ? "" : "none";
+    $("hero").innerHTML = HERO.map(k => { const s = sig[k]; if (!s) return "";
+      return `<div class="card"><div class="k">${LABELS[k]||k}</div><div class="v">${fmt(s.v)}<span class="u"> ${s.u||""}</span></div></div>`; }).join("");
+    $("signals").innerHTML = Object.keys(sig).sort().map(k => { const s = sig[k];
+      const cls = (s.s==="low"||s.s==="high") ? " s-"+s.s : "";
+      return `<div class="row"><span class="n">${LABELS[k]||k}</span><span class="val${cls}">${fmt(s.v)} <span class="u">${s.u||""}</span></span></div>`; }).join("") || '<span class="none">—</span>';
+    $("m_faults").innerHTML = faultHtml(faults);
   }
 
-  function connect() {
-    const es = new EventSource("/events");
-    es.onmessage = e => { try { render(JSON.parse(e.data)); } catch(_) {} };
-    es.onerror = () => { $("dot").className = "dot connecting"; $("status").textContent = "återansluter…"; };
-  }
-  connect();
-
-  function showCmd(msg, ok) {
-    const el = $("cmdResult");
-    el.textContent = msg;
-    el.className = "cmd " + (ok ? "ok" : "bad");
-    setTimeout(() => { el.textContent = ""; el.className = "cmd"; }, 5000);
-  }
-
-  $("clearBtn").onclick = async () => {
-    if (!confirm("Radera lagrade felkoder i ECU:n?\n(Aktuella fel som fortfarande föreligger kommer tillbaka.)")) return;
-    const btn = $("clearBtn");
-    btn.disabled = true; btn.textContent = "Raderar…";
-    try {
-      const r = await fetch("/command", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "clear_faults" }),
-      });
-      const d = await r.json();
-      showCmd(d.ok ? (d.message || "Klart") : ("Fel: " + (d.error || "okänt")), !!d.ok);
-    } catch (e) {
-      showCmd("Nätverksfel: " + e, false);
+  function setT(id, v) { const e = $(id); if (e) e.textContent = v; }
+  function renderSlabs(sig, faults) {
+    $("slabs-hint").style.display = Object.keys(sig).length ? "none" : "";
+    $("slabs-body").style.display = Object.keys(sig).length ? "" : "none";
+    for (const w of ["fl","fr","rl","rr"]) {
+      const s = sig["speed_"+w], v = sig["volt_"+w];
+      setT("c_"+w+"_s", s ? fmt(s.v)+"" : "–");
+      setT("c_"+w+"_v", v ? v.v.toFixed(2)+"V" : "–");
     }
-    btn.disabled = false; btn.textContent = "Radera felkoder";
-  };
+    setT("c_h_l", sig.height_left ? fmt(sig.height_left.v) : "–");
+    setT("c_h_r", sig.height_right ? fmt(sig.height_right.v) : "–");
+    const cur = faults.filter(f => /current/i.test(f)).length;
+    setT("c_abs", faults.length ? (cur ? cur+" aktiva" : faults.length+" loggade") : "OK");
+    $("s_faults").innerHTML = faultHtml(faults);
+  }
 
-  $("buzzerBtn").onclick = async () => {
-    const btn = $("buzzerBtn");
+  function faultHtml(faults) {
+    if (!faults.length) return '<span class="none">Inga felkoder</span>';
+    return faults.map(f => { const cur = /current/i.test(f);
+      const tag = f.match(/\(([^)]+)\)\s*$/), name = f.replace(/\s*\([^)]+\)\s*$/, "");
+      return `<div class="fault ${cur?'current':'logged'}">${name}<span class="tag">${tag?tag[1]:""}</span></div>`; }).join("");
+  }
+
+  function showCmd(msg, ok) { const el = $("cmdResult"); el.textContent = msg; el.className = "cmd " + (ok?"ok":"bad");
+    setTimeout(() => { el.textContent = ""; el.className = "cmd"; }, 5000); }
+
+  document.querySelectorAll("[data-cmd]").forEach(btn => btn.onclick = async () => {
+    if (btn.dataset.confirm && !confirm(btn.dataset.confirm + "\n(Stillastående, tändning på.)")) return;
     btn.disabled = true;
     try {
-      const r = await fetch("/command", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "buzzer" }),
-      });
+      const r = await fetch("/command", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ action: btn.dataset.cmd }) });
       const d = await r.json();
-      showCmd(d.ok ? (d.message || "Summer aktiverad") : ("Fel: " + (d.error || "okänt")), !!d.ok);
-    } catch (e) {
-      showCmd("Nätverksfel: " + e, false);
-    }
+      showCmd(d.ok ? (d.message || "Klart") : ("Fel: " + (d.error || "okänt")), !!d.ok);
+    } catch (e) { showCmd("Nätverksfel: " + e, false); }
     btn.disabled = false;
-  };
+  });
+
+  (function connect() {
+    const es = new EventSource("/events");
+    es.onmessage = e => { try { render(JSON.parse(e.data)); } catch(_){} };
+    es.onerror = () => { $("dot").className = "dot connecting"; $("status").textContent = "återansluter…"; };
+  })();
 </script>
-</body>
-</html>

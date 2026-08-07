@@ -216,6 +216,39 @@ def _slabs_faults_flat(f: "dict[str, list]") -> "list[str]":
            [x + " (Current)" for x in f.get("aktuella", [])]
 
 
+# Ställdons-actions (webb → SLABS). Namn → svensk etikett (för mock-svar/UI).
+_SLABS_ACTUATORS = {
+    "buzzer": "SLS-summer", "compressor": "Kompressor", "exhaust": "Avluftningsventil",
+    "pump_on": "ABS-pump på", "pump_off": "ABS-pump av",
+    "raise_left": "Höj vänster", "raise_right": "Höj höger",
+    "lower_left": "Sänk vänster", "lower_right": "Sänk höger",
+    "wheel_fl": "Ventiltest VF", "wheel_fr": "Ventiltest HF",
+    "wheel_rl": "Ventiltest VB", "wheel_rr": "Ventiltest HB",
+}
+
+
+def _slabs_do(slabs, action: str) -> None:
+    """Kör en ställdons-action mot ett riktigt Slabs-objekt."""
+    if action == "buzzer":
+        slabs.buzzer()
+    elif action == "compressor":
+        slabs.compressor()
+    elif action == "exhaust":
+        slabs.exhaust_valve()
+    elif action == "pump_on":
+        slabs.pump_relay(True)
+    elif action == "pump_off":
+        slabs.pump_relay(False)
+    elif action.startswith("raise_"):
+        slabs.raise_corner(action.split("_", 1)[1])
+    elif action.startswith("lower_"):
+        slabs.lower_corner(action.split("_", 1)[1])
+    elif action.startswith("wheel_"):
+        slabs.wheel_test(action.split("_", 1)[1])
+    else:
+        raise ValueError(f"okänt kommando: {action}")
+
+
 class MockSlabsDataSource(DataSource):
     """Simulerad SLABS för UI-dev: rörliga höjder + baslinjens två loggade fel."""
 
@@ -236,10 +269,14 @@ class MockSlabsDataSource(DataSource):
         self._t += 1
         hl = 143 + 2 * math.sin(self._t / 10)
         hr = 157 + 2 * math.cos(self._t / 12)
-        signals = _slabs_sig({
+        vals = {
             "height_left": hl, "height_right": hr,
             "height_left_mm": hl * 1.4, "height_right_mm": hr * 1.4,
-        })
+        }
+        for w in ("fl", "fr", "rl", "rr"):  # hjul: hastighet (0 stillastående) + givarspänning
+            vals[f"speed_{w}"] = 0.0
+            vals[f"volt_{w}"] = round(2.2 + random.uniform(-0.05, 0.05), 2)
+        signals = _slabs_sig(vals)
         if self._cleared > 0:
             self._cleared -= 1
             if self._cleared == 0:
@@ -252,8 +289,8 @@ class MockSlabsDataSource(DataSource):
             self._faults = {"loggade": [], "aktuella": []}
             self._cleared = 4
             return {"ok": True, "message": "Felkoder raderade (mock)"}
-        if action == "buzzer":
-            return {"ok": True, "message": "SLS-summer aktiverad (mock) 🔔"}
+        if action in _SLABS_ACTUATORS:
+            return {"ok": True, "message": f"{_SLABS_ACTUATORS[action]} (mock)"}
         return {"ok": False, "error": f"okänt kommando: {action}"}
 
 
@@ -290,13 +327,22 @@ class SlabsDataSource(DataSource):
             if self._slabs is None:
                 self._slabs = self._connect()
             self._slabs.tester_present()
-            raw = self._slabs.read_data(0x54)  # höjder: byte0=vänster, byte1=höger
-            hl = raw[0] if len(raw) > 0 else 0
-            hr = raw[1] if len(raw) > 1 else 0
-            signals = _slabs_sig({
+            h = self._slabs.read_data(0x54)  # höjder: byte0=vänster, byte1=höger
+            hl = h[0] if len(h) > 0 else 0
+            hr = h[1] if len(h) > 1 else 0
+            vals = {
                 "height_left": hl, "height_right": hr,
                 "height_left_mm": hl * 1.4, "height_right_mm": hr * 1.4,
-            })
+            }
+            try:
+                sp = self._slabs.read_data(0x43)  # 4 hjulhastigheter (7c 00-mönster)
+                vo = self._slabs.read_data(0x50)  # 4 givarspänningar (rå ADC)
+                for i, w in enumerate(("fl", "fr", "rl", "rr")):  # ordning preliminär
+                    vals[f"speed_{w}"] = sp[i * 2] if len(sp) > i * 2 else 0
+                    vals[f"volt_{w}"] = round(vo[i] * 0.02, 2) if len(vo) > i else 0
+            except Exception:  # noqa: BLE001 — hjuldata är best-effort
+                pass
+            signals = _slabs_sig(vals)
             if self._read_faults and self._tick % 10 == 0:
                 try:
                     self._faults = _slabs_faults_flat(self._slabs.read_faults())
@@ -323,9 +369,9 @@ class SlabsDataSource(DataSource):
                 self._slabs.clear_faults()
                 self._tick = 0
                 return {"ok": True, "message": "Felkoder raderade"}
-            if action == "buzzer":
-                self._slabs.buzzer()
-                return {"ok": True, "message": "SLS-summer aktiverad 🔔"}
+            if action in _SLABS_ACTUATORS:
+                _slabs_do(self._slabs, action)
+                return {"ok": True, "message": f"{_SLABS_ACTUATORS[action]} ✓"}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
         return {"ok": False, "error": f"okänt kommando: {action}"}
