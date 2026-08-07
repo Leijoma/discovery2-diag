@@ -2,7 +2,7 @@
 
     PYTHONPATH=src python3 tools/slabs.py PORT [kommando]
 
-kommandon:  faults (default) · vin · versions · clear · buzzer
+kommandon:  faults (default) · vin · versions · clear · buzzer · verify
 
 ⚠️ Kräver en SÄNDANDE K-line-interface (KKL, eller ESP32 i master-läge) — den
 passiva sniff-tappen (RX-only) räcker INTE. Stillastående, tändning PÅ.
@@ -28,7 +28,17 @@ def main() -> int:
         print(f"  ✓ uppkopplad, C1-nyckelbytes {c1.hex(' ')}")
         slabs.tester_present()
 
-        if cmd == "vin":
+        if cmd == "verify":
+            # Full läs+skriv-verifiering i en körning.
+            print("VIN:", slabs.read_vin())
+            print("versioner:", ", ".join(slabs.read_software_versions()))
+            f = slabs.read_faults()
+            print("loggade fel:", f["loggade"] or "inga")
+            print("aktuella fel:", f["aktuella"] or "inga")
+            print("SKRIV-test: aktiverar SLS-summer...")
+            slabs.buzzer()
+            print("  ✓ om du hörde summern: läs OCH skriv fungerar live. 🎯")
+        elif cmd == "vin":
             print("VIN:", slabs.read_vin())
         elif cmd == "versions":
             for v in slabs.read_software_versions():

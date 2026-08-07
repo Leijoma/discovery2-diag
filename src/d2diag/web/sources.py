@@ -199,3 +199,133 @@ class Td5DataSource(DataSource):
             except Exception as exc:  # noqa: BLE001
                 return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
         return {"ok": False, "error": f"okänt kommando: {action}"}
+
+
+# --- SLABS (Wabco ABS/SLS) ------------------------------------------------ #
+_SLABS_UNITS = {"height_left_mm": "mm", "height_right_mm": "mm"}
+
+
+def _slabs_sig(values: "dict[str, float]") -> "dict[str, dict]":
+    return {k: {"v": round(v, 1), "u": _SLABS_UNITS.get(k, ""), "s": None}
+            for k, v in values.items()}
+
+
+def _slabs_faults_flat(f: "dict[str, list]") -> "list[str]":
+    """{"loggade":[…],"aktuella":[…]} → platt lista med (Logged)/(Current)-taggar."""
+    return [x + " (Logged)" for x in f.get("loggade", [])] + \
+           [x + " (Current)" for x in f.get("aktuella", [])]
+
+
+class MockSlabsDataSource(DataSource):
+    """Simulerad SLABS för UI-dev: rörliga höjder + baslinjens två loggade fel."""
+
+    name = "slabs"
+
+    def __init__(self) -> None:
+        self._t = 0.0
+        self._faults = {
+            "loggade": [
+                "020: höger fram hjulhastighetsgivare — output too low",
+                "027: shuttle valve switch — electrical failure",
+            ],
+            "aktuella": [],
+        }
+        self._cleared = 0
+
+    def poll(self) -> "dict":
+        self._t += 1
+        hl = 143 + 2 * math.sin(self._t / 10)
+        hr = 157 + 2 * math.cos(self._t / 12)
+        signals = _slabs_sig({
+            "height_left": hl, "height_right": hr,
+            "height_left_mm": hl * 1.4, "height_right_mm": hr * 1.4,
+        })
+        if self._cleared > 0:
+            self._cleared -= 1
+            if self._cleared == 0:
+                self._faults = {"loggade": [], "aktuella": []}
+        return {"status": "connected", "source": self.name,
+                "signals": signals, "faults": _slabs_faults_flat(self._faults)}
+
+    def command(self, action: str, params: "dict | None" = None) -> "dict":
+        if action == "clear_faults":
+            self._faults = {"loggade": [], "aktuella": []}
+            self._cleared = 4
+            return {"ok": True, "message": "Felkoder raderade (mock)"}
+        if action == "buzzer":
+            return {"ok": True, "message": "SLS-summer aktiverad (mock) 🔔"}
+        return {"ok": False, "error": f"okänt kommando: {action}"}
+
+
+class SlabsDataSource(DataSource):
+    """Riktig Wabco SLABS. Etablerar fast init 0x29 lazily, läser om vid fel.
+
+    Kräver en SÄNDANDE K-line-kabel (KKL/ESP32-master) — inte den passiva sniff-tappen.
+    """
+
+    name = "slabs"
+
+    def __init__(self, port: str, read_faults: bool = True) -> None:
+        self._port = port
+        self._read_faults = read_faults
+        self._slabs = None
+        self._faults: "list[str]" = []
+        self._tick = 0
+
+    def _connect(self):
+        from ..kline import KLine
+        from ..kwp2000 import KWP2000
+        from ..slabs import SLABS_ADDRESS, Slabs
+        from ..transport import SerialTransport
+
+        port = resolve_serial_port(self._port)
+        slabs = Slabs(KWP2000(KLine(SerialTransport(port, timeout=1.0), target=SLABS_ADDRESS),
+                              tolerant=True))
+        slabs.open()
+        slabs.establish()
+        return slabs
+
+    def poll(self) -> "dict":
+        try:
+            if self._slabs is None:
+                self._slabs = self._connect()
+            self._slabs.tester_present()
+            raw = self._slabs.read_data(0x54)  # höjder: byte0=vänster, byte1=höger
+            hl = raw[0] if len(raw) > 0 else 0
+            hr = raw[1] if len(raw) > 1 else 0
+            signals = _slabs_sig({
+                "height_left": hl, "height_right": hr,
+                "height_left_mm": hl * 1.4, "height_right_mm": hr * 1.4,
+            })
+            if self._read_faults and self._tick % 10 == 0:
+                try:
+                    self._faults = _slabs_faults_flat(self._slabs.read_faults())
+                except Exception:  # noqa: BLE001
+                    pass
+            self._tick += 1
+            return {"status": "connected", "source": self.name,
+                    "signals": signals, "faults": self._faults}
+        except Exception as exc:  # noqa: BLE001
+            try:
+                if self._slabs is not None:
+                    self._slabs.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self._slabs = None
+            return {"status": "error", "source": self.name, "signals": {}, "faults": [],
+                    "error": f"{type(exc).__name__}: {exc}"}
+
+    def command(self, action: str, params: "dict | None" = None) -> "dict":
+        if self._slabs is None:
+            return {"ok": False, "error": "inte ansluten till SLABS"}
+        try:
+            if action == "clear_faults":
+                self._slabs.clear_faults()
+                self._tick = 0
+                return {"ok": True, "message": "Felkoder raderade"}
+            if action == "buzzer":
+                self._slabs.buzzer()
+                return {"ok": True, "message": "SLS-summer aktiverad 🔔"}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        return {"ok": False, "error": f"okänt kommando: {action}"}

@@ -73,7 +73,7 @@
 </head>
 <body>
 <header>
-  <h1>Discovery 2 · Td5</h1>
+  <h1 id="title">Discovery 2 · Td5</h1>
   <span class="pill"><span id="dot" class="dot connecting"></span><span id="status">ansluter…</span></span>
 </header>
 <main>
@@ -82,7 +82,7 @@
     <h2>Avvikelser</h2>
     <div class="anom" id="anom"></div>
   </section>
-  <section>
+  <section id="schemaSection">
     <h2>Motorschema</h2>
     <div class="schema">
     <svg viewBox="0 0 720 380" id="engine" xmlns="http://www.w3.org/2000/svg">
@@ -136,7 +136,8 @@
     <div class="grid" id="signals"></div>
   </section>
   <section>
-    <h2>Felkoder <button id="clearBtn" class="btn" title="Radera lagrade felkoder i ECU:n">Radera felkoder</button></h2>
+    <h2>Felkoder <button id="clearBtn" class="btn" title="Radera lagrade felkoder i ECU:n">Radera felkoder</button>
+        <button id="buzzerBtn" class="btn" style="display:none" title="Aktivera SLS-summern (ofarlig skriv-verifiering)">🔔 Summer-test</button></h2>
     <div class="faults" id="faults"></div>
     <div id="cmdResult" class="cmd"></div>
   </section>
@@ -152,6 +153,8 @@
     pedal_track1:"Pedal 1", pedal_track2:"Pedal 2", pedal_demand:"Pedalbegäran",
     pedal_supply:"Pedal 5V", balance_1:"Injektor 1", balance_2:"Injektor 2",
     balance_3:"Injektor 3", balance_4:"Injektor 4", balance_5:"Injektor 5",
+    height_left:"Höjd vänster (rå)", height_right:"Höjd höger (rå)",
+    height_left_mm:"Höjd vänster", height_right_mm:"Höjd höger",
   };
   const HERO = ["rpm","speed","coolant_temp","__boost","battery"];
   const $ = id => document.getElementById(id);
@@ -181,8 +184,16 @@
         + (d.source ? " · " + d.source : "");
     $("error").textContent = d.error || "";
     const sig = d.signals || {};
-    $("hero").innerHTML = HERO.map(k => heroCard(k, sig)).join("");
-    updateEngine(sig, d.faults || []);
+    // Källmedveten: SLABS har inget motorschema/hero-kort.
+    const isSlabs = (d.source || "").indexOf("slabs") >= 0;
+    $("title").textContent = "Discovery 2 · " + (isSlabs ? "SLABS" : "Td5");
+    $("hero").style.display = isSlabs ? "none" : "";
+    $("schemaSection").style.display = isSlabs ? "none" : "";
+    $("buzzerBtn").style.display = isSlabs ? "" : "none";
+    if (!isSlabs) {
+      $("hero").innerHTML = HERO.map(k => heroCard(k, sig)).join("");
+      updateEngine(sig, d.faults || []);
+    }
     // avvikelser (signaler utanför driftsintervallet)
     const anoms = Object.keys(sig).filter(k => sig[k].s === "low" || sig[k].s === "high").sort();
     $("anom").innerHTML = anoms.length ? anoms.map(k => {
@@ -267,6 +278,22 @@
       showCmd("Nätverksfel: " + e, false);
     }
     btn.disabled = false; btn.textContent = "Radera felkoder";
+  };
+
+  $("buzzerBtn").onclick = async () => {
+    const btn = $("buzzerBtn");
+    btn.disabled = true;
+    try {
+      const r = await fetch("/command", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "buzzer" }),
+      });
+      const d = await r.json();
+      showCmd(d.ok ? (d.message || "Summer aktiverad") : ("Fel: " + (d.error || "okänt")), !!d.ok);
+    } catch (e) {
+      showCmd("Nätverksfel: " + e, false);
+    }
+    btn.disabled = false;
   };
 </script>
 </body>
