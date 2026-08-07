@@ -167,3 +167,15 @@ class Slabs:
     def lower_corner(self, side: str) -> None:
         """⚠️ Sänk luftfjädring. side ∈ {'left','right'}."""
         self.start_routine(RID_LOWER_LEFT if side == "left" else RID_LOWER_RIGHT, b"\x28")
+
+    # Hjul → (sub, ventilmask). Belagt ur sniff: 2 bitar/hjul i ordning HF,VF,HB,VB.
+    _WHEEL = {
+        "fr": (0x10, 0x03), "fl": (0x11, 0x0c),
+        "rr": (0x12, 0x30), "rl": (0x13, 0xc0),
+    }
+
+    def wheel_test(self, corner: str) -> None:
+        """⚠️ ABS-ventiltest på ETT hjul. corner ∈ {'fl','fr','rl','rr'}.
+        `31 22 <sub> <mask> c1 f4` + 8 nollbyte (belagt ur sniff)."""
+        sub, mask = self._WHEEL[corner]
+        self.start_routine(RID_ABS_TEST, bytes([sub, mask, 0xc1, 0xf4]) + bytes(8))
