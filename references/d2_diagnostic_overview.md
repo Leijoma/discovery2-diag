@@ -74,6 +74,23 @@ forumet använda ISO 9141 0,4 kb/s). Kreativt: **passiv sniff vid nyckel-på** (
 gateway kan väcka/pinga moduler → adresser utan att gissa init). Total tystnad hittills
 tyder ändå på ovanlig init/adress → **sniffa ett lånat verktyg** är fortsatt säkraste vägen.
 
+## NANOCOM-SNIFF 2026-08-07 — SLABS = FAST INIT 0x29 (bekräftat), BCU = SLOW
+Lånad **reference tool 1** (läser motor/SLABS/BCU/ABS/airbag/ACE; **ej autolåda**). Passiv
+sniff av pin 7 (Y-kabel + KKL) fångade reference toolens init per modul:
+- **SLABS: `81 29 F7 81 22` (FAST init, adress `0x29`) → svar `03 c1 57 8f aa`**
+  (C1 57 8F, KWP2000). Reproducerbart. ⇒ **SLABS var fast init på 0x29 hela tiden**
+  (pyTD5Tester-kandidaten stämde). Vårt eget fast-scan missade 0x29 pga KKL:ns orena
+  init-puls — ESP32-realtidstajming bör nå den. **SLABS är alltså INTE en slow-modul.**
+- **BCU: SLOW init** — reference toolens BCU-init syns bara som `00` (5-baud bit-bang, ej
+  UART-läsbar). Stämmer med vårt 0x40 (slow, permanent matad, funkar tändning-av).
+- Slow-init-modulerna 0x18/0x33/0x40 var alltså BCU (0x40) / OBD-generisk (0x33) / 0x18(?),
+  inte SLABS.
+
+**KKL duger EJ som passiv tapp:** lastar bussen → reference toolen kan inte hålla sessioner
+(motorn svarade ej; SLABS-session bröts efter init). Vi fångar bara **init-handskakningen**,
+aldrig fault-/live-tjänster; slow-init-adresser syns ej i UART. **Nästa: HÖGIMPEDANS
+read-only-tapp** (ESP32 RX-gren / diskret, 47 kΩ+ serie, ingen TX på bussen) för djupfångst.
+
 ## GENOMBROTT 2026-08-05: chassimoduler svarar på 5-BAUD SLOW INIT (belagt)
 `tools/slabs_hunt.py full` + `tools/verify_slow.py` mot bilen. Fast init (alla
 varianter, 0x01–0xFF) var tyst utom motorn — **fel init-metod.** Med **5-baud slow
