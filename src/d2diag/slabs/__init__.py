@@ -1,9 +1,9 @@
-"""SLABS-lagret (Wabco ABS/SLS) — skelett.
+"""SLABS-lagret (Wabco ABS/SLS) — fast init 0x29, belagt ur sniffad reference tool-trafik.
 
-SLABS nås via **5-baud slow init** (bara motorn använder fast init). Adress,
-tjänstebytes och felminnesstruktur är ännu OKÄNDA — se modul-docstringen i
-:mod:`d2diag.slabs.slabs`.
+Se ``references/slabs_protocol.md``. Uppkoppling: ``Slabs(KWP2000(KLine(transport,
+target=0x29), tolerant=True))``.
 """
-from .slabs import KNOWN_SLABS_FAULTS, Slabs
+from .faults import SLABS_FAULT_BITS, decode_fault_block
+from .slabs import SLABS_ADDRESS, Slabs
 
-__all__ = ["Slabs", "KNOWN_SLABS_FAULTS"]
+__all__ = ["Slabs", "SLABS_ADDRESS", "decode_fault_block", "SLABS_FAULT_BITS"]
