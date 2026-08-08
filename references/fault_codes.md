@@ -10,11 +10,11 @@ Detta är bara ett **index** till våra kod-inbäddade och sniffade källor:
 
 | Modul | Rå-mappat i kod | Publik lista | Sett på RDL 016 |
 |---|---|---|---|
-| **Td5** | `src/d2diag/td5/faults.py` (210, `21 3B`-bit-per-fel) | reference tool Lucas TD5-guide | `01-07` EGR, `04-01` IAT (intermittent); air flow+IAT under last |
+| **Td5** | `src/d2diag/td5/faults.py` (210, `21 3B`-bit-per-fel) | reference tool Lucas TD5-guide + **forumlista (Kelvin, komplett X-Y)** | `01-07` EGR, `04-01` IAT (intermittent); air flow+IAT under last. ⚠️ `28-7` topside switch = ECU-haveri vid intermittent motorstopp |
 | **SLABS** | ✅ `21 11`=loggade / `21 47`=aktuella (bit-per-fel, index=byte*8+bit), `14 FF FF`=clear. Bekräftat: `020-05`→byte3.bit4, `027-05`→byte10.bit4 | `references/slabs_fault_codes.md` (012–114) | `020-05` RF-givare + `027-05` shuttle valve (×254, loggade) |
-| **ACE** | — (ej sniffad) | dicten (45) | `004-02/04/05` riktningsventiler + `006-01` lågt tryck (aktuella) |
-| **EAT** | — | dicten (39) | gick ej läsa |
-| **Airbag** | — | dicten (37) | `004` varningslampa, `022` v. bältessträckare (intermittent) |
+| **ACE** | — (ej sniffad) | dicten **fullständig 0001–0048** (the factory tool# = display-index, forumbekräftad) | `04-02/04/05` riktningsventiler + `06-01` lågt tryck (aktuella) |
+| **EAT** | — | dicten (39, RAVE) — **forumbekräftad** the factory tool# 1–39 | gick ej läsa |
+| **Airbag** | — | dicten **position=display-kod löst** (RDL 016-ankare 4/8/22/32); full strängdump 1–65 | `004` varningslampa, `022` v. bältessträckare (intermittent) |
 | **BCU** | — | ingen konventionell fault-kapacitet (reference tool) | ej sniffad |
 
 **Arbetsgång:** sniffa → analysera (`decode_session.py`) → fyll **rå-bytes + status-
