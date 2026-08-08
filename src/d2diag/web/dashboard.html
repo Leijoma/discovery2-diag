@@ -64,6 +64,34 @@
     background:var(--card); border-radius:8px; margin-bottom:6px; font-size:13px; border-left:3px solid var(--line); }
   .mrow.ok { border-left-color:var(--ok); } .mrow.maybe { border-left-color:var(--warn); }
   .mrow.todo { opacity:.6; } .mrow .mref { color:var(--muted); font-size:11px; text-align:right; white-space:nowrap; }
+  /* dokument-flik */
+  .dokpick { display:flex; flex-direction:column; gap:6px; }
+  .dokgrp { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; margin:8px 0 2px; }
+  .dokitem { text-align:left; padding:11px 12px; border-radius:9px; border:1px solid var(--line);
+    background:var(--card); color:var(--fg); font-size:14px; font-weight:600; cursor:pointer; }
+  .dokitem.active { border-color:var(--accent); color:var(--accent); }
+  .doc { font-size:14px; line-height:1.5; }
+  .doc h1 { font-size:19px; margin:14px 0 8px; }
+  .doc h2 { font-size:16px; color:var(--fg); text-transform:none; letter-spacing:0; margin:16px 0 6px;
+    border-bottom:1px solid var(--line); padding-bottom:4px; }
+  .doc h3 { font-size:14px; color:var(--accent); margin:14px 0 6px; }
+  .doc h4,.doc h5,.doc h6 { font-size:13px; color:var(--muted); margin:12px 0 4px; }
+  .doc p { margin:8px 0; } .doc a { color:var(--accent); }
+  .doc code { background:var(--card2); padding:1px 5px; border-radius:5px; font-size:.86em;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .doc pre { background:var(--card2); padding:11px 12px; border-radius:9px; overflow-x:auto; }
+  .doc pre code { background:none; padding:0; }
+  .doc blockquote { margin:10px 0; padding:8px 12px; border-left:3px solid var(--warn);
+    background:var(--card); border-radius:0 8px 8px 0; color:var(--fg); }
+  .doc ul,.doc ol { margin:8px 0; padding-left:22px; } .doc li { margin:3px 0; }
+  .doc hr { border:0; border-top:1px solid var(--line); margin:16px 0; }
+  .doc .tablewrap { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:10px 0;
+    border:1px solid var(--line); border-radius:9px; }
+  .doc table { border-collapse:collapse; font-size:12.5px; width:100%; }
+  .doc th,.doc td { border:1px solid var(--line); padding:6px 9px; text-align:left; vertical-align:top;
+    white-space:nowrap; }
+  .doc th { background:var(--card2); color:var(--muted); position:sticky; top:0; }
+  .doc td code { white-space:nowrap; }
 </style>
 
 <header>
@@ -75,6 +103,7 @@
   <div class="tab active" data-tab="motor">Motor</div>
   <div class="tab" data-tab="slabs">SLABS</div>
   <div class="tab" data-tab="karta">Karta</div>
+  <div class="tab" data-tab="dok">Dokument</div>
 </div>
 
 <main>
@@ -173,6 +202,16 @@
     </section>
   </div>
 
+  <!-- ===================== DOKUMENT ===================== -->
+  <div class="view" id="view-dok">
+    <section>
+      <h2>Dokumentation — underlag & felkoder</h2>
+      <div class="hint">Live-vy av de kanoniska källfilerna (facit + referens). Redigeras i markdownen, aldrig här.</div>
+      <div id="dok-picker" class="dokpick" style="margin:10px 0"></div>
+      <div id="dok-body" class="doc"><div class="hint">Välj ett dokument…</div></div>
+    </section>
+  </div>
+
   <div id="cmdResult" class="cmd"></div>
   <div class="err" id="error"></div>
 </main>
@@ -206,8 +245,38 @@
   document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
     const name = t.dataset.tab;
     if (name === "karta") { showTab("karta"); loadMap(); }
+    else if (name === "dok") { showTab("dok"); loadDocs(); }
     else selectModule(name);
   });
+
+  // ---- dokument-flik (vy mot kanoniska markdown-filer, ej bunden till session) ----
+  let _docsLoaded = false;
+  async function loadDocs(force) {
+    if (_docsLoaded && !force) return;
+    try {
+      const d = await (await fetch("/docs")).json();
+      renderDocPicker(d.docs || []);
+      _docsLoaded = true;
+    } catch (e) { $("dok-picker").innerHTML = '<div class="hint">Kunde inte hämta dokumentlistan.</div>'; }
+  }
+  function renderDocPicker(docs) {
+    if (!docs.length) { $("dok-picker").innerHTML = '<div class="hint">Inga dokument konfigurerade.</div>'; return; }
+    const groups = {};
+    docs.forEach(x => (groups[x.group || "Referens"] = groups[x.group || "Referens"] || []).push(x));
+    $("dok-picker").innerHTML = Object.keys(groups).map(g =>
+      `<div class="dokgrp">${g}</div>` + groups[g].map(x =>
+        `<button class="dokitem" data-doc="${x.id}">${x.title}</button>`).join("")).join("");
+    $("dok-picker").querySelectorAll("[data-doc]").forEach(b => b.onclick = () => openDoc(b.dataset.doc, b));
+  }
+  async function openDoc(id, btn) {
+    document.querySelectorAll(".dokitem").forEach(x => x.classList.toggle("active", x === btn));
+    $("dok-body").innerHTML = '<div class="hint">Laddar…</div>';
+    try {
+      const html = await (await fetch("/doc?id=" + encodeURIComponent(id))).text();
+      $("dok-body").innerHTML = html;
+      $("dok-body").scrollIntoView({ behavior:"smooth", block:"start" });
+    } catch (e) { $("dok-body").innerHTML = '<div class="hint">Kunde inte hämta dokumentet.</div>'; }
+  }
 
   // ---- karta / täckningssida (valfri modul, ej bunden till aktiv session) ----
   const mIcon = s => s === "ok" ? "✅" : (s === "maybe" ? "🟡" : "⬜");

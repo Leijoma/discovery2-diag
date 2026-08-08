@@ -13,6 +13,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .docs import DocLibrary
 from .sources import DataSource
 
 _DASHBOARD = Path(__file__).with_name("dashboard.html")
@@ -38,6 +39,16 @@ class _Handler(BaseHTTPRequestHandler):
             else:
                 mp = self.server.source.menu_map()
             self._json({"module": mod, "map": mp, "modules": list(self.server._menus)})
+        elif self.path == "/docs":
+            self._json({"docs": self.server.docs.index()})
+        elif self.path.split("?")[0] == "/doc":
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            frag = self.server.docs.html((q.get("id", [""])[0]))
+            if frag is None:
+                self.send_error(404)
+            else:
+                self._send(frag.encode("utf-8"), "text/html; charset=utf-8")
         else:
             self.send_error(404)
 
@@ -55,13 +66,15 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     # ---- svar ---------------------------------------------------------- #
-    def _html(self) -> None:
-        body = _DASHBOARD.read_bytes()
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+    def _send(self, body: bytes, content_type: str, code: int = 200) -> None:
+        self.send_response(code)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _html(self) -> None:
+        self._send(_DASHBOARD.read_bytes(), "text/html; charset=utf-8")
 
     def _json(self, obj: "dict", code: int = 200) -> None:
         body = json.dumps(obj).encode("utf-8")
@@ -101,9 +114,11 @@ class DiagServer(ThreadingHTTPServer):
         logger=None,
         active: "str | None" = None,
         menus: "dict | None" = None,
+        docs: "DocLibrary | None" = None,
     ) -> None:
         super().__init__((host, port), _Handler)
         self._menus = menus or {}  # modul → meny-lista (Karta-fliken)
+        self.docs = docs or DocLibrary()  # markdown-vy (Dokument-fliken)
         # source kan vara en enda DataSource (bakåtkompat) eller en dict
         # {modulnamn: DataSource}. Bara en modul är aktiv åt gången — K-line är
         # en delad buss, så att byta flik = släppa gammal session och etablera ny.

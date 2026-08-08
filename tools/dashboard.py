@@ -37,6 +37,10 @@ def main() -> int:
     ap.add_argument("--log-dir", help="logga till DIR/session-<tid>.jsonl (auto-namn)")
     ap.add_argument("--log-interval", type=float, default=2.0,
                     help="min sekunder mellan loggrader (feländring loggas alltid)")
+    ap.add_argument("--dict", dest="dict_path",
+                    help="sökväg till felkodsordboken (default: syskon-repot 'Discovery 2/')")
+    ap.add_argument("--docs", action="append", default=[],
+                    help="extra katalog med .md att visa i Dokument-fliken (kan upprepas)")
     args = ap.parse_args()
 
     live = args.serial and not args.mock
@@ -59,11 +63,26 @@ def main() -> int:
         logger = SnapshotLogger(log_path, min_interval=args.log_interval)
 
     from d2diag.menus import MENUS  # modul-menyregister för Karta-fliken
+    from d2diag.web.docs import DocLibrary  # markdown-vy för Dokument-fliken
+
+    # Dokument-fliken speglar de KANONISKA källfilerna (ingen kopia):
+    #   Facit = felkodsordboken i register-repot (syskonmapp 'Discovery 2/')
+    #   Referens = diag-repots references/*.md
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    dict_path = args.dict_path or os.path.join(
+        os.path.dirname(repo_root), "Discovery 2", "discovery2_reference tool_fault_dictionary.md")
+    docs = DocLibrary()
+    docs.add_file(dict_path, title="reference tool felkodsordbok (facit)", group="Facit")
+    docs.add_dir(os.path.join(repo_root, "references"), group="Referens")
+    for extra in args.docs:
+        docs.add_dir(extra, group="Extra")
+
     srv = DiagServer(
         modules, host=args.host, port=args.port,
         poll_interval=args.interval, stream_interval=args.interval, logger=logger,
-        active=active, menus=MENUS,
+        active=active, menus=MENUS, docs=docs,
     )
+    print(f"Dokument: {len(docs.index())} st i Dokument-fliken")
     print(f"Dashboard: http://localhost:{args.port}   (moduler: {', '.join(modules)} · aktiv: {active})")
     if log_path:
         print(f"Loggar data → {log_path}")

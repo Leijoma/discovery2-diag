@@ -10,7 +10,7 @@ Detta är bara ett **index** till våra kod-inbäddade och sniffade källor:
 
 | Modul | Rå-mappat i kod | Publik lista | Sett på RDL 016 |
 |---|---|---|---|
-| **Td5** | `src/d2diag/td5/faults.py` (210, `21 3B`-bit-per-fel) | reference tool Lucas TD5-guide + **forumlista (Kelvin, komplett X-Y)** | `01-07` EGR, `04-01` IAT (intermittent); air flow+IAT under last. ⚠️ `28-7` topside switch = ECU-haveri vid intermittent motorstopp |
+| **Td5** | `src/d2diag/td5/faults.py` (210, `21 3B`-bit-per-fel) | reference tool Lucas TD5-guide + **forumlista (Kelvin, komplett X-Y)** — forumnot: `28-7` topside switch ≈ ECU-haveri (ej sett här) | `01-07` EGR, `04-01` IAT (intermittent); air flow+IAT under last |
 | **SLABS** | ✅ `21 11`=loggade / `21 47`=aktuella (bit-per-fel, index=byte*8+bit), `14 FF FF`=clear. Bekräftat: `020-05`→byte3.bit4, `027-05`→byte10.bit4 | `references/slabs_fault_codes.md` (012–114) | `020-05` RF-givare + `027-05` shuttle valve (×254, loggade) |
 | **ACE** | — (ej sniffad) | dicten **fullständig 0001–0048** (the factory tool# = display-index, forumbekräftad) | `04-02/04/05` riktningsventiler + `06-01` lågt tryck (aktuella) |
 | **EAT** | — | dicten (39, RAVE) — **forumbekräftad** the factory tool# 1–39 | gick ej läsa |
