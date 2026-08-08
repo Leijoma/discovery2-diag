@@ -298,8 +298,10 @@
       <h2>Fångst — märk koderna som strömmar</h2>
       <div class="hint">Välj en skärm i reference tool. Koder som pollas om och om igen dyker upp här. Skriv vad reference tool visar (värden i visad ordning) och spara.</div>
       <div id="fangst-badge" style="margin:8px 0"></div>
-      <div class="btns" style="margin-bottom:10px"><button class="btn" id="fangst-reset">↺ Nollställ aktiva</button></div>
+      <div class="btns"><button class="btn ok wide" id="fangst-new">⬤ Ny insamling — vänta på läsning</button></div>
+      <div id="fangst-status" style="margin:10px 0"></div>
       <div id="fangst-active"></div>
+      <div class="btns" style="margin-top:6px"><button class="btn" id="fangst-reset">↺ Avbryt</button></div>
       <h2 style="margin-top:18px">Sparade fångster</h2>
       <div id="fangst-log"></div>
     </section>
@@ -597,52 +599,75 @@
     btn.disabled = false;
   });
 
-  // ---- Fångst: märk live-strömmande koder (auto-detektera aktiva LID:er) ----
-  let _fTimer=null, _fCounts={}, _fSeen={}, _fPoll=0, _fSnap={}, _fActive=[], _fMeta={}, _fSig="";
+  // ---- Fångst: batch-insamling (tryck "Ny insamling" → läs i reference tool → beskriv) ----
+  let _fTimer=null, _fBase={}, _fBatch=[], _fBatchRaw={}, _fArmed=false, _fArmStart=0, _fLastData=0,
+      _fSnap={}, _fMeta={}, _fStatus="idle", _fSig="";
   function stopFangst(){ if(_fTimer){ clearInterval(_fTimer); _fTimer=null; } }
-  function resetFangst(){ _fCounts={}; _fSeen={}; _fPoll=0; _fSig=""; const a=document.getElementById("fangst-active"); if(a) a.innerHTML=""; }
+  function armFangst(){
+    _fBatch=[]; _fBatchRaw={}; _fArmed=true; _fStatus="armed"; _fArmStart=Date.now(); _fLastData=0;
+    _fBase={}; Object.values(_fSnap).forEach(l=>{ _fBase[l.lid]=l.count; }); _fSig=""; renderFangst();
+  }
+  function resetFangst(){ _fArmed=false; _fBatch=[]; _fBatchRaw={}; _fStatus="idle"; _fSig="x"; renderFangst(); }
   function startFangst(){
     stopFangst(); renderFangstLog();
-    const el=document.getElementById("fangst-reset"); if(el) el.onclick=resetFangst;
+    const nb=document.getElementById("fangst-new"); if(nb) nb.onclick=armFangst;
+    const rs=document.getElementById("fangst-reset"); if(rs) rs.onclick=resetFangst;
     const poll=async()=>{
       try{
         const d=await (await fetch("/sniff")).json();
-        d.fps=(_fMeta.lines!=null)?Math.max(0,(d.lines||0)-_fMeta.lines):0;  // bustrafik-takt
+        d.fps=(_fMeta.lines!=null)?Math.max(0,(d.lines||0)-_fMeta.lines):0;
         _fMeta=d; _fSnap={}; (d.lids||[]).forEach(l=>_fSnap[l.lid]=l);
-        _fPoll++;
-        (d.lids||[]).forEach(l=>{ if(_fCounts[l.lid]!=null && l.count>_fCounts[l.lid]) _fSeen[l.lid]=_fPoll; _fCounts[l.lid]=l.count; });
-        _fActive=Object.keys(_fSeen).filter(lid=>_fPoll-_fSeen[lid]<=3).sort();
+        if(_fArmed){
+          (d.lids||[]).forEach(l=>{ const base=_fBase[l.lid];
+            if(base==null || l.count>base){ if(!_fBatch.includes(l.lid)) _fBatch.push(l.lid);
+              _fBatchRaw[l.lid]=l.raw; _fBase[l.lid]=l.count; _fLastData=Date.now(); } });
+          const now=Date.now();
+          if(_fBatch.length && now-_fLastData>4000){ _fArmed=false; _fStatus="done"; _fSig=""; }
+          else if(!_fBatch.length && now-_fArmStart>4000){ _fArmed=false; _fStatus="timeout"; _fSig=""; }
+        }
         renderFangst();
       }catch(e){}
     };
-    poll(); _fTimer=setInterval(poll,1000);
+    poll(); _fTimer=setInterval(poll,500);
   }
   function fDecodeText(l){ return (l&&l.decode&&l.decode.length)? l.decode.map(s=>s.name+"="+s.value+(s.unit||"")).join(", ") : "(ingen mappning än)"; }
   function renderFangst(){
-    const b=document.getElementById("fangst-badge"); if(b) b.innerHTML=sniffBadge(_fMeta, new Set(_fActive));
-    const sig=_fActive.join(",");
-    if(sig!==_fSig){ _fSig=sig; buildFangstCards(); }
-    _fActive.forEach(lid=>{ const card=document.querySelector('#fangst-active .fcard[data-lid="'+lid+'"]'); if(!card) return;
-      const l=_fSnap[lid]; const raw=card.querySelector(".fraw"); if(raw&&l&&raw.textContent!==l.raw) raw.textContent=l.raw;
-      const our=card.querySelector(".four"); if(our) our.textContent=fDecodeText(l); });
+    const b=document.getElementById("fangst-badge"); if(b) b.innerHTML=sniffBadge(_fMeta, null);
+    const st=document.getElementById("fangst-status");
+    if(st){
+      if(_fStatus==="armed"){ const left=Math.max(0,4-Math.round((Date.now()-(_fLastData||_fArmStart))/1000));
+        st.innerHTML='<span class="sniffbad stale">● väntar på läsning… tryck LÄS i reference tool ('+left+'s)</span>'; }
+      else if(_fStatus==="done") st.innerHTML='<span class="sniffbad ok">● '+_fBatch.length+' koder fångade — beskriv och spara</span>';
+      else if(_fStatus==="timeout") st.innerHTML='<span class="sniffbad err">ingen data kom in — tryck LÄS i reference tool och försök igen</span>';
+      else st.innerHTML='<span class="sniffbad off">tryck "Ny insamling", läs i reference tool, beskriv koderna</span>';
+    }
+    const sig=_fStatus+"|"+_fBatch.join(",");
+    if(sig!==_fSig){ _fSig=sig; buildBatchCards(); }
+    _fBatch.forEach(lid=>{ const card=document.querySelector('#fangst-active .fcard[data-lid="'+lid+'"]'); if(!card) return;
+      const raw=card.querySelector(".fraw"); const rw=_fBatchRaw[lid]||((_fSnap[lid]||{}).raw)||""; if(raw&&raw.textContent!==rw) raw.textContent=rw;
+      const o=card.querySelector(".four"); if(o) o.textContent=fDecodeText(_fSnap[lid]); });
     renderFangstLog();
   }
-  function buildFangstCards(){
+  function buildBatchCards(){
     const box=document.getElementById("fangst-active"); if(!box) return;
-    if(!_fActive.length){ box.innerHTML='<div class="hint">Inga aktiva koder — välj en skärm i reference tool som pollar värden.</div>'; return; }
-    box.innerHTML=_fActive.map(lid=>{ const l=_fSnap[lid]||{raw:"",decode:[]};
-      return '<div class="fcard" data-lid="'+lid+'"><div class="fcard-h"><b>21 '+lid+'</b><span class="fdot">● aktiv</span></div>'+
-        '<div class="fraw">'+(l.raw||"")+'</div>'+
+    if(!_fBatch.length){ box.innerHTML=""; return; }
+    box.innerHTML=_fBatch.map(lid=>{ const l=_fSnap[lid]||{decode:[]}; const raw=_fBatchRaw[lid]||l.raw||"";
+      return '<div class="fcard" data-lid="'+lid+'"><div class="fcard-h"><b>21 '+lid+'</b><span class="fdot">fångad</span></div>'+
+        '<div class="fraw">'+raw+'</div>'+
         '<div class="fmap">vår mappning: <span class="four">'+fDecodeText(l)+'</span></div>'+
-        '<div class="frow"><input class="ftext" placeholder="vad visar reference tool? (värden i visad ordning)"><button class="fsave">spara</button></div></div>'; }).join("");
-    box.querySelectorAll(".fcard").forEach(card=>{ const lid=card.dataset.lid, inp=card.querySelector(".ftext"), btn=card.querySelector(".fsave");
-      const save=async()=>{ const text=(inp.value||"").trim(); if(!text){ inp.focus(); return; }
-        const raw=(_fSnap[lid]||{}).raw||"";
-        try{ await fetch("/capture",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({module:_fMeta.module, lid:lid, raw:raw, text:text})}); }catch(_){}
-        addFangstLog({lid:lid, raw:raw, text:text}); inp.value=""; btn.textContent="✓ sparat"; setTimeout(()=>{btn.textContent="spara";},1200);
-      };
-      btn.onclick=save; inp.onkeydown=e=>{ if(e.key==="Enter") save(); };
-    });
+        '<div class="frow"><input class="ftext" placeholder="vad visar reference tool? (värden i visad ordning)"></div></div>'; }).join("")+
+      '<button class="btn ok wide" id="fangst-savebatch">Spara batch</button>';
+    const sb=document.getElementById("fangst-savebatch"); if(sb) sb.onclick=saveBatch;
+  }
+  async function saveBatch(){
+    let n=0;
+    for(const card of [...document.querySelectorAll('#fangst-active .fcard')]){
+      const lid=card.dataset.lid, text=(card.querySelector('.ftext').value||"").trim(); if(!text) continue;
+      const raw=_fBatchRaw[lid]||((_fSnap[lid]||{}).raw)||"";
+      try{ await fetch("/capture",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({module:_fMeta.module,lid:lid,raw:raw,text:text})}); }catch(_){}
+      addFangstLog({lid:lid,raw:raw,text:text}); n++;
+    }
+    _fBatch=[]; _fBatchRaw={}; _fStatus="idle"; _fSig=""; renderFangst(); showCmd(n+" fångster sparade", true);
   }
   function fLogKey(){ return "fangstlog:"+(_fMeta.module||"?"); }
   function getFangstLog(){ try{ return JSON.parse(localStorage.getItem(fLogKey())||"[]"); }catch(_){ return []; } }
