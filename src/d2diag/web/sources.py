@@ -135,6 +135,10 @@ class MockDataSource(DataSource):
             return {"ok": True, "message": "Felkoder raderade (mock)"}
         return {"ok": False, "error": f"okänt kommando: {action}"}
 
+    def menu_map(self) -> "list":
+        from ..td5.menu import TD5_MENU
+        return TD5_MENU
+
 
 class Td5DataSource(DataSource):
     """Riktig Td5-ECU. Etablerar session lazily och läser om vid fel.
@@ -170,6 +174,10 @@ class Td5DataSource(DataSource):
         except Exception:  # noqa: BLE001
             pass
         self._td5 = None
+
+    def menu_map(self) -> "list":
+        from ..td5.menu import TD5_MENU
+        return TD5_MENU
 
     def poll(self) -> "dict":
         try:

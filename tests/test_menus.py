@@ -7,7 +7,7 @@ from d2diag.web.sources import MockDataSource, MockSlabsDataSource
 
 
 def test_all_modules_have_populated_maps():
-    for name in ("slabs", "bcu", "ace", "autobox", "airbag"):
+    for name in ("td5", "slabs", "bcu", "ace", "autobox", "airbag"):
         menu = MENUS[name]
         assert menu, f"{name} har tom karta"
         for group in menu:

@@ -9,9 +9,11 @@ from .airbag.menu import AIRBAG_MENU
 from .autobox.menu import AUTOBOX_MENU
 from .bcu.menu import BCU_MENU
 from .slabs.menu import SLABS_MENU
+from .td5.menu import TD5_MENU
 
 # Ordning = visningsordning i Karta-pickern.
 MENUS: "dict[str, list]" = {
+    "td5": TD5_MENU,
     "slabs": SLABS_MENU,
     "bcu": BCU_MENU,
     "ace": ACE_MENU,
