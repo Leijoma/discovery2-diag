@@ -46,6 +46,17 @@ def test_slabs_any_door_decoded():
     assert door["value"] == "stängd"
 
 
+def test_sniffer_snapshot_has_freshness_fields():
+    from d2diag.web.sniffer import SnifferFeed
+    feed = SnifferFeed(lambda: iter([]), source="test:x")
+    feed.store.ingest_line("[1] 81 13 f7 81 0c")               # init (ingen svarsram)
+    feed.store.ingest_line("[2] 02 21 09 2c 04 61 09 02 fa 6a")  # 61 09-svar → frames+1
+    snap = feed.snapshot()
+    assert snap["frames"] == 1
+    assert snap["source"] == "test:x"
+    assert {"status", "age", "frames", "source", "error"} <= set(snap)
+
+
 def test_menu_items_carry_lid_bindings():
     from d2diag.menus import MENUS
     fuel = next(g for g in MENUS["td5"] if "Fuelling" in g["cat"])

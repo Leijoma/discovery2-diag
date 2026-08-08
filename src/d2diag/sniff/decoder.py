@@ -84,6 +84,7 @@ class LidStore:
 
     def __init__(self) -> None:
         self.module: "str | None" = None
+        self.frames = 0  # totalt antal avkodade svarsramar (för färskhets-mätning)
         self._data: "dict[str, dict[int, dict]]" = {}
 
     def ingest_line(self, line: str) -> None:
@@ -105,6 +106,7 @@ class LidStore:
                 slot = self._data.setdefault(mod, {}).setdefault(lid, {"count": 0})
                 slot["raw"] = data
                 slot["count"] = slot["count"] + 1
+                self.frames += 1
 
     def snapshot(self, module: "str | None" = None) -> "dict":
         mod = module or self.module

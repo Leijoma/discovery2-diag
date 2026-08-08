@@ -89,9 +89,9 @@ def main() -> int:
         print(f"Sniff (live): {args.sniff} → Mappning-fliken")
     elif args.replay:
         from d2diag.web.sniffer import SnifferFeed
-        # stabil förhandsvisning: läs in hela loggen direkt (ej loop), alla LID:er syns
-        sniffer = SnifferFeed.from_file(args.replay, delay=0.0, loop=False)
-        print(f"Sniff (replay): {args.replay} → Mappning-fliken")
+        # loopande uppspelning så färskhets-badgen visar "LIVE" i förhandsvisningen
+        sniffer = SnifferFeed.from_file(args.replay, delay=0.008, loop=True)
+        print(f"Sniff (replay): {args.replay} → Karta-fliken (färskhets-demo)")
 
     srv = DiagServer(
         modules, host=args.host, port=args.port,

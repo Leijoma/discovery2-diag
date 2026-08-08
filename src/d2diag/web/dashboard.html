@@ -86,6 +86,12 @@
     background:var(--bg); padding:6px 8px; border-radius:6px; overflow-x:auto; white-space:pre; color:var(--accent); }
   .mautohint { color:var(--muted); }
   .mclr { background:none; border:0; color:var(--err); cursor:pointer; font-size:11px; }
+  .sniffbad { display:inline-block; padding:2px 8px; border-radius:8px; font-size:12px; font-weight:600; }
+  .sniffbad code { background:var(--bg); padding:0 4px; border-radius:4px; }
+  .sniffbad.ok { color:#04121f; background:var(--ok); }
+  .sniffbad.stale { color:#04121f; background:var(--warn); }
+  .sniffbad.err { color:#fff; background:var(--err); }
+  .sniffbad.wait, .sniffbad.off { color:var(--muted); background:var(--card2); }
   section h2 .gcount { color:var(--muted); font-weight:600; font-size:11px; text-transform:none; letter-spacing:0; }
   /* täckningsbarer (Karta-pickern + kart-header) */
   #karta-picker { display:flex; flex-direction:column; gap:7px; }
@@ -314,20 +320,30 @@
   });
 
   // ---- Karta: live sniff-integration (tänds när reference tool pollar fältet) ----
-  let _kSniffTimer=null, _ksniff=null, _kCounts={}, _kActive=new Set(), _kModule=null;
+  let _kSniffTimer=null, _ksniff=null, _kCounts={}, _kActive=new Set(), _kModule=null, _kMeta={};
   function stopKartaSniff(){ if(_kSniffTimer){ clearInterval(_kSniffTimer); _kSniffTimer=null; } }
   function startKartaSniff(module){
-    stopKartaSniff(); _kModule=module; _kCounts={};
+    stopKartaSniff(); _kModule=module; _kCounts={}; _kMeta={};
     const poll=async()=>{
       try{
         const d=await (await fetch("/sniff"+(module?("?module="+module):""))).json();
         const ns={}; (d.lids||[]).forEach(l=>ns[l.lid]=l);
         _kActive=new Set(); (d.lids||[]).forEach(l=>{ if(_kCounts[l.lid]!=null && l.count>_kCounts[l.lid]) _kActive.add(l.lid); _kCounts[l.lid]=l.count; });
         _ksniff=ns;
+        const fps=(_kMeta.lines!=null)?Math.max(0, (d.lines||0)-_kMeta.lines):0;
+        _kMeta={status:d.status, age:d.age, frames:d.frames||0, lines:d.lines||0, source:d.source, error:d.error, fps, configured:d.status!=null};
         if(document.getElementById("view-karta").classList.contains("active")) updateKartaLive();
-      }catch(e){}
+      }catch(e){ _kMeta={status:"fel", error:"ingen kontakt med servern", configured:true}; }
     };
     poll(); _kSniffTimer=setInterval(poll,1000);
+  }
+  function sniffBadge(){
+    const m=_kMeta||{};
+    if(!m.configured) return '<span class="sniffbad off">○ ingen sniff — starta dashboarden med <code>--sniff PORT</code></span>';
+    if(m.status==="fel") return `<span class="sniffbad err">● sniff-fel: ${m.error||"?"}</span>`;
+    if(m.status==="live" && m.age!=null && m.age<3){ const demo=(m.source||"").startsWith("replay")?" · demo (replay)":""; return `<span class="sniffbad ok">● LIVE · ${m.fps||0} ramar/s · ${m.frames} läsningar${demo}</span>`; }
+    if(m.age!=null) return `<span class="sniffbad stale">● ingen trafik på ${m.age}s — sitter tappen rätt / är reference tool på?</span>`;
+    return `<span class="sniffbad wait">○ väntar på trafik… (${(m.source||"").replace(/^serial:/,"")})</span>`;
   }
   function truthKey(cat,name){ return "truth:"+_kModule+"|"+cat+"|"+name; }
   function liveFor(lid,sig){
@@ -348,7 +364,7 @@
       const o=row.querySelector(".mour b"); if(o) o.textContent=(lv&&lv.our!=null)?lv.our:"—";
       const r=row.querySelector(".mrawv"); if(r) r.textContent=(lv&&lv.raw)||"";
     });
-    const s=document.getElementById("karta-live"); if(s) s.textContent=_ksniff?("live sniff · "+Object.keys(_ksniff).length+" LID:er"):"ingen sniff (kör --sniff/--replay)";
+    const s=document.getElementById("karta-live"); if(s) s.innerHTML=sniffBadge();
   }
 
   // ---- dokument-flik (vy mot kanoniska markdown-filer, ej bunden till session) ----
