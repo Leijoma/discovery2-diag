@@ -76,6 +76,16 @@
     border-radius:7px; padding:6px 8px; font-size:13px; }
   .mtruth.filled { border-color:var(--ok); }
   .mrawv { color:var(--muted); font-size:10px; font-family:ui-monospace,Menlo,monospace; }
+  .mrec { flex:0 0 auto; padding:6px 10px; border-radius:7px; border:1px solid var(--accent);
+    background:var(--card2); color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; }
+  .mauto:empty { display:none; }
+  .mauto { margin-top:2px; font-size:11.5px; color:var(--muted); }
+  .mres { color:var(--fg); background:var(--card2); border-left:3px solid var(--ok); border-radius:0 7px 7px 0;
+    padding:6px 9px; margin-bottom:4px; }
+  .mres code { display:block; margin-top:4px; font-family:ui-monospace,Menlo,monospace; font-size:11.5px;
+    background:var(--bg); padding:6px 8px; border-radius:6px; overflow-x:auto; white-space:pre; color:var(--accent); }
+  .mautohint { color:var(--muted); }
+  .mclr { background:none; border:0; color:var(--err); cursor:pointer; font-size:11px; }
   section h2 .gcount { color:var(--muted); font-weight:600; font-size:11px; text-transform:none; letter-spacing:0; }
   /* täckningsbarer (Karta-pickern + kart-header) */
   #karta-picker { display:flex; flex-direction:column; gap:7px; }
@@ -379,7 +389,7 @@
   async function loadMap(module) {
     try {
       const d = await (await fetch(module ? "/map?module=" + module : "/map")).json();
-      _kmap = d;
+      _kmap = d; _kModule = d.module;
       renderPicker(d.modules || [], d.module, d.coverage || {});
       renderKartaLive();
       startKartaSniff(d.module);
@@ -405,23 +415,50 @@
     html+=map.map(g=>{ let go=0,gt=0; g.items.forEach(i=>{gt++;if(i.status==="ok")go++;});
       return `<h2 style="margin-top:14px">${g.cat} <span class="gcount">${go}/${gt}</span></h2>`+g.items.map(i=>rowHtml(g.cat,i)).join(""); }).join("");
     $("karta-body").innerHTML=html;
-    bindTruthInputs(); updateKartaLive();
+    bindRowActions(); updateKartaLive();
   }
   function rowHtml(cat,i){
-    const has=!!i.lid;
-    const tk=truthKey(cat,i.name), tv=(localStorage.getItem(tk)||"").replace(/"/g,"&quot;");
-    const attr=has?` data-lid="${i.lid}" data-sig="${i.sig||""}"`:"";
-    const live=has?
+    if(!i.lid) return `<div class="mrow ${i.status}"><div class="mrow-top"><span>${mIcon(i.status)} ${i.name}</span><span class="mref">${i.ref||""}</span></div></div>`;
+    return `<div class="mrow ${i.status}" data-lid="${i.lid}" data-sig="${i.sig||""}" data-cat="${encodeURIComponent(cat)}" data-name="${encodeURIComponent(i.name)}">`+
+      `<div class="mrow-top"><span>${mIcon(i.status)} ${i.name}</span><span class="mref">${i.ref||""}</span></div>`+
       `<div class="mrow-live"><span class="mour">vår: <b>—</b></span>`+
-      `<input class="mtruth${tv?" filled":""}" data-tk="${encodeURIComponent(tk)}" value="${tv}" placeholder="reference tool: värde + enhet"></div>`+
-      `<div class="mrow-raw"><code class="mrawv"></code></div>`:"";
-    return `<div class="mrow ${i.status}"${attr}>`+
-      `<div class="mrow-top"><span>${mIcon(i.status)} ${i.name}</span><span class="mref">${i.ref||""}</span></div>`+live+`</div>`;
+        `<input class="mtruth" placeholder="läs av i reference tool (klartext)">`+
+        `<button class="mrec">spara</button></div>`+
+      `<div class="mrow-raw"><code class="mrawv"></code></div>`+
+      `<div class="mauto"></div></div>`;
   }
-  function bindTruthInputs(){
-    document.querySelectorAll("#karta-body .mtruth").forEach(inp=>{
-      inp.oninput=()=>{ const k=decodeURIComponent(inp.dataset.tk); if(inp.value.trim()) localStorage.setItem(k,inp.value); else localStorage.removeItem(k); inp.classList.toggle("filled", !!inp.value.trim()); };
+  function readingsKey(cat,name){ return "read:"+_kModule+"|"+cat+"|"+name; }
+  function getReadings(k){ try{ return JSON.parse(localStorage.getItem(k)||"[]"); }catch(_){ return []; } }
+  function setReadings(k,v){ localStorage.setItem(k,JSON.stringify(v)); }
+  function bindRowActions(){
+    document.querySelectorAll("#karta-body .mrow[data-lid]").forEach(row=>{
+      const cat=decodeURIComponent(row.dataset.cat), name=decodeURIComponent(row.dataset.name), rk=readingsKey(cat,name);
+      const inp=row.querySelector(".mtruth"), rec=row.querySelector(".mrec");
+      const save=()=>{
+        const text=(inp.value||"").trim(); if(!text){ inp.focus(); return; }
+        const raws={}; row.dataset.lid.split(/\s+/).forEach(x=>{ if(_ksniff&&_ksniff[x]) raws[x]=_ksniff[x].raw; });
+        if(!Object.keys(raws).length){ showCmd("Ingen sniff-data för den LID:en ännu — står reference tool på fältet?", false); return; }
+        const rs=getReadings(rk); rs.push({text, raws}); setReadings(rk,rs); inp.value="";
+        autoSolve(row, rk);
+      };
+      rec.onclick=save;
+      inp.onkeydown=(ev)=>{ if(ev.key==="Enter") save(); };
+      if(getReadings(rk).length) autoSolve(row, rk);
     });
+  }
+  async function autoSolve(row, rk){
+    const rs=getReadings(rk), box=row.querySelector(".mauto");
+    const rawname=decodeURIComponent(row.dataset.name);
+    const sig=row.dataset.sig||rawname.replace(/^\d+\.\s*/,"").replace(/\s*\([^)]*\)/g,"").trim().replace(/[^a-zA-Z0-9åäöÅÄÖ]+/g,"_").replace(/^_+|_+$/g,"").toLowerCase();
+    const clr=` <button class="mclr">rensa ${rs.length}</button>`;
+    try{
+      const r=await (await fetch("/automap",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({samples:rs, candidate_lids:row.dataset.lid.split(/\s+/), name:sig, unit:""})})).json();
+      if(!r.ok){ box.innerHTML=`<span class="mautohint">${rs.length} avläsning(ar) · ${r.error}</span>${clr}`; }
+      else if(r.mode==="numeric"){ box.innerHTML=`<div class="mres">→ <b>21 ${r.lid}@${r.offset} ${r.kind}</b> · R²=${(+r.r2).toFixed(3)}${r.clean?" · ren skala ✓":" · osäker skala"}${r.how==="guess"?" (gissning, 1 avläsning)":""}<code>${r.signal}</code></div><span class="mautohint">${rs.length} avläsning(ar)</span>${clr}`; }
+      else { box.innerHTML=`<div class="mres">→ <b>${r.rule}</b></div><span class="mautohint">${rs.length} avläsning(ar)</span>${clr}`; }
+    }catch(e){ box.innerHTML=`<span class="mautohint">nätverksfel</span>${clr}`; }
+    const cb=box.querySelector(".mclr"); if(cb) cb.onclick=()=>{ setReadings(rk,[]); box.innerHTML=""; };
   }
 
   function render(d) {

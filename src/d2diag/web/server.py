@@ -40,6 +40,21 @@ def _calibrate(req: "dict") -> "dict":
     return {"ok": True, "signal": sig, **fit}
 
 
+def _automap(req: "dict") -> "dict":
+    """Auto-sök rätt råfält (offset/typ/skala eller byte.bit) ur klartext-avläsningar."""
+    from ..sniff.automap import solve
+
+    try:
+        return solve(
+            req.get("samples") or [],
+            [str(x) for x in (req.get("candidate_lids") or [])],
+            (req.get("name") or "signal"),
+            (req.get("unit") or ""),
+        )
+    except (ValueError, TypeError, KeyError, IndexError) as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *args) -> None:  # tyst logg
         pass
@@ -102,6 +117,14 @@ class _Handler(BaseHTTPRequestHandler):
             except (ValueError, TypeError):
                 req = {}
             self._json(_calibrate(req))
+        elif self.path == "/automap":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                req = json.loads(raw or b"{}")
+            except (ValueError, TypeError):
+                req = {}
+            self._json(_automap(req))
         else:
             self.send_error(404)
 

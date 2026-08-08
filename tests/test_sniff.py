@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from d2diag.sniff import LidStore, parse_hex_line, solve_linear, suggest_signal
+from d2diag.sniff.automap import solve as automap_solve
 
 
 def test_parse_hex_line_and_markers():
@@ -66,6 +67,46 @@ def test_solve_linear_battery_points():
 def test_solve_linear_needs_two_distinct():
     assert solve_linear([(5, 1.0)]) is None
     assert solve_linear([(5, 1.0), (5, 2.0)]) is None  # samma rå → ingen lutning
+
+
+def test_automap_numeric_finds_battery_field():
+    # två klartext-avläsningar (motor av / igång) + råblock för LID 10
+    r = automap_solve(
+        [{"text": "11.67", "raws": {"10": "2d 94 2d af"}},
+         {"text": "13.82", "raws": {"10": "35 fa 36 1a"}}],
+        ["10"], name="battery", unit="V",
+    )
+    assert r["ok"] and r["mode"] == "numeric"
+    assert r["lid"] == "10" and r["offset"] == 0 and r["kind"] == "u16"
+    assert abs(r["scale"] - 0.001) < 1e-6 and r["r2"] > 0.999
+    assert r["signal"] == 'Signal("battery", 0x10, 0, scale=1 / 1000, unit="V")'
+
+
+def test_automap_numeric_finds_temperature_with_bias():
+    # kylvätsketemp ur 21 1A@0: (u16/10 − 273.2). 59.2 °C vs 58.2 °C
+    r = automap_solve(
+        [{"text": "59.2", "raws": {"1a": "0c fc 04 f1 0c b1 05 eb 10 88 00 04 0c 95 06 51"}},
+         {"text": "58.2", "raws": {"1a": "0c f2 05 0f 0c 89 06 82 10 88 00 04 0c a4 06 17"}}],
+        ["1a"], name="coolant_temp", unit="°C",
+    )
+    assert r["ok"] and r["offset"] == 0 and r["kind"] == "u16"
+    assert abs(r["scale"] - 0.1) < 1e-6 and abs(r["bias"] + 273.2) < 0.5
+
+
+def test_automap_state_finds_door_bit():
+    r = automap_solve(
+        [{"text": "öppen", "raws": {"56": "01 0f 0f 0f"}},
+         {"text": "stängd", "raws": {"56": "00 0f 0f 0f"}}],
+        ["56"],
+    )
+    assert r["ok"] and r["mode"] == "state"
+    assert r["lid"] == "56" and r["offset"] == 0 and r["bit"] == 0
+    assert r["mapping"] == {"öppen": 1, "stängd": 0}
+
+
+def test_automap_single_reading_guesses_clean_scale():
+    r = automap_solve([{"text": "13.74", "raws": {"10": "35 ab 35 da"}}], ["10"], "battery", "V")
+    assert r["ok"] and abs(r["scale"] - 0.001) < 1e-6 and r["how"] == "guess"
 
 
 def test_suggest_signal_formats_common_fraction():
