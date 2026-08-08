@@ -88,6 +88,8 @@
   .mres code { display:block; margin-top:4px; font-family:ui-monospace,Menlo,monospace; font-size:11.5px;
     background:var(--bg); padding:6px 8px; border-radius:6px; overflow-x:auto; white-space:pre; color:var(--accent); }
   .mautohint { color:var(--muted); }
+  .mdiff { font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--accent); margin:2px 0 4px; }
+  .mdiff.none { color:var(--warn); font-family:inherit; }
   .mclr { background:none; border:0; color:var(--err); cursor:pointer; font-size:11px; }
   .sniffbad { display:inline-block; padding:2px 8px; border-radius:8px; font-size:12px; font-weight:600; }
   .sniffbad code { background:var(--bg); padding:0 4px; border-radius:4px; }
@@ -483,9 +485,15 @@
     try{
       const r=await (await fetch("/automap",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({samples:rs, candidate_lids:row.dataset.lid.split(/\s+/), name:sig, unit:""})})).json();
-      if(!r.ok){ box.innerHTML=`<span class="mautohint">${rs.length} avläsning(ar) · ${r.error}</span>${clr}`; }
-      else if(r.mode==="numeric"){ box.innerHTML=`<div class="mres">→ <b>21 ${r.lid}@${r.offset} ${r.kind}</b> · R²=${(+r.r2).toFixed(3)}${r.clean?" · ren skala ✓":" · osäker skala"}${r.how==="guess"?" (gissning, 1 avläsning)":""}<code>${r.signal}</code></div><span class="mautohint">${rs.length} avläsning(ar)</span>${clr}`; }
-      else { box.innerHTML=`<div class="mres">→ <b>${r.rule}</b></div><span class="mautohint">${rs.length} avläsning(ar)</span>${clr}`; }
+      const hx=v=>v.toString(16).padStart(2,"0");
+      const diffTxt=(r.diff&&r.diff.length)
+        ? `<div class="mdiff">ändrade bytes: ${r.diff.slice(0,8).map(d=>`21 ${d.lid} b${d.byte}: ${d.values.map(hx).join("→")}`).join(" · ")}</div>`
+        : (rs.length>=2 ? `<div class="mdiff none">inga bytes ändrades — fältet ligger inte i denna LID, eller värdet var oförändrat</div>` : "");
+      let main="";
+      if(!r.ok) main=`<span class="mautohint">${r.error}</span>`;
+      else if(r.mode==="numeric") main=`<div class="mres">→ <b>21 ${r.lid}@${r.offset} ${r.kind}</b> · R²=${(+r.r2).toFixed(3)}${r.clean?" · ren skala ✓":" · osäker skala"}${r.how==="guess"?" (gissning, 1 avläsning)":""}<code>${r.signal}</code></div>`;
+      else main=`<div class="mres">→ <b>${r.rule}</b></div>`;
+      box.innerHTML=main+diffTxt+`<span class="mautohint">${rs.length} avläsning(ar)</span>${clr}`;
     }catch(e){ box.innerHTML=`<span class="mautohint">nätverksfel</span>${clr}`; }
     const cb=box.querySelector(".mclr"); if(cb) cb.onclick=()=>{ setReadings(rk,[]); box.innerHTML=""; };
   }

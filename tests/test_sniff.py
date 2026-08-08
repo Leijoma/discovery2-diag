@@ -115,6 +115,27 @@ def test_automap_state_finds_door_bit():
     assert r["mapping"] == {"öppen": 1, "stängd": 0}
 
 
+def test_automap_diff_shows_changed_byte():
+    # settings-block läst i två lägen; bara byte 3 ändras → där bor fältet
+    r = automap_solve(
+        [{"text": "AIR", "raws": {"45": "0a 0b 0c 01 0e"}},
+         {"text": "springs", "raws": {"45": "0a 0b 0c 00 0e"}}],
+        ["45"],
+    )
+    assert r["mode"] == "state"
+    assert {"lid": "45", "byte": 3, "values": [1, 0]} in r["diff"]
+    assert r["offset"] == 3 and r["bit"] == 0  # entydig bit → hittad
+
+
+def test_automap_diff_empty_when_nothing_changed():
+    # samma råbytes i båda avläsningarna → inget rörde sig (fel LID eller ingen ändring)
+    r = automap_solve(
+        [{"text": "på", "raws": {"46": "aa bb"}}, {"text": "av", "raws": {"46": "aa bb"}}],
+        ["46"],
+    )
+    assert r["diff"] == [] and r["ok"] is False
+
+
 def test_automap_single_reading_guesses_clean_scale():
     r = automap_solve([{"text": "13.74", "raws": {"10": "35 ab 35 da"}}], ["10"], "battery", "V")
     assert r["ok"] and abs(r["scale"] - 0.001) < 1e-6 and r["how"] == "guess"

@@ -181,10 +181,31 @@ def search_state(samples, candidate_lids):
     return best
 
 
+def block_diff(parsed, candidate_lids):
+    """Vilka bytes ändrades mellan avläsningarna? Kärn-primitiven för fält som
+    läses i ett block: ändra EN sak, se vilken byte som rör sig = där bor fältet.
+
+    → [{'lid', 'byte', 'values': [per avläsning]}]. Tom = inget rörde sig.
+    """
+    out = []
+    if len(parsed) < 2:
+        return out
+    for lid in candidate_lids:
+        raws = [p["raws"].get(lid) for p in parsed]
+        if any(r is None for r in raws):
+            continue
+        for off in range(min(len(r) for r in raws)):
+            vals = [r[off] for r in raws]
+            if len(set(vals)) > 1:
+                out.append({"lid": lid, "byte": off, "values": vals})
+    return out
+
+
 def solve(samples, candidate_lids, name="signal", unit=""):
     """Auto-detektera numeriskt vs tillstånd och returnera bästa mappning.
 
-    ``samples``: [{'text': '<klartext>', 'raws': {lid_hex: 'hex' | bytes}}]
+    ``samples``: [{'text': '<klartext>', 'raws': {lid_hex: 'hex' | bytes}}]. Bär
+    alltid med ``diff`` (ändrade bytes mellan avläsningarna) så platsen syns.
     """
     parsed = []
     numeric = True
@@ -199,14 +220,15 @@ def solve(samples, candidate_lids, name="signal", unit=""):
             numeric = False
     if len(parsed) < 1:
         return {"ok": False, "error": "inga avläsningar"}
+    diff = block_diff(parsed, candidate_lids)
     if numeric:
         num = [{"value": float(p["text"].replace(",", ".")), "raws": p["raws"]} for p in parsed]
         res = search_numeric(num, candidate_lids, name, unit)
         if res is None:
-            return {"ok": False, "error": "hittade inget råfält som matchar värdena"}
-        return {"ok": True, "mode": "numeric", **res}
+            return {"ok": False, "error": "hittade inget råfält som matchar värdena", "diff": diff}
+        return {"ok": True, "mode": "numeric", "diff": diff, **res}
     st = [{"state": p["text"], "raws": p["raws"]} for p in parsed]
     res = search_state(st, candidate_lids)
     if res is None:
-        return {"ok": False, "error": "behöver ≥2 olika lägen som särskiljs i råbytesen"}
-    return {"ok": True, "mode": "state", **res}
+        return {"ok": False, "error": "behöver ≥2 olika lägen som särskiljs i råbytesen", "diff": diff}
+    return {"ok": True, "mode": "state", "diff": diff, **res}
