@@ -89,7 +89,8 @@ def main() -> int:
         print(f"Sniff (live): {args.sniff} → Mappning-fliken")
     elif args.replay:
         from d2diag.web.sniffer import SnifferFeed
-        sniffer = SnifferFeed.from_file(args.replay)
+        # stabil förhandsvisning: läs in hela loggen direkt (ej loop), alla LID:er syns
+        sniffer = SnifferFeed.from_file(args.replay, delay=0.0, loop=False)
         print(f"Sniff (replay): {args.replay} → Mappning-fliken")
 
     srv = DiagServer(
