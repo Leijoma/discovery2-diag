@@ -95,6 +95,23 @@
   .sniffbad.stale { color:#04121f; background:var(--warn); }
   .sniffbad.err { color:#fff; background:var(--err); }
   .sniffbad.wait, .sniffbad.off { color:var(--muted); background:var(--card2); }
+  /* fångst-flik */
+  .fcard { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--ok);
+    border-radius:10px; padding:11px 12px; margin-bottom:10px; }
+  .fcard-h { display:flex; justify-content:space-between; align-items:center; }
+  .fcard-h b { font-family:ui-monospace,Menlo,monospace; font-size:15px; }
+  .fdot { color:var(--ok); font-size:11px; }
+  .fraw { font-family:ui-monospace,Menlo,monospace; font-size:14px; color:var(--accent); margin:6px 0;
+    word-break:break-all; }
+  .fmap { color:var(--muted); font-size:12px; margin-bottom:8px; } .fmap .four { color:var(--fg); }
+  .frow { display:flex; gap:8px; }
+  .ftext { flex:1; background:var(--card2); border:1px solid var(--line); color:var(--fg);
+    border-radius:8px; padding:9px 10px; font-size:14px; }
+  .fsave { flex:0 0 auto; padding:9px 14px; border-radius:8px; border:1px solid var(--accent);
+    background:var(--card2); color:var(--accent); font-size:13px; font-weight:600; cursor:pointer; }
+  .flog { padding:7px 10px; background:var(--card); border-radius:8px; margin-bottom:5px; font-size:12.5px; }
+  .flog .flid { font-family:ui-monospace,Menlo,monospace; color:var(--accent); }
+  .flog code { background:var(--card2); padding:0 5px; border-radius:4px; font-size:11.5px; }
   section h2 .gcount { color:var(--muted); font-weight:600; font-size:11px; text-transform:none; letter-spacing:0; }
   /* täckningsbarer (Karta-pickern + kart-header) */
   #karta-picker { display:flex; flex-direction:column; gap:7px; }
@@ -174,6 +191,7 @@
 <div class="tabs">
   <div class="tab active" data-tab="motor">Motor</div>
   <div class="tab" data-tab="slabs">SLABS</div>
+  <div class="tab" data-tab="fangst">Fångst</div>
   <div class="tab" data-tab="karta">Karta</div>
   <div class="tab" data-tab="dok">Dokument</div>
 </div>
@@ -274,6 +292,19 @@
     </section>
   </div>
 
+  <!-- ===================== FÅNGST (märk live-strömmande koder) ===================== -->
+  <div class="view" id="view-fangst">
+    <section>
+      <h2>Fångst — märk koderna som strömmar</h2>
+      <div class="hint">Välj en skärm i reference tool. Koder som pollas om och om igen dyker upp här. Skriv vad reference tool visar (värden i visad ordning) och spara.</div>
+      <div id="fangst-badge" style="margin:8px 0"></div>
+      <div class="btns" style="margin-bottom:10px"><button class="btn" id="fangst-reset">↺ Nollställ aktiva</button></div>
+      <div id="fangst-active"></div>
+      <h2 style="margin-top:18px">Sparade fångster</h2>
+      <div id="fangst-log"></div>
+    </section>
+  </div>
+
   <!-- ===================== DOKUMENT ===================== -->
   <div class="view" id="view-dok">
     <section>
@@ -316,9 +347,10 @@
   }
   document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
     const name = t.dataset.tab;
-    stopKartaSniff();
+    stopKartaSniff(); stopFangst();
     if (name === "karta") { showTab("karta"); loadMap(); }
     else if (name === "dok") { showTab("dok"); loadDocs(); }
+    else if (name === "fangst") { showTab("fangst"); startFangst(); }
     else selectModule(name);
   });
 
@@ -341,11 +373,11 @@
     };
     poll(); _kSniffTimer=setInterval(poll,1000);
   }
-  function sniffBadge(){
-    const m=_kMeta||{};
-    if(!m.configured) return '<span class="sniffbad off">○ ingen sniff — starta dashboarden med <code>--sniff PORT</code></span>';
+  function sniffBadge(m, active){
+    m=m||{};
+    if(m.status==null) return '<span class="sniffbad off">○ ingen sniff — starta dashboarden med <code>--sniff PORT</code></span>';
     if(m.status==="fel") return `<span class="sniffbad err">● sniff-fel: ${m.error||"?"}</span>`;
-    if(m.status==="live" && m.age!=null && m.age<3){ const demo=(m.source||"").startsWith("replay")?" · demo":""; const pol=(_kActive&&_kActive.size)?(" · pollar "+Array.from(_kActive).slice(0,6).join(" ")):""; return `<span class="sniffbad ok">● LIVE · ${m.fps||0} ramar/s · ${m.frames||0} läsningar${pol}${demo}</span>`; }
+    if(m.status==="live" && m.age!=null && m.age<3){ const demo=(m.source||"").startsWith("replay")?" · demo":""; const pol=(active&&active.size)?(" · pollar "+Array.from(active).slice(0,6).join(" ")):""; return `<span class="sniffbad ok">● LIVE · ${m.fps||0} ramar/s · ${m.frames||0} läsningar${pol}${demo}</span>`; }
     if(m.age!=null) return `<span class="sniffbad stale">● ingen trafik på ${m.age}s — sitter tappen rätt / är reference tool på?</span>`;
     return `<span class="sniffbad wait">○ väntar på trafik… (${(m.source||"").replace(/^serial:/,"")})</span>`;
   }
@@ -360,7 +392,7 @@
     else if((hit.decode||[]).length){ our=hit.decode.map(d=>d.name+"="+d.value+(d.unit||"")).join(", "); }
     return {seen:true,active,our,raw:hit.raw};
   }
-  function updateBadge(){ const s=document.getElementById("karta-live"); if(s) s.innerHTML=sniffBadge(); }
+  function updateBadge(){ const s=document.getElementById("karta-live"); if(s) s.innerHTML=sniffBadge(_kMeta, _kActive); }
   function setFocus(row){
     document.querySelectorAll("#karta-body .mrow.focus").forEach(r=>r.classList.remove("focus"));
     if(row){ row.classList.add("focus"); _kFocus=row.dataset.name||null; refreshFocus(); row.scrollIntoView({block:"nearest"}); }
@@ -564,6 +596,59 @@
     } catch (e) { showCmd("Nätverksfel: " + e, false); }
     btn.disabled = false;
   });
+
+  // ---- Fångst: märk live-strömmande koder (auto-detektera aktiva LID:er) ----
+  let _fTimer=null, _fCounts={}, _fSeen={}, _fPoll=0, _fSnap={}, _fActive=[], _fMeta={}, _fSig="";
+  function stopFangst(){ if(_fTimer){ clearInterval(_fTimer); _fTimer=null; } }
+  function resetFangst(){ _fCounts={}; _fSeen={}; _fPoll=0; _fSig=""; const a=document.getElementById("fangst-active"); if(a) a.innerHTML=""; }
+  function startFangst(){
+    stopFangst(); renderFangstLog();
+    const el=document.getElementById("fangst-reset"); if(el) el.onclick=resetFangst;
+    const poll=async()=>{
+      try{
+        const d=await (await fetch("/sniff")).json();
+        d.fps=(_fMeta.lines!=null)?Math.max(0,(d.lines||0)-_fMeta.lines):0;  // bustrafik-takt
+        _fMeta=d; _fSnap={}; (d.lids||[]).forEach(l=>_fSnap[l.lid]=l);
+        _fPoll++;
+        (d.lids||[]).forEach(l=>{ if(_fCounts[l.lid]!=null && l.count>_fCounts[l.lid]) _fSeen[l.lid]=_fPoll; _fCounts[l.lid]=l.count; });
+        _fActive=Object.keys(_fSeen).filter(lid=>_fPoll-_fSeen[lid]<=3).sort();
+        renderFangst();
+      }catch(e){}
+    };
+    poll(); _fTimer=setInterval(poll,1000);
+  }
+  function fDecodeText(l){ return (l&&l.decode&&l.decode.length)? l.decode.map(s=>s.name+"="+s.value+(s.unit||"")).join(", ") : "(ingen mappning än)"; }
+  function renderFangst(){
+    const b=document.getElementById("fangst-badge"); if(b) b.innerHTML=sniffBadge(_fMeta, new Set(_fActive));
+    const sig=_fActive.join(",");
+    if(sig!==_fSig){ _fSig=sig; buildFangstCards(); }
+    _fActive.forEach(lid=>{ const card=document.querySelector('#fangst-active .fcard[data-lid="'+lid+'"]'); if(!card) return;
+      const l=_fSnap[lid]; const raw=card.querySelector(".fraw"); if(raw&&l&&raw.textContent!==l.raw) raw.textContent=l.raw;
+      const our=card.querySelector(".four"); if(our) our.textContent=fDecodeText(l); });
+    renderFangstLog();
+  }
+  function buildFangstCards(){
+    const box=document.getElementById("fangst-active"); if(!box) return;
+    if(!_fActive.length){ box.innerHTML='<div class="hint">Inga aktiva koder — välj en skärm i reference tool som pollar värden.</div>'; return; }
+    box.innerHTML=_fActive.map(lid=>{ const l=_fSnap[lid]||{raw:"",decode:[]};
+      return '<div class="fcard" data-lid="'+lid+'"><div class="fcard-h"><b>21 '+lid+'</b><span class="fdot">● aktiv</span></div>'+
+        '<div class="fraw">'+(l.raw||"")+'</div>'+
+        '<div class="fmap">vår mappning: <span class="four">'+fDecodeText(l)+'</span></div>'+
+        '<div class="frow"><input class="ftext" placeholder="vad visar reference tool? (värden i visad ordning)"><button class="fsave">spara</button></div></div>'; }).join("");
+    box.querySelectorAll(".fcard").forEach(card=>{ const lid=card.dataset.lid, inp=card.querySelector(".ftext"), btn=card.querySelector(".fsave");
+      const save=async()=>{ const text=(inp.value||"").trim(); if(!text){ inp.focus(); return; }
+        const raw=(_fSnap[lid]||{}).raw||"";
+        try{ await fetch("/capture",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({module:_fMeta.module, lid:lid, raw:raw, text:text})}); }catch(_){}
+        addFangstLog({lid:lid, raw:raw, text:text}); inp.value=""; btn.textContent="✓ sparat"; setTimeout(()=>{btn.textContent="spara";},1200);
+      };
+      btn.onclick=save; inp.onkeydown=e=>{ if(e.key==="Enter") save(); };
+    });
+  }
+  function fLogKey(){ return "fangstlog:"+(_fMeta.module||"?"); }
+  function getFangstLog(){ try{ return JSON.parse(localStorage.getItem(fLogKey())||"[]"); }catch(_){ return []; } }
+  function addFangstLog(rec){ const l=getFangstLog(); l.unshift({lid:rec.lid, raw:rec.raw, text:rec.text, t:new Date().toLocaleTimeString()}); localStorage.setItem(fLogKey(), JSON.stringify(l.slice(0,200))); renderFangstLog(); }
+  function renderFangstLog(){ const box=document.getElementById("fangst-log"); if(!box) return; const l=getFangstLog();
+    box.innerHTML=l.length? l.map(r=>'<div class="flog"><span class="flid">21 '+r.lid+'</span> <code>'+(r.raw||"")+'</code> → '+r.text+' <span class="none">'+(r.t||"")+'</span></div>').join("") : '<div class="hint" style="padding:14px">Inga sparade än.</div>'; }
 
   (function connect() {
     const es = new EventSource("/events");

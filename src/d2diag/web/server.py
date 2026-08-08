@@ -40,6 +40,25 @@ def _calibrate(req: "dict") -> "dict":
     return {"ok": True, "signal": sig, **fit}
 
 
+_capture_lock = threading.Lock()
+
+
+def _append_capture(path: "str | None", rec: "dict") -> "dict":
+    """Lägg en märkt fångst {module, lid, raw, text} till en JSONL-fil (durabelt
+    dataset för mappnings-analys)."""
+    if not path:
+        return {"ok": True, "stored": False}
+    row = {"t": time.strftime("%Y-%m-%d %H:%M:%S"),
+           "module": rec.get("module"), "lid": rec.get("lid"),
+           "raw": rec.get("raw"), "text": rec.get("text")}
+    try:
+        with _capture_lock, open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    return {"ok": True, "stored": True}
+
+
 def _automap(req: "dict") -> "dict":
     """Auto-sök rätt råfält (offset/typ/skala eller byte.bit) ur klartext-avläsningar."""
     from ..sniff.automap import solve
@@ -125,6 +144,14 @@ class _Handler(BaseHTTPRequestHandler):
             except (ValueError, TypeError):
                 req = {}
             self._json(_automap(req))
+        elif self.path == "/capture":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                req = json.loads(raw or b"{}")
+            except (ValueError, TypeError):
+                req = {}
+            self._json(_append_capture(self.server.captures_path, req))
         else:
             self.send_error(404)
 
@@ -179,11 +206,13 @@ class DiagServer(ThreadingHTTPServer):
         menus: "dict | None" = None,
         docs: "DocLibrary | None" = None,
         sniffer=None,
+        captures_path: "str | None" = None,
     ) -> None:
         super().__init__((host, port), _Handler)
         self._menus = menus or {}  # modul → meny-lista (Karta-fliken)
         self.docs = docs or DocLibrary()  # markdown-vy (Dokument-fliken)
         self.sniffer = sniffer  # passiv sniff-feed (Mappning-fliken), valfri
+        self.captures_path = captures_path  # märkta live-fångster → JSONL
         # source kan vara en enda DataSource (bakåtkompat) eller en dict
         # {modulnamn: DataSource}. Bara en modul är aktiv åt gången — K-line är
         # en delad buss, så att byta flik = släppa gammal session och etablera ny.

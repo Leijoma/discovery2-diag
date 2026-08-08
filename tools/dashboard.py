@@ -93,12 +93,17 @@ def main() -> int:
         sniffer = SnifferFeed.from_file(args.replay, delay=0.008, loop=True)
         print(f"Sniff (replay): {args.replay} → Karta-fliken (färskhets-demo)")
 
+    # Märkta live-fångster (Fångst-fliken) → durabelt JSONL-dataset.
+    captures_path = os.path.join(repo_root, "logs", "labeled_captures.jsonl")
+    os.makedirs(os.path.dirname(captures_path), exist_ok=True)
+
     srv = DiagServer(
         modules, host=args.host, port=args.port,
         poll_interval=args.interval, stream_interval=args.interval, logger=logger,
-        active=active, menus=MENUS, docs=docs, sniffer=sniffer,
+        active=active, menus=MENUS, docs=docs, sniffer=sniffer, captures_path=captures_path,
     )
     print(f"Dokument: {len(docs.index())} st i Dokument-fliken")
+    print(f"Fångster → {captures_path}")
     print(f"Dashboard: http://localhost:{args.port}   (moduler: {', '.join(modules)} · aktiv: {active})")
     if log_path:
         print(f"Loggar data → {log_path}")
