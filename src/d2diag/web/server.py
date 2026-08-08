@@ -29,6 +29,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._sse()
         elif self.path == "/snapshot":
             self._json(self.server.latest)
+        elif self.path == "/map":
+            self._json({"module": self.server._active, "map": self.server.source.menu_map()})
         else:
             self.send_error(404)
 

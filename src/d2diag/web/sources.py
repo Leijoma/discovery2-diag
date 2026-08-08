@@ -62,6 +62,10 @@ class DataSource(abc.ABC):
     def disconnect(self) -> None:
         """Släpp ev. K-line-session/port (vid modulbyte). Bas: inget att göra."""
 
+    def menu_map(self) -> "list":
+        """Referens-/täckningskarta (reference tool-meny + vår status). Bas: tom."""
+        return []
+
     def command(self, action: str, params: "dict | None" = None) -> "dict":
         """Utför ett skrivkommando. Bas: okänt. Returnerar {ok, message|error}.
 
@@ -304,6 +308,10 @@ class MockSlabsDataSource(DataSource):
             return {"ok": True, "message": f"{_SLABS_ACTUATORS[action]} (mock)"}
         return {"ok": False, "error": f"okänt kommando: {action}"}
 
+    def menu_map(self) -> "list":
+        from ..slabs.menu import SLABS_MENU
+        return SLABS_MENU
+
 
 class SlabsDataSource(DataSource):
     """Riktig Wabco SLABS. Etablerar fast init 0x29 lazily, läser om vid fel.
@@ -394,3 +402,7 @@ class SlabsDataSource(DataSource):
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
         return {"ok": False, "error": f"okänt kommando: {action}"}
+
+    def menu_map(self) -> "list":
+        from ..slabs.menu import SLABS_MENU
+        return SLABS_MENU
