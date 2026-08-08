@@ -72,6 +72,10 @@ def decode_known(module: str, lid: int, data: bytes) -> "list[dict]":
         # 21 54: höjder vänster/höger (byte0/byte1) — avkodat i SlabsDataSource.
         out.append({"name": "height_left", "offset": 0, "kind": "u8", "value": data[0], "unit": ""})
         out.append({"name": "height_right", "offset": 1, "kind": "u8", "value": data[1], "unit": ""})
+    elif module == "slabs" and lid == 0x56 and len(data) >= 1:
+        # 21 56 byte0 bit0: any-door — BELAGT via differential 2026-08-08.
+        out.append({"name": "any_door", "offset": 0, "kind": "bit0",
+                    "value": "öppen" if data[0] & 0x01 else "stängd", "unit": ""})
     return out
 
 

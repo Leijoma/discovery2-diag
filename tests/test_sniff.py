@@ -34,6 +34,26 @@ def test_lidstore_switches_to_slabs():
     assert hl["value"] == 0x07
 
 
+def test_slabs_any_door_decoded():
+    st = LidStore()
+    st.ingest_line("[ 1] 81 29 f7 81 22")
+    st.ingest_line("[ 2] 00 06 61 56 01 0f 0f 0f ed")   # byte0 bit0 = 1 → öppen
+    door = next(s for l in st.snapshot()["lids"] if l["lid"] == "56" for s in l["decode"] if s["name"] == "any_door")
+    assert door["value"] == "öppen"
+    st.ingest_line("[ 3] 00 06 61 56 00 0f 0f 0f ec")   # byte0 bit0 = 0 → stängd
+    door = next(s for l in st.snapshot()["lids"] if l["lid"] == "56" for s in l["decode"] if s["name"] == "any_door")
+    assert door["value"] == "stängd"
+
+
+def test_menu_items_carry_lid_bindings():
+    from d2diag.menus import MENUS
+    fuel = next(g for g in MENUS["td5"] if "Fuelling" in g["cat"])
+    rpm = next(i for i in fuel["items"] if i["name"].endswith("Engine Speed (rpm)"))
+    assert rpm["lid"] == "09" and rpm["sig"] == "rpm"
+    door = next(i for g in MENUS["slabs"] if "Switchar" in g["cat"] for i in g["items"] if i["name"].startswith("Any Door"))
+    assert door["lid"] == "56" and door["sig"] == "any_door"
+
+
 def test_solve_linear_battery_points():
     # rå 0x35ab=13739 → 13.739 V ; rå 0x2d94=11668 → 11.67 V  (skala ~1/1000)
     fit = solve_linear([(13739, 13.739), (11668, 11.668)])
