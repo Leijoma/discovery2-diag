@@ -41,6 +41,10 @@ def main() -> int:
                     help="sökväg till felkodsordboken (default: syskon-repot 'Discovery 2/')")
     ap.add_argument("--docs", action="append", default=[],
                     help="extra katalog med .md att visa i Dokument-fliken (kan upprepas)")
+    ap.add_argument("--sniff", metavar="PORT",
+                    help="ESP32-sniffport för Mappning-fliken (passiv RX-only; Nanacom pollar)")
+    ap.add_argument("--replay", metavar="FIL",
+                    help="spela upp en sniff-logg i Mappning-fliken (för test utan bil)")
     args = ap.parse_args()
 
     live = args.serial and not args.mock
@@ -77,10 +81,21 @@ def main() -> int:
     for extra in args.docs:
         docs.add_dir(extra, group="Extra")
 
+    # Mappning-fliken: passiv sniff-feed (live ESP32 eller uppspelad logg).
+    sniffer = None
+    if args.sniff:
+        from d2diag.web.sniffer import SnifferFeed
+        sniffer = SnifferFeed.from_serial(args.sniff)
+        print(f"Sniff (live): {args.sniff} → Mappning-fliken")
+    elif args.replay:
+        from d2diag.web.sniffer import SnifferFeed
+        sniffer = SnifferFeed.from_file(args.replay)
+        print(f"Sniff (replay): {args.replay} → Mappning-fliken")
+
     srv = DiagServer(
         modules, host=args.host, port=args.port,
         poll_interval=args.interval, stream_interval=args.interval, logger=logger,
-        active=active, menus=MENUS, docs=docs,
+        active=active, menus=MENUS, docs=docs, sniffer=sniffer,
     )
     print(f"Dokument: {len(docs.index())} st i Dokument-fliken")
     print(f"Dashboard: http://localhost:{args.port}   (moduler: {', '.join(modules)} · aktiv: {active})")

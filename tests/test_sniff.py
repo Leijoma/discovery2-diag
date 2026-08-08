@@ -1,36 +1,55 @@
-"""Tester för sniff-kärnan: ram-uppdelning på gap + annotering."""
-from d2diag.sniff import describe, frame_by_gaps
+"""Passiv sniff-kalibrering: frame-parsning, LID-lager och skala/offset-solver."""
+from __future__ import annotations
+
+from d2diag.sniff import LidStore, parse_hex_line, solve_linear, suggest_signal
 
 
-def test_frame_by_gaps_splits_on_silence():
-    samples = [
-        (0.000, 0x02), (0.001, 0x10), (0.002, 0xA0), (0.003, 0xB2),  # meddelande 1
-        (0.100, 0x01), (0.101, 0x50), (0.102, 0x51),                  # meddelande 2 efter gap
-    ]
-    msgs = frame_by_gaps(samples, gap=0.01)
-    assert len(msgs) == 2
-    assert msgs[0]["data"] == b"\x02\x10\xa0\xb2"
-    assert msgs[1]["data"] == b"\x01\x50\x51"
-    assert msgs[0]["gap_before"] is None
-    assert abs(msgs[1]["gap_before"] - 0.097) < 1e-6
+def test_parse_hex_line_and_markers():
+    assert parse_hex_line("[    56921] 02 21 09 2c 04 61 09 02 fa 6a") == \
+        [0x02, 0x21, 0x09, 0x2c, 0x04, 0x61, 0x09, 0x02, 0xfa, 0x6a]
+    assert parse_hex_line(">>> read fuelling") is None
+    assert parse_hex_line("=== SESSION ... ===") is None
 
 
-def test_frame_by_gaps_single_message_when_no_gap():
-    samples = [(i * 0.001, 0x00) for i in range(5)]
-    msgs = frame_by_gaps(samples, gap=0.01)
-    assert len(msgs) == 1
-    assert len(msgs[0]["data"]) == 5
+def test_lidstore_tracks_module_and_decodes_td5():
+    st = LidStore()
+    st.ingest_line("[  8773] 81 13 f7 81 0c")          # TD5 fast init
+    st.ingest_line("[ 56921] 02 21 09 2c 04 61 09 02 fa 6a")  # 21 09 → rpm
+    snap = st.snapshot()
+    assert snap["module"] == "td5"
+    lid09 = next(l for l in snap["lids"] if l["lid"] == "09")
+    assert lid09["raw"] == "02 fa"
+    rpm = next(s for s in lid09["decode"] if s["name"] == "rpm")
+    assert rpm["value"] == 762
 
 
-def test_describe_requests_and_responses():
-    assert describe(b"\x81\x13\xf7\x81\x0c") == "REQ StartCommunication"
-    assert describe(b"\x03\xc1\x57\x8f\xaa") == "StartCommunication positivt (C1)"
-    assert describe(b"\x02\x10\xa0\xb2") == "REQ StartDiagnosticSession"
-    assert describe(b"\x01\x50\x51") == "SVAR StartDiagnosticSession"
-    assert describe(b"\x04\x61\x09\x00\x00\x6e") == "SVAR ReadDataByLocalId"
+def test_lidstore_switches_to_slabs():
+    st = LidStore()
+    st.ingest_line("[ 100] 81 29 f7 81 22")            # SLABS fast init
+    st.ingest_line("[ 200] 02 21 54 79 04 61 54 07 08 aa")  # 21 54 → höjder
+    snap = st.snapshot()
+    assert snap["module"] == "slabs"
+    lid54 = next(l for l in snap["lids"] if l["lid"] == "54")
+    hl = next(s for s in lid54["decode"] if s["name"] == "height_left")
+    assert hl["value"] == 0x07
 
 
-def test_describe_negative_and_sync():
-    assert describe(b"\x03\x7f\x10\x10\xa2") == "NEG på StartDiagnosticSession (NRC 0x10)"
-    assert describe(b"\x55\x8f\xea") == "slow-init sync (0x55)"
-    assert describe(b"") == ""
+def test_solve_linear_battery_points():
+    # rå 0x35ab=13739 → 13.739 V ; rå 0x2d94=11668 → 11.67 V  (skala ~1/1000)
+    fit = solve_linear([(13739, 13.739), (11668, 11.668)])
+    assert fit is not None
+    assert abs(fit["scale"] - 0.001) < 1e-5
+    assert abs(fit["bias"]) < 1e-3
+    assert fit["r2"] > 0.999
+
+
+def test_solve_linear_needs_two_distinct():
+    assert solve_linear([(5, 1.0)]) is None
+    assert solve_linear([(5, 1.0), (5, 2.0)]) is None  # samma rå → ingen lutning
+
+
+def test_suggest_signal_formats_common_fraction():
+    s = suggest_signal("battery", 0x10, 0, "u16", 0.001, 0.0, "V")
+    assert s == 'Signal("battery", 0x10, 0, scale=1 / 1000, unit="V")'
+    s2 = suggest_signal("speed", 0x0D, 0, "u8", 1.0, 0.0, "km/h")
+    assert s2 == 'Signal("speed", 0x0D, 0, "u8", unit="km/h")'

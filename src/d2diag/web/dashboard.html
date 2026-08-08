@@ -105,6 +105,35 @@
     white-space:nowrap; }
   .doc th { background:var(--card2); color:var(--muted); position:sticky; top:0; }
   .doc td code { white-space:nowrap; }
+  /* mappning / kalibrering */
+  .snlids { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+  .snlid { padding:8px 10px; border-radius:9px; border:1px solid var(--line); background:var(--card);
+    color:var(--fg); font-size:13px; cursor:pointer; font-family:ui-monospace,Menlo,monospace; }
+  .snlid.active { border-color:var(--accent); color:var(--accent); }
+  .snlid .c { color:var(--muted); font-size:11px; }
+  .snbytes { display:flex; flex-wrap:wrap; gap:4px; margin:8px 0; }
+  .snbyte { min-width:38px; text-align:center; padding:5px 4px; border-radius:7px; background:var(--card2);
+    border:1px solid var(--line); font-family:ui-monospace,Menlo,monospace; font-size:12px; cursor:pointer; }
+  .snbyte.sel { border-color:var(--accent); }
+  .snbyte b { display:block; color:var(--accent); } .snbyte .o { color:var(--muted); font-size:9px; }
+  .sndec { display:flex; flex-direction:column; gap:5px; margin:8px 0; }
+  .sndec .r { display:flex; justify-content:space-between; padding:7px 10px; background:var(--card); border-radius:8px; font-size:13px; }
+  .sndec .r .k { color:var(--muted); } .sndec .r code { background:var(--card2); padding:0 5px; border-radius:4px; }
+  .calibbox { background:var(--card); border:1px solid var(--line); border-radius:11px; padding:12px; margin-top:12px; }
+  .calibrow { display:flex; flex-wrap:wrap; gap:8px; align-items:end; }
+  .fld { display:flex; flex-direction:column; gap:3px; }
+  .fld label { font-size:11px; color:var(--muted); }
+  .fld input, .fld select { background:var(--card2); border:1px solid var(--line); color:var(--fg);
+    border-radius:8px; padding:8px; font-size:14px; width:90px; }
+  .fld input.wide { width:120px; }
+  .snsamples { margin:10px 0; font-size:12.5px; }
+  .snsamples .s { display:flex; justify-content:space-between; padding:5px 9px; background:var(--card2);
+    border-radius:7px; margin-bottom:4px; font-family:ui-monospace,Menlo,monospace; }
+  .snsamples .s button { background:none; border:0; color:var(--err); cursor:pointer; font-size:14px; }
+  .snresult { margin-top:10px; padding:11px; border-radius:9px; background:var(--card2); border-left:3px solid var(--ok); }
+  .snresult code { display:block; margin-top:6px; font-family:ui-monospace,Menlo,monospace; font-size:12.5px;
+    background:var(--bg); padding:8px; border-radius:7px; overflow-x:auto; white-space:pre; }
+  .snlive { color:var(--accent); font-family:ui-monospace,Menlo,monospace; font-weight:650; }
 </style>
 
 <header>
@@ -117,6 +146,7 @@
   <div class="tab" data-tab="slabs">SLABS</div>
   <div class="tab" data-tab="karta">Karta</div>
   <div class="tab" data-tab="dok">Dokument</div>
+  <div class="tab" data-tab="mappning">Mappning</div>
 </div>
 
 <main>
@@ -225,6 +255,17 @@
     </section>
   </div>
 
+  <!-- ===================== MAPPNING (passiv sniff-kalibrering) ===================== -->
+  <div class="view" id="view-mappning">
+    <section>
+      <h2>Mappning — jämför & kalibrera mot Nanacom</h2>
+      <div class="hint" id="sniff-hint">Passiv sniff: Nanacom måste vara inkopplad och polla (vår tapp sänder aldrig). Väntar på trafik…</div>
+      <div id="sniff-head" class="mapsum" style="display:none"></div>
+      <div id="sniff-lids" class="snlids"></div>
+      <div id="sniff-detail"></div>
+    </section>
+  </div>
+
   <div id="cmdResult" class="cmd"></div>
   <div class="err" id="error"></div>
 </main>
@@ -257,10 +298,108 @@
   }
   document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
     const name = t.dataset.tab;
+    stopSniff();
     if (name === "karta") { showTab("karta"); loadMap(); }
     else if (name === "dok") { showTab("dok"); loadDocs(); }
+    else if (name === "mappning") { showTab("mappning"); startSniff(); }
     else selectModule(name);
   });
+
+  // ---- Mappning: passiv sniff-kalibrering ----
+  let _sniffTimer = null, _sniff = null, _selLid = null, _sniffMod = null;
+  const KINDW = { u8:1, u16:2, s16:2 };
+  function startSniff(){ loadSniff(); _sniffTimer = setInterval(loadSniff, 1000); }
+  function stopSniff(){ if (_sniffTimer){ clearInterval(_sniffTimer); _sniffTimer = null; } }
+  async function loadSniff(){
+    try { _sniff = await (await fetch("/sniff" + (_sniffMod?("?module="+_sniffMod):""))).json(); renderSniff(); }
+    catch(e){ /* tyst — nästa poll försöker igen */ }
+  }
+  function renderSniff(){
+    const d = _sniff || {lids:[]};
+    const has = (d.lids||[]).length > 0;
+    $("sniff-hint").style.display = has ? "none" : "";
+    $("sniff-head").style.display = has ? "" : "none";
+    if (has) {
+      const mods = d.modules||[];
+      const picker = mods.length>1 ? " · " + mods.map(m=>`<button class="snlid${(m===(d.module))?' active':''}" data-smod="${m}" style="padding:2px 8px">${m.toUpperCase()}</button>`).join(" ") : "";
+      $("sniff-head").innerHTML = `Modul <b>${(d.module||"?").toUpperCase()}</b> · ${d.lids.length} LID:er sniffade${picker}`;
+      $("sniff-head").querySelectorAll("[data-smod]").forEach(b=>b.onclick=()=>{ _sniffMod=b.dataset.smod; _selLid=null; loadSniff(); });
+    }
+    $("sniff-lids").innerHTML = (d.lids||[]).map(l =>
+      `<button class="snlid${l.lid===_selLid?' active':''}" data-lid="${l.lid}">21 ${l.lid} <span class="c">×${l.count}</span></button>`).join("");
+    $("sniff-lids").querySelectorAll("[data-lid]").forEach(b => b.onclick = () => { _selLid = b.dataset.lid; renderSniff(); });
+    renderLidDetail();
+  }
+  function curLid(){ return (_sniff&&_sniff.lids||[]).find(l => l.lid === _selLid) || null; }
+  function bytesOf(hex){ return hex && hex.trim() ? hex.trim().split(/\s+/).map(h=>parseInt(h,16)) : []; }
+  function rawVal(bytes, off, kind){
+    if (kind==="u8") return bytes[off];
+    const hi=bytes[off], lo=bytes[off+1];
+    if (hi==null||lo==null) return null;
+    let v=(hi<<8)|lo; if (kind==="s16"&&v>=0x8000) v-=0x10000; return v;
+  }
+  function sampleKey(){ const f=$("cal-off"); return `${_sniff.module}|${_selLid}|${$("cal-off").value}|${$("cal-kind").value}`; }
+  function getSamples(k){ try { return JSON.parse(localStorage.getItem("cal:"+k)||"[]"); } catch(_){ return []; } }
+  function setSamples(k,v){ localStorage.setItem("cal:"+k, JSON.stringify(v)); }
+  function renderLidDetail(){
+    const l = curLid();
+    const box = $("sniff-detail");
+    if (!l){ box.innerHTML = _selLid ? "" : '<div class="hint" style="padding:16px">Välj en LID ovan.</div>'; return; }
+    const bytes = bytesOf(l.raw);
+    const grid = bytes.map((b,i)=>`<div class="snbyte" data-off="${i}"><span class="o">${i}</span><b>${b.toString(16).padStart(2,"0")}</b>${b}</div>`).join("") || "<span class='none'>—</span>";
+    const dec = (l.decode||[]).length
+      ? `<div class="sndec">`+l.decode.map(s=>`<div class="r"><span class="k">vår avkodning · offset ${s.offset} ${s.kind}</span><span><b>${s.name}</b> = ${s.value} ${s.unit||""}</span></div>`).join("")+`</div>`
+      : `<div class="hint" style="padding:8px">Ingen avkodning ännu — mappa fälten nedan.</div>`;
+    box.innerHTML =
+      `<h2 style="margin-top:14px">21 ${l.lid} — råbytes (klicka en byte för offset)</h2>`+
+      `<div class="snbytes">${grid}</div>${dec}`+
+      `<div class="calibbox">
+        <div class="calibrow">
+          <div class="fld"><label>offset</label><input id="cal-off" type="number" min="0" value="0"></div>
+          <div class="fld"><label>typ</label><select id="cal-kind"><option>u8</option><option selected>u16</option><option>s16</option></select></div>
+          <div class="fld"><label>namn</label><input id="cal-name" class="wide" placeholder="t.ex. left_supply"></div>
+          <div class="fld"><label>enhet</label><input id="cal-unit" placeholder="V"></div>
+        </div>
+        <div class="calibrow" style="margin-top:10px">
+          <div>live rå-värde: <span class="snlive" id="cal-live">–</span></div>
+          <div class="fld"><label>Nanacom visar</label><input id="cal-shown" type="number" step="any" placeholder="t.ex. 5.01"></div>
+          <button class="btn ok" style="min-width:auto;flex:0 0 auto" id="cal-add">+ Lägg till prov</button>
+        </div>
+        <div class="snsamples" id="cal-samples"></div>
+        <div class="btns"><button class="btn" id="cal-solve">Räkna ut skala/offset</button><button class="btn" id="cal-clear">Rensa prov</button></div>
+        <div id="cal-result"></div>
+      </div>`;
+    const refreshLive = ()=>{ const v=rawVal(bytesOf((curLid()||{}).raw||""), +$("cal-off").value, $("cal-kind").value); $("cal-live").textContent = v==null?"–":v; renderSamples(); };
+    $("cal-off").oninput = refreshLive; $("cal-kind").onchange = refreshLive;
+    box.querySelectorAll(".snbyte").forEach(b => b.onclick = ()=>{ $("cal-off").value=b.dataset.off; refreshLive(); });
+    $("cal-add").onclick = ()=>{
+      const raw = rawVal(bytesOf(curLid().raw), +$("cal-off").value, $("cal-kind").value);
+      const shown = parseFloat($("cal-shown").value);
+      if (raw==null || isNaN(shown)) { showCmd("Fyll i vad Nanacom visar (och se till att offset ger ett rå-värde)", false); return; }
+      const k=sampleKey(), s=getSamples(k); s.push([raw,shown]); setSamples(k,s); $("cal-shown").value=""; renderSamples();
+    };
+    $("cal-solve").onclick = solveCalib;
+    $("cal-clear").onclick = ()=>{ setSamples(sampleKey(),[]); renderSamples(); $("cal-result").innerHTML=""; };
+    refreshLive();
+  }
+  function renderSamples(){
+    if (!$("cal-samples")) return;
+    const k=sampleKey(), s=getSamples(k);
+    $("cal-samples").innerHTML = s.length
+      ? s.map((p,i)=>`<div class="s"><span>rå ${p[0]} → visat ${p[1]}</span><button data-i="${i}">✕</button></div>`).join("")
+      : '<div class="hint" style="padding:4px">Inga prov än — ändra ett fysiskt värde, läs Nanacom, lägg till.</div>';
+    $("cal-samples").querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>{ const a=getSamples(k); a.splice(+b.dataset.i,1); setSamples(k,a); renderSamples(); });
+  }
+  async function solveCalib(){
+    const k=sampleKey(), samples=getSamples(k);
+    const body={ samples, name:$("cal-name").value||"signal", lid:_selLid,
+      offset:+$("cal-off").value, kind:$("cal-kind").value, unit:$("cal-unit").value };
+    try {
+      const r = await (await fetch("/calib",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+      if (!r.ok){ $("cal-result").innerHTML=`<div class="err">${r.error||"kunde inte lösa"}</div>`; return; }
+      $("cal-result").innerHTML=`<div class="snresult">scale <b>${(+r.scale).toPrecision(6)}</b> · bias <b>${(+r.bias).toPrecision(6)}</b> · R²=${(+r.r2).toFixed(4)} (${r.n} prov)<code>${r.signal}</code></div>`;
+    } catch(e){ $("cal-result").innerHTML=`<div class="err">nätverksfel</div>`; }
+  }
 
   // ---- dokument-flik (vy mot kanoniska markdown-filer, ej bunden till session) ----
   let _docsLoaded = false;

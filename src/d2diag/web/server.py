@@ -19,6 +19,27 @@ from .sources import DataSource
 _DASHBOARD = Path(__file__).with_name("dashboard.html")
 
 
+def _calibrate(req: "dict") -> "dict":
+    """Lös skala/offset ur inskickade (rå, visat)-prover → Signal-förslag."""
+    from ..sniff.calib import solve_linear, suggest_signal
+
+    samples = req.get("samples") or []
+    try:
+        fit = solve_linear([(float(s[0]), float(s[1])) for s in samples])
+    except (TypeError, ValueError, IndexError):
+        fit = None
+    if fit is None:
+        return {"ok": False, "error": "behöver ≥2 prover med olika rå-värde"}
+    lid = req.get("lid", 0)
+    if isinstance(lid, str):
+        lid = int(lid, 16)
+    sig = suggest_signal(
+        (req.get("name") or "signal"), int(lid), int(req.get("offset", 0)),
+        (req.get("kind") or "u16"), fit["scale"], fit["bias"], (req.get("unit") or ""),
+    )
+    return {"ok": True, "signal": sig, **fit}
+
+
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *args) -> None:  # tyst logg
         pass
@@ -43,6 +64,13 @@ class _Handler(BaseHTTPRequestHandler):
                 "modules": list(self.server._menus),
                 "coverage": self.server.coverage(),
             })
+        elif self.path.split("?")[0] == "/sniff":
+            if self.server.sniffer is None:
+                self._json({"module": None, "modules": [], "lids": []})
+            else:
+                from urllib.parse import parse_qs, urlparse
+                q = parse_qs(urlparse(self.path).query)
+                self._json(self.server.sniffer.snapshot(q.get("module", [None])[0]))
         elif self.path == "/docs":
             self._json({"docs": self.server.docs.index()})
         elif self.path.split("?")[0] == "/doc":
@@ -66,6 +94,14 @@ class _Handler(BaseHTTPRequestHandler):
                 cmd = {}
             result = self.server.enqueue_command(cmd)
             self._json(result, code=200 if result.get("ok") else 400)
+        elif self.path == "/calib":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                req = json.loads(raw or b"{}")
+            except (ValueError, TypeError):
+                req = {}
+            self._json(_calibrate(req))
         else:
             self.send_error(404)
 
@@ -119,10 +155,12 @@ class DiagServer(ThreadingHTTPServer):
         active: "str | None" = None,
         menus: "dict | None" = None,
         docs: "DocLibrary | None" = None,
+        sniffer=None,
     ) -> None:
         super().__init__((host, port), _Handler)
         self._menus = menus or {}  # modul → meny-lista (Karta-fliken)
         self.docs = docs or DocLibrary()  # markdown-vy (Dokument-fliken)
+        self.sniffer = sniffer  # passiv sniff-feed (Mappning-fliken), valfri
         # source kan vara en enda DataSource (bakåtkompat) eller en dict
         # {modulnamn: DataSource}. Bara en modul är aktiv åt gången — K-line är
         # en delad buss, så att byta flik = släppa gammal session och etablera ny.
@@ -234,6 +272,8 @@ class DiagServer(ThreadingHTTPServer):
 
     def serve(self) -> None:
         self.start_polling()
+        if self.sniffer is not None:
+            self.sniffer.start()
         try:
             self.serve_forever()
         finally:
