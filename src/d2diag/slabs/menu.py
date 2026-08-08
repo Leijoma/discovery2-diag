@@ -18,10 +18,14 @@ SLABS_MENU = [
         {"name": "Radera fel", "status": "ok", "ref": "14 FF FF → 54"},
     ]},
     {"cat": "Settings", "items": [
-        {"name": "Test status (en/dis)", "status": "maybe", "ref": "21 45/46/49/59 (bytes ej isolerade)", "lid": "45 46 49 59"},
-        {"name": "ECU calibrated (yes/no)", "status": "maybe", "ref": "settings-block sniffat", "lid": "45 46 49 59"},
-        {"name": "Transport mode (en/dis)", "status": "maybe", "ref": "settings-block sniffat", "lid": "45 46 49 59"},
-        {"name": "Suspension type (AIR/springs)", "status": "maybe", "ref": "settings-block sniffat", "lid": "45 46 49 59"},
+        # LID→funktion BELAGD RDL 016 2026-08-08 (fångad i Nanacom-visningsordning,
+        # en LID per setting; olika längd). Byte-kodningen (vilken bit=på/av) kräver differential.
+        {"name": "Test status (enabled)", "status": "maybe", "ref": "21 46 = 78 76 — LID belagd; kodning TBD", "lid": "46"},
+        {"name": "Transport mode (disabled)", "status": "maybe", "ref": "21 59 = 00 0f 0f 0f — byte0=00 = av?", "lid": "59"},
+        {"name": "ECU calibrated (yes)", "status": "maybe", "ref": "21 45 = 7f — LID belagd; kodning TBD", "lid": "45"},
+        {"name": "Suspension type (AIR)", "status": "maybe", "ref": "21 49 = 00 00 01 — sista byte 01 = AIR?", "lid": "49"},
+        {"name": "Left/Right stored height", "status": "todo",
+         "ref": "⚠️ 21 54 = LIVE höjd (149/161), INTE stored (149/149) — stored-källa ej fångad"},
     ]},
     {"cat": "Inputs — ABS", "items": [
         {"name": "ABS-sensor FR/FL/RR/RL (V)", "status": "maybe", "ref": "21 50 (4 byte ~×0,02 V)", "lid": "50"},
