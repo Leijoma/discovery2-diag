@@ -38,7 +38,11 @@ class _Handler(BaseHTTPRequestHandler):
                 mp = self.server._menus[mod]
             else:
                 mp = self.server.source.menu_map()
-            self._json({"module": mod, "map": mp, "modules": list(self.server._menus)})
+            self._json({
+                "module": mod, "map": mp,
+                "modules": list(self.server._menus),
+                "coverage": self.server.coverage(),
+            })
         elif self.path == "/docs":
             self._json({"docs": self.server.docs.index()})
         elif self.path.split("?")[0] == "/doc":
@@ -151,6 +155,22 @@ class DiagServer(ThreadingHTTPServer):
 
     def modules(self) -> "list[str]":
         return list(self._modules)
+
+    def coverage(self) -> "dict":
+        """Täckning per modul: {modul: {ok, maybe, total}} — driver Karta-pickern."""
+        cov: "dict[str, dict]" = {}
+        for name, menu in self._menus.items():
+            ok = mb = tot = 0
+            for group in menu:
+                for item in group.get("items", []):
+                    tot += 1
+                    status = item.get("status")
+                    if status == "ok":
+                        ok += 1
+                    elif status == "maybe":
+                        mb += 1
+            cov[name] = {"ok": ok, "maybe": mb, "total": tot}
+        return cov
 
     def _select(self, name: "str | None") -> "dict":
         """Byt aktiv modul: släpp gamla sessionen, aktivera den nya (etableras

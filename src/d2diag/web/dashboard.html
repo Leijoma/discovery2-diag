@@ -64,6 +64,19 @@
     background:var(--card); border-radius:8px; margin-bottom:6px; font-size:13px; border-left:3px solid var(--line); }
   .mrow.ok { border-left-color:var(--ok); } .mrow.maybe { border-left-color:var(--warn); }
   .mrow.todo { opacity:.6; } .mrow .mref { color:var(--muted); font-size:11px; text-align:right; white-space:nowrap; }
+  .mrow.maybe { opacity:1; }
+  section h2 .gcount { color:var(--muted); font-weight:600; font-size:11px; text-transform:none; letter-spacing:0; }
+  /* täckningsbarer (Karta-pickern + kart-header) */
+  #karta-picker { display:flex; flex-direction:column; gap:7px; }
+  .kmod { display:block; width:100%; text-align:left; padding:9px 11px; border-radius:10px;
+    border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+  .kmod.active { border-color:var(--accent); }
+  .kmod-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+  .kmod-name { font-weight:650; font-size:13px; } .kmod.active .kmod-name { color:var(--accent); }
+  .kmod-frac { color:var(--muted); font-size:11px; } .kmod-frac em { color:var(--warn); font-style:normal; }
+  .kbar { display:flex; height:6px; border-radius:4px; overflow:hidden; background:var(--card2); }
+  .kbar.big { height:9px; margin:8px 0 4px; }
+  .kbar i { display:block; height:100%; } .kbar i.ok { background:var(--ok); } .kbar i.mb { background:var(--warn); }
   /* dokument-flik */
   .dokpick { display:flex; flex-direction:column; gap:6px; }
   .dokgrp { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; margin:8px 0 2px; }
@@ -280,27 +293,36 @@
 
   // ---- karta / täckningssida (valfri modul, ej bunden till aktiv session) ----
   const mIcon = s => s === "ok" ? "✅" : (s === "maybe" ? "🟡" : "⬜");
+  const pctOf = c => (c && c.total ? Math.round(100 * c.ok / c.total) : 0);
+  const bar = c => { const t = c.total || 0, ok = t ? 100*c.ok/t : 0, mb = t ? 100*c.maybe/t : 0;
+    return `<span class="kbar"><i class="ok" style="width:${ok}%"></i><i class="mb" style="width:${mb}%"></i></span>`; };
   async function loadMap(module) {
     try {
       const d = await (await fetch(module ? "/map?module=" + module : "/map")).json();
-      renderPicker(d.modules || [], d.module);
-      renderMap(d.module || "?", d.map || []);
+      renderPicker(d.modules || [], d.module, d.coverage || {});
+      renderMap(d.module || "?", d.map || [], (d.coverage || {})[d.module]);
     } catch (e) { $("karta-body").innerHTML = '<div class="hint">Kunde inte hämta kartan.</div>'; }
   }
-  function renderPicker(modules, active) {
-    $("karta-picker").innerHTML = modules.map(m =>
-      `<button class="btn${m === active ? " ok" : ""}" data-kmod="${m}">${m.toUpperCase()}</button>`).join("");
+  function renderPicker(modules, active, cov) {
+    $("karta-picker").innerHTML = modules.map(m => { const c = cov[m] || {ok:0,maybe:0,total:0};
+      return `<button class="kmod${m === active ? " active" : ""}" data-kmod="${m}">` +
+        `<span class="kmod-top"><span class="kmod-name">${m.toUpperCase()}</span>` +
+        `<span class="kmod-frac">${pctOf(c)}% · ${c.ok}/${c.total}${c.maybe?` <em>+${c.maybe}</em>`:""}</span></span>` +
+        bar(c) + `</button>`; }).join("");
     $("karta-picker").querySelectorAll("[data-kmod]").forEach(b => b.onclick = () => loadMap(b.dataset.kmod));
   }
-  function renderMap(module, map) {
+  function renderMap(module, map, cov) {
     if (!map.length) { $("karta-body").innerHTML = `<div class="hint">Ingen karta för "${module}" än.</div>`; return; }
-    let ok = 0, tot = 0;
-    map.forEach(g => g.items.forEach(i => { tot++; if (i.status === "ok") ok++; }));
+    let ok = 0, mb = 0, tot = 0;
+    map.forEach(g => g.items.forEach(i => { tot++; if (i.status === "ok") ok++; else if (i.status === "maybe") mb++; }));
+    const c = cov || {ok, maybe:mb, total:tot}, pct = pctOf(c);
     $("karta-body").innerHTML =
-      `<div class="mapsum">Modul <b>${module.toUpperCase()}</b> · bekräftat <b>${ok}/${tot}</b></div>` +
-      map.map(g => `<h2 style="margin-top:14px">${g.cat}</h2>` + g.items.map(i =>
+      `<div class="mapsum">Modul <b>${module.toUpperCase()}</b> · täckt <b>${pct}%</b> — bekräftat <b>${ok}/${tot}</b>${mb?` · påbörjat <b>${mb}</b>`:""}</div>` +
+      `<div class="kbar big"><i class="ok" style="width:${tot?100*ok/tot:0}%"></i><i class="mb" style="width:${tot?100*mb/tot:0}%"></i></div>` +
+      map.map(g => { let go=0,gt=0; g.items.forEach(i=>{gt++;if(i.status==="ok")go++;});
+        return `<h2 style="margin-top:14px">${g.cat} <span class="gcount">${go}/${gt}</span></h2>` + g.items.map(i =>
         `<div class="mrow ${i.status}"><span>${mIcon(i.status)} ${i.name}</span>` +
-        `<span class="mref">${i.ref || ""}</span></div>`).join("")).join("");
+        `<span class="mref">${i.ref || ""}</span></div>`).join(""); }).join("");
   }
 
   function render(d) {
