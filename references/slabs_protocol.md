@@ -77,3 +77,19 @@ finns men måste **loggas om** (lista gärna reference tool-ordningen samtidigt)
 `read_faults()` = `21 11`/`21 47` (bit-per-fel, karta i `slabs_fault_codes.md`);
 `clear_faults()` = `14 FF FF`; live via `21 xx`; ställdon via `31 xx`. Återanvänd
 Td5-lagrets toleranta läsning + samma sessionsmönster.
+
+## Input-LID:er (sniffat 2026-08-08, full per-input-svep)
+Nanacom pollar en fast LID-uppsättning per skärm; operatören stegade igenom
+posterna. Alla input-LID:er nu identifierade (offset/skala per post återstår att
+isolera med riktade captures):
+
+| Skärm | LID:er | Poster |
+|---|---|---|
+| SLS-inputs | `21 53`, `21 54`, `21 55` | L/R sensor value (**`21 54` b0/b1 avkodad**), sensor supply, value (V), exhaust valve (V), compressor relay (V) |
+| ABS-inputs | `21 43`, `21 44`, `21 49`, `21 50`, `21 57` | hjulhastighet (`21 43`), ABS-sensor V (`21 50`), in-/utloppsventiler, pump relay/monitor, batteri, ECU-supply, ground ref, HDC brake, engine speed/torque/throttle (via CAN) |
+| Switchar | `21 42`, `21 48`, `21 56`, `21 58` | neutral, low range, diff lock, reverse, HDC, shuttle, **any-door (`21 56` byte0 bit0 — BELAGT: 00 stängd/01 öppen)**, plip |
+| Settings | `21 45`, `21 46`, `21 49`, `21 59` | test status, ECU calibrated, transport mode, suspension type |
+
+**Nästa steg för full avkodning:** riktade differential-captures — ändra EN sak
+(öppna en switch, lyft en hörna, mät en spänning mot multimeter) och jämför
+råbytesen före/efter för att pinna offset/bit/skala.
