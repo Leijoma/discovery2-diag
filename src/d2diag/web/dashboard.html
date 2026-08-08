@@ -67,9 +67,12 @@
   .mrow.todo { opacity:.6; } .mrow .mref { color:var(--muted); font-size:11px; text-align:right; white-space:nowrap; }
   .mrow.maybe { opacity:1; }
   .mrow.seen, .mrow.seen.todo { opacity:1; }
-  .mrow.active { border-left-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset;
-    animation:mpulse 1.1s ease-in-out infinite; }
-  @keyframes mpulse { 0%,100%{ background:var(--card); } 50%{ background:var(--card2); } }
+  .mrow-top { cursor:pointer; }
+  .mrow.focus { border-left-color:var(--accent); box-shadow:0 0 0 2px var(--accent) inset; background:var(--card2); }
+  .mlive-dot { width:8px; height:8px; border-radius:50%; background:var(--line); flex:0 0 auto; }
+  .mrow.focus .mlive-dot.on { background:var(--ok); animation:mpulse 1s ease-in-out infinite; }
+  .mrow:not(.focus) .mlive-dot { display:none; }
+  @keyframes mpulse { 0%,100%{ opacity:.35; } 50%{ opacity:1; } }
   .mrow-live { display:flex; gap:8px; align-items:center; }
   .mour { color:var(--muted); font-size:12px; white-space:nowrap; } .mour b { color:var(--accent); }
   .mtruth { flex:1; min-width:70px; background:var(--card2); border:1px solid var(--line); color:var(--fg);
@@ -320,10 +323,10 @@
   });
 
   // ---- Karta: live sniff-integration (tänds när reference tool pollar fältet) ----
-  let _kSniffTimer=null, _ksniff=null, _kCounts={}, _kActive=new Set(), _kModule=null, _kMeta={};
+  let _kSniffTimer=null, _ksniff=null, _kCounts={}, _kActive=new Set(), _kModule=null, _kMeta={}, _kFocus=null, _kBaked=false;
   function stopKartaSniff(){ if(_kSniffTimer){ clearInterval(_kSniffTimer); _kSniffTimer=null; } }
   function startKartaSniff(module){
-    stopKartaSniff(); _kModule=module; _kCounts={}; _kMeta={};
+    stopKartaSniff(); _kModule=module; _kCounts={}; _kMeta={}; _kFocus=null; _kBaked=false;
     const poll=async()=>{
       try{
         const d=await (await fetch("/sniff"+(module?("?module="+module):""))).json();
@@ -332,6 +335,7 @@
         _ksniff=ns;
         const fps=(_kMeta.lines!=null)?Math.max(0, (d.lines||0)-_kMeta.lines):0;
         _kMeta={status:d.status, age:d.age, frames:d.frames||0, lines:d.lines||0, source:d.source, error:d.error, fps, configured:d.status!=null};
+        if(!_kBaked && (d.lids||[]).length){ _kBaked=true; renderKartaLive(); }  // baka in värden en gång när data kommit
         if(document.getElementById("view-karta").classList.contains("active")) updateKartaLive();
       }catch(e){ _kMeta={status:"fel", error:"ingen kontakt med servern", configured:true}; }
     };
@@ -341,7 +345,7 @@
     const m=_kMeta||{};
     if(!m.configured) return '<span class="sniffbad off">○ ingen sniff — starta dashboarden med <code>--sniff PORT</code></span>';
     if(m.status==="fel") return `<span class="sniffbad err">● sniff-fel: ${m.error||"?"}</span>`;
-    if(m.status==="live" && m.age!=null && m.age<3){ const demo=(m.source||"").startsWith("replay")?" · demo (replay)":""; return `<span class="sniffbad ok">● LIVE · ${m.fps||0} ramar/s · ${m.frames} läsningar${demo}</span>`; }
+    if(m.status==="live" && m.age!=null && m.age<3){ const demo=(m.source||"").startsWith("replay")?" · demo":""; const pol=(_kActive&&_kActive.size)?(" · pollar "+Array.from(_kActive).slice(0,6).join(" ")):""; return `<span class="sniffbad ok">● LIVE · ${m.fps||0} ramar/s${pol}${demo}</span>`; }
     if(m.age!=null) return `<span class="sniffbad stale">● ingen trafik på ${m.age}s — sitter tappen rätt / är reference tool på?</span>`;
     return `<span class="sniffbad wait">○ väntar på trafik… (${(m.source||"").replace(/^serial:/,"")})</span>`;
   }
@@ -356,16 +360,21 @@
     else if((hit.decode||[]).length){ our=hit.decode.map(d=>d.name+"="+d.value+(d.unit||"")).join(", "); }
     return {seen:true,active,our,raw:hit.raw};
   }
-  function updateKartaLive(){
-    document.querySelectorAll("#karta-body [data-lid]").forEach(row=>{
-      const lv=liveFor(row.dataset.lid, row.dataset.sig||"");
-      row.classList.toggle("active", !!(lv&&lv.active));
-      row.classList.toggle("seen", !!(lv&&lv.seen));
-      const o=row.querySelector(".mour b"); if(o) o.textContent=(lv&&lv.our!=null)?lv.our:"—";
-      const r=row.querySelector(".mrawv"); if(r) r.textContent=(lv&&lv.raw)||"";
-    });
-    const s=document.getElementById("karta-live"); if(s) s.innerHTML=sniffBadge();
+  function updateBadge(){ const s=document.getElementById("karta-live"); if(s) s.innerHTML=sniffBadge(); }
+  function setFocus(row){
+    document.querySelectorAll("#karta-body .mrow.focus").forEach(r=>r.classList.remove("focus"));
+    if(row){ row.classList.add("focus"); _kFocus=row.dataset.name||null; refreshFocus(); row.scrollIntoView({block:"nearest"}); }
+    else _kFocus=null;
   }
+  function refreshFocus(){
+    const row=document.querySelector("#karta-body .mrow.focus"); if(!row) return;
+    const lv=liveFor(row.dataset.lid, row.dataset.sig||"");
+    const o=row.querySelector(".mour b"); if(o) o.textContent=(lv&&lv.our!=null)?lv.our:"—";
+    const r=row.querySelector(".mrawv"); if(r) r.textContent=(lv&&lv.raw)||"";
+    const d=row.querySelector(".mlive-dot"); if(d) d.classList.toggle("on", !!(lv&&lv.active));
+  }
+  // varje sekund: uppdatera BARA badgen + den fokuserade raden (inget mass-flimmer)
+  function updateKartaLive(){ updateBadge(); refreshFocus(); }
 
   // ---- dokument-flik (vy mot kanoniska markdown-filer, ej bunden till session) ----
   let _docsLoaded = false;
@@ -435,12 +444,14 @@
   }
   function rowHtml(cat,i){
     if(!i.lid) return `<div class="mrow ${i.status}"><div class="mrow-top"><span>${mIcon(i.status)} ${i.name}</span><span class="mref">${i.ref||""}</span></div></div>`;
+    const lv=liveFor(i.lid, i.sig||"");
+    const our=(lv&&lv.our!=null)?lv.our:"—", raw=(lv&&lv.raw)||"";
     return `<div class="mrow ${i.status}" data-lid="${i.lid}" data-sig="${i.sig||""}" data-cat="${encodeURIComponent(cat)}" data-name="${encodeURIComponent(i.name)}">`+
       `<div class="mrow-top"><span>${mIcon(i.status)} ${i.name}</span><span class="mref">${i.ref||""}</span></div>`+
-      `<div class="mrow-live"><span class="mour">vår: <b>—</b></span>`+
+      `<div class="mrow-live"><span class="mlive-dot"></span><span class="mour">vår: <b>${our}</b></span>`+
         `<input class="mtruth" placeholder="läs av i reference tool (klartext)">`+
         `<button class="mrec">spara</button></div>`+
-      `<div class="mrow-raw"><code class="mrawv"></code></div>`+
+      `<div class="mrow-raw"><code class="mrawv">${raw}</code></div>`+
       `<div class="mauto"></div></div>`;
   }
   function readingsKey(cat,name){ return "read:"+_kModule+"|"+cat+"|"+name; }
@@ -450,6 +461,8 @@
     document.querySelectorAll("#karta-body .mrow[data-lid]").forEach(row=>{
       const cat=decodeURIComponent(row.dataset.cat), name=decodeURIComponent(row.dataset.name), rk=readingsKey(cat,name);
       const inp=row.querySelector(".mtruth"), rec=row.querySelector(".mrec");
+      const top=row.querySelector(".mrow-top"); if(top) top.onclick=()=>setFocus(row.classList.contains("focus")?null:row);
+      if(_kFocus && name===_kFocus) row.classList.add("focus");  // behåll fokus över omritning
       const save=()=>{
         const text=(inp.value||"").trim(); if(!text){ inp.focus(); return; }
         const raws={}; row.dataset.lid.split(/\s+/).forEach(x=>{ if(_ksniff&&_ksniff[x]) raws[x]=_ksniff[x].raw; });
