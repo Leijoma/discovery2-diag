@@ -58,10 +58,11 @@ def main() -> int:
         from d2diag.web.logger import SnapshotLogger
         logger = SnapshotLogger(log_path, min_interval=args.log_interval)
 
+    from d2diag.menus import MENUS  # modul-menyregister för Karta-fliken
     srv = DiagServer(
         modules, host=args.host, port=args.port,
         poll_interval=args.interval, stream_interval=args.interval, logger=logger,
-        active=active,
+        active=active, menus=MENUS,
     )
     print(f"Dashboard: http://localhost:{args.port}   (moduler: {', '.join(modules)} · aktiv: {active})")
     if log_path:

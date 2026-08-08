@@ -44,6 +44,7 @@
   .btn { flex:1; min-width:calc(50% - 4px); padding:13px 10px; border-radius:11px; border:1px solid var(--line);
     background:var(--card); color:var(--fg); font-size:14px; font-weight:600; cursor:pointer; }
   .btn:active { background:var(--card2); } .btn.warn { border-color:var(--warn); color:var(--warn); }
+  .btn.ok { border-color:var(--accent); color:var(--accent); }
   .btn.wide { min-width:100%; }
   .cmd { margin-top:8px; font-size:13px; min-height:18px; } .cmd.ok { color:var(--ok); } .cmd.bad { color:var(--err); }
   .err { color:var(--err); font-size:13px; margin-top:8px; }
@@ -167,7 +168,8 @@
   <div class="view" id="view-karta">
     <section>
       <h2>Täckning — reference tool-meny vs vår kod</h2>
-      <div id="karta-body"><div class="hint">Välj modul (flik) — kartan visar aktiv moduls täckning.</div></div>
+      <div id="karta-picker" class="btns" style="margin-bottom:10px"></div>
+      <div id="karta-body"><div class="hint">Laddar…</div></div>
     </section>
   </div>
 
@@ -207,13 +209,19 @@
     else selectModule(name);
   });
 
-  // ---- karta / täckningssida ----
+  // ---- karta / täckningssida (valfri modul, ej bunden till aktiv session) ----
   const mIcon = s => s === "ok" ? "✅" : (s === "maybe" ? "🟡" : "⬜");
-  async function loadMap() {
+  async function loadMap(module) {
     try {
-      const d = await (await fetch("/map")).json();
+      const d = await (await fetch(module ? "/map?module=" + module : "/map")).json();
+      renderPicker(d.modules || [], d.module);
       renderMap(d.module || "?", d.map || []);
     } catch (e) { $("karta-body").innerHTML = '<div class="hint">Kunde inte hämta kartan.</div>'; }
+  }
+  function renderPicker(modules, active) {
+    $("karta-picker").innerHTML = modules.map(m =>
+      `<button class="btn${m === active ? " ok" : ""}" data-kmod="${m}">${m.toUpperCase()}</button>`).join("");
+    $("karta-picker").querySelectorAll("[data-kmod]").forEach(b => b.onclick = () => loadMap(b.dataset.kmod));
   }
   function renderMap(module, map) {
     if (!map.length) { $("karta-body").innerHTML = `<div class="hint">Ingen karta för "${module}" än.</div>`; return; }

@@ -29,8 +29,15 @@ class _Handler(BaseHTTPRequestHandler):
             self._sse()
         elif self.path == "/snapshot":
             self._json(self.server.latest)
-        elif self.path == "/map":
-            self._json({"module": self.server._active, "map": self.server.source.menu_map()})
+        elif self.path.split("?")[0] == "/map":
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            mod = (q.get("module", [None])[0]) or self.server._active
+            if mod in self.server._menus:
+                mp = self.server._menus[mod]
+            else:
+                mp = self.server.source.menu_map()
+            self._json({"module": mod, "map": mp, "modules": list(self.server._menus)})
         else:
             self.send_error(404)
 
@@ -93,8 +100,10 @@ class DiagServer(ThreadingHTTPServer):
         stream_interval: float = 0.5,
         logger=None,
         active: "str | None" = None,
+        menus: "dict | None" = None,
     ) -> None:
         super().__init__((host, port), _Handler)
+        self._menus = menus or {}  # modul → meny-lista (Karta-fliken)
         # source kan vara en enda DataSource (bakåtkompat) eller en dict
         # {modulnamn: DataSource}. Bara en modul är aktiv åt gången — K-line är
         # en delad buss, så att byta flik = släppa gammal session och etablera ny.
