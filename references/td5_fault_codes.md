@@ -47,6 +47,20 @@ råkodningen.
 > havererar (särskilt efter fukt). Se dicten för hela resonemanget. Ej sett på
 > RDL 016.
 
-## Sett på RDL 016 (belagt)
-`01-07` EGR, `04-01` IAT (intermittent), samt air flow + IAT under senare körning.
-Inget injektor-/topside-fel observerat. (Facit: se dicten, kolumn "Sett på RDL 016".)
+## Sett på RDL 016 — rå-sniffat 2026-08-08 (belagt)
+`21 3B` läst under varm tomgång; vår avkodare gav: **air flow circuit** (Current +
+Logged Low), **inlet air temp** (Logged High), **can tx/rx error** (Logged),
+**driver demand** (problem Current + inconsistencies Logged), samt två misstänkta:
+**inj. 6 peak charge long** (Current — men motorn är 5-cyl) och en okänd `byte18.bit6`.
+Rå-block + full tabell: se dicten, avsnitt "Sett på RDL 016 — rå-sniffat".
+
+Samma session belade även: SecurityAccess seed `d3 e6` → key `ad 87` (vår keygen
+stämmer), immobiliser-status `03` = ej immobiliserad, fast init `0x13`, session `0xA0`.
+
+## Nya protokoll sniffade (utöver faults)
+- **Output-tester:** IOControl `30 <id> ff` (fuel pump A1, MIL A2, A/C-clutch A3,
+  A/C-fan A4, glow B3, rev-counter B7, temp-gauge BA; wastegate BE / EGR BD med PWM-
+  parametrar). **Injektorklick:** StartRoutine `31 C2 0<n>` (cyl 1–5).
+- **Security:** `31 C0` + `33 C0` → statusbyte. Implementerat i `td5/td5.py`
+  (`output_test`, `injector_pulse`, `security_status`); `LEARN SECURITY CODE`
+  medvetet ej implementerat (tillståndsändrande).

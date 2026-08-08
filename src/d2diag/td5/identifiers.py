@@ -62,12 +62,15 @@ SIGNALS = [
     # rapporterar konstant default 0x1088 = 150,0 °C. Ignorera värdet (oansluten).
     Signal("ext_temp", 0x1A, 8, **_TEMP),
     Signal("fuel_temp", 0x1A, 12, **_TEMP),
-    # LID 1B: gaspedalgivare (accelerator), 4 fält — svaret är 8 databytes.
-    # Två redundanta potentiometerspår, beräknad pedalbegäran (%), 5V-referens.
-    Signal("pedal_track1", 0x1B, 0, scale=1 / 1000, unit="V"),
-    Signal("pedal_track2", 0x1B, 2, scale=1 / 1000, unit="V"),
-    Signal("pedal_demand", 0x1B, 4, scale=1 / 100, unit="%"),
-    Signal("pedal_supply", 0x1B, 6, scale=1 / 1000, unit="V"),
+    # LID 1B: accelerator-pedalgivare, 4 u16-fält (8 databytes). Nanacom visar
+    # **Accel. Way 1/2/3 (V) + Accel. Supply (V)** — SNIFFAT 2026-08-08 (session.log).
+    # OBS: @4 tolkades tidigare som "demand %"; Nanacoms etikett visar att det är ett
+    # tredje SPÄNNINGSspår (0 V med foten av). Skala 1/1000 V; way3-skalan bör
+    # bekräftas med ett pedalsvep (var 0 i fångsten så exakt skala ej sedd).
+    Signal("accel_way1", 0x1B, 0, scale=1 / 1000, unit="V"),
+    Signal("accel_way2", 0x1B, 2, scale=1 / 1000, unit="V"),
+    Signal("accel_way3", 0x1B, 4, scale=1 / 1000, unit="V"),
+    Signal("accel_supply", 0x1B, 6, scale=1 / 1000, unit="V"),
     # LID 1C@0: grenrörstryck (MAP). BEKRÄFTAT mot bilen 2026-08-03 — steg
     # 1.0→1.2 bar under acceleration. boost = MAP − ambient(23).
     Signal("manifold_press", 0x1C, 0, scale=1 / 10000, unit="bar"),
@@ -100,10 +103,10 @@ LIMITS = {
     "ambient_press_1": (0.8, 1.1),
     "ambient_press_2": (0.8, 1.1),
     "rpm_error": (-300, 300),
-    "pedal_track1": (0.0, 5.1),
-    "pedal_track2": (0.0, 5.1),
-    "pedal_demand": (0.0, 100.0),
-    "pedal_supply": (4.7, 5.3),      # 5V-referens; utanför = matningsproblem
+    "accel_way1": (0.0, 5.1),
+    "accel_way2": (0.0, 5.1),
+    "accel_way3": (0.0, 5.1),
+    "accel_supply": (4.7, 5.3),      # 5V-referens; utanför = matningsproblem
     "balance_1": (-12, 12),
     "balance_2": (-12, 12),
     "balance_3": (-12, 12),

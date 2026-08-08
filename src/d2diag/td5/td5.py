@@ -25,6 +25,23 @@ FAULT_LID = 0x3B
 _CLEAR_FAULTS_ROUTINE = 0xDD
 _CLEAR_FAULTS_PADDING = b"\x00" * 18
 
+# Output-tester — BELAGT ur sniff 2026-08-08 (session.log, RDL 016). Nanacom
+# pulsar TD5-utgångar via IOControl `30 <lid> ff`; wastegate/EGR tar PWM-parametrar.
+# Injektorklick är StartRoutine `31 C2 0<n>`. Alla svarar `70/71 <id>` (ack, ingen data).
+_OUTPUTS: "dict[str, tuple[int, bytes]]" = {
+    "fuel_pump":   (0xA1, b"\xff"),
+    "mil_lamp":    (0xA2, b"\xff"),
+    "ac_clutch":   (0xA3, b"\xff"),
+    "ac_fan":      (0xA4, b"\xff"),
+    "glow_plugs":  (0xB3, b"\xff"),
+    "rev_counter": (0xB7, b"\xff"),
+    "temp_gauge":  (0xBA, b"\xff"),
+    "egr_throttle": (0xBD, b"\xff\x00\xfa\x13\x88"),  # PWM-parametrar (duty/frekvens)
+    "wastegate":   (0xBE, b"\xff\x00\x0a\x13\x88"),
+}
+_INJECTOR_ROUTINE = 0xC2       # `31 C2 0<n>` — pulsa injektor n (1–5)
+_SECURITY_ROUTINE = 0xC0       # `31 C0` starta, `33 C0` läs status (03 = ej immobiliserad)
+
 # Standardvärden för establish(): bus-idle innan init och antal helomförsök.
 _DEFAULT_IDLE = 5.0
 _DEFAULT_ATTEMPTS = 6
@@ -142,6 +159,42 @@ class Td5:
     def clear_faults(self) -> None:
         """Radera lagrade felkoder (StartRoutine 0xDD). Kräver upplåst session."""
         self._kwp.start_routine(_CLEAR_FAULTS_ROUTINE, _CLEAR_FAULTS_PADDING)
+
+    # ---- output-tester (kräver SÄNDANDE kabel) ------------------------ #
+    def output_names(self) -> "list[str]":
+        """Namn på de kända output-testerna (för UI/CLI)."""
+        return list(_OUTPUTS)
+
+    def output_test(self, name: str) -> None:
+        """Pulsa en TD5-utgång (IOControl). ``name`` ur :meth:`output_names`.
+
+        ⚠️ Aktivt test — kör bara stillastående, tändning på. Byte-exakt mot
+        sniffen (t.ex. ``ac_clutch`` → ``30 A3 FF``)."""
+        try:
+            lid, params = _OUTPUTS[name]
+        except KeyError:
+            raise ValueError(f"okänd TD5-utgång: {name!r}") from None
+        self._kwp.io_control(lid, params)
+
+    def injector_pulse(self, cylinder: int) -> None:
+        """Pulsa en injektor för hörbart klick (StartRoutine ``31 C2 0<n>``).
+
+        ``cylinder`` 1–5. ⚠️ Aktivt test, motorn av."""
+        if not 1 <= cylinder <= 5:
+            raise ValueError("cylinder måste vara 1–5")
+        self._kwp.start_routine(_INJECTOR_ROUTINE, bytes([cylinder]))
+
+    # ---- immobiliser/security ----------------------------------------- #
+    def security_status(self) -> int:
+        """Läs immobiliser-status (`31 C0` starta + `33 C0` läs). Returnerar
+        statusbyten — **0x03 = ej immobiliserad** (belagt RDL 016). Read-only.
+
+        (Motsvarar Nanacoms 'GET SECURITY STATUS'. 'LEARN SECURITY CODE' är en
+        annan, tillståndsändrande rutin och implementeras medvetet inte.)"""
+        self._kwp.start_routine(_SECURITY_ROUTINE)
+        result = self._kwp.request_routine_results(_SECURITY_ROUTINE)
+        # svaret börjar med ekad rutin-id (C0), följt av statusbyte
+        return result[1] if len(result) >= 2 else -1
 
     # bekvämlighet
     def rpm(self) -> float:

@@ -14,7 +14,9 @@ STOP_DIAGNOSTIC_SESSION = 0x20
 TESTER_PRESENT = 0x3E
 SECURITY_ACCESS = 0x27
 READ_DATA_BY_LOCAL_ID = 0x21
+INPUT_OUTPUT_CONTROL_BY_LOCAL_ID = 0x30
 START_ROUTINE_BY_LOCAL_ID = 0x31
+REQUEST_ROUTINE_RESULTS_BY_LOCAL_ID = 0x33
 
 _POSITIVE = 0x40  # positivt svar = tjänste-ID | 0x40
 NEGATIVE_RESPONSE = 0x7F
@@ -166,7 +168,20 @@ class KWP2000:
         """Returnerar datafältet (utan den ekade identifieraren)."""
         return self.request(READ_DATA_BY_LOCAL_ID, bytes([lid]))[1:]
 
+    def io_control(self, lid: int, params: bytes = b"\xff") -> bytes:
+        """InputOutputControlByLocalIdentifier (0x30) — output-tester.
+
+        Standard-param är en enda ``0xFF`` (så Nanacom pulsar TD5-utgångar, t.ex.
+        ``30 A3 FF`` = A/C-koppling). Parametriserade utgångar (wastegate/EGR) tar
+        fler bytes. Returnerar svaret utan positiv SID (börjar med ekad LID)."""
+        return self.request(INPUT_OUTPUT_CONTROL_BY_LOCAL_ID, bytes([lid]) + bytes(params))
+
     def start_routine(self, routine: int, params: bytes = b"") -> bytes:
         """StartRoutineByLocalIdentifier (0x31). Returnerar svaret utan positiv SID
         (dvs börjar med den ekade rutin-identifieraren)."""
         return self.request(START_ROUTINE_BY_LOCAL_ID, bytes([routine]) + bytes(params))
+
+    def request_routine_results(self, routine: int, params: bytes = b"") -> bytes:
+        """RequestRoutineResultsByLocalIdentifier (0x33). Returnerar svaret utan
+        positiv SID (börjar med ekad rutin-id, följt av resultatbyte/-bytes)."""
+        return self.request(REQUEST_ROUTINE_RESULTS_BY_LOCAL_ID, bytes([routine]) + bytes(params))
