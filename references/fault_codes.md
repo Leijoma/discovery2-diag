@@ -1,67 +1,22 @@
-# Discovery 2 — felkoder, samlad referens (alla moduler)
+# Felkoder — index (kanonisk ordbok ligger i registret)
 
-Alla felkoder vi känner till — **sedda på RDL 016** och **dokumenterade online** (så
-vi har en komplett bild utan att kunna provocera fram varje fel). Levande dokument;
-uppdatera när vi ser nya fel eller hittar bättre källor.
+**Kanonisk felkodsordbok:** `Discovery 2/discovery2_reference tool_fault_dictionary.md`
+(registret) — reverse-engineering-struktur med confidence, rå-bytes-kolumn,
+status-encoding, occurrence, källor och markerade display-vs-raw-konflikter. Fylls
+på parallellt med sniff-arbetet. Kapaciteter: TD5 >200 (256 slots), SLABS 47,
+ACE 45, Auto Gearbox GS8.87.0 39, Airbag TRW SPS 2A 37.
 
-**Statusnyckel:**
-🔴 sedd **aktuell** (Current) på RDL 016 · 🟠 sedd **loggad/intermittent** på RDL 016 ·
-📖 dokumenterad online (ej sedd) · ✅ bekräftad rå-mappad (byte↔kod känd i vår kod)
+Detta är bara ett **index** till våra kod-inbäddade och sniffade källor:
 
-> Format skiljer per modul: SLABS `020-05`, ACE `004-02`, Airbag `004`/`022`,
-> Td5-text. `<nr>-<sub>` = felnr + status/underkod. Se resp. modul.
+| Modul | Rå-mappat i kod | Publik lista | Sett på RDL 016 |
+|---|---|---|---|
+| **Td5** | `src/d2diag/td5/faults.py` (210, `21 3B`-bit-per-fel) | reference tool Lucas TD5-guide | `01-07` EGR, `04-01` IAT (intermittent); air flow+IAT under last |
+| **SLABS** | ✅ `21 11`=loggade / `21 47`=aktuella (bit-per-fel, index=byte*8+bit), `14 FF FF`=clear. Bekräftat: `020-05`→byte3.bit4, `027-05`→byte10.bit4 | `references/slabs_fault_codes.md` (012–114) | `020-05` RF-givare + `027-05` shuttle valve (×254, loggade) |
+| **ACE** | — (ej sniffad) | dicten (45) | `004-02/04/05` riktningsventiler + `006-01` lågt tryck (aktuella) |
+| **EAT** | — | dicten (39) | gick ej läsa |
+| **Airbag** | — | dicten (37) | `004` varningslampa, `022` v. bältessträckare (intermittent) |
+| **BCU** | — | ingen konventionell fault-kapacitet (reference tool) | ej sniffad |
 
----
-
-## Motor — Td5 (EDC)
-**Sedda på RDL 016** (reference tool-baslinje + egen läsning):
-| Kod | Beskrivning | Status |
-|---|---|---|
-| 001-07 | EGR-vakuummodul kortslutning | 🟠 intermittent |
-| 004-01 | Inlet air temp (IAT) krets | 🟠 intermittent |
-| — | air flow circuit + inlet air temp circuit (under last, air_temp pegged 120°C) | 🔴 (egen läsning, B-009) |
-
-**Full dokumenterad lista:** `src/d2diag/td5/faults.py` (**210 poster**, ur Ekaitza
-get_faults/fault_code_text) + `21 3B`-bit-per-fel. ✅ rå-mappad i vår kod.
-
-## SLABS — ABS + självnivellering
-**Sedda på RDL 016:**
-| Kod | Beskrivning | Status |
-|---|---|---|
-| 020-05 | Höger fram hjulhastighetsgivare — output too low (×254) | 🟠 loggad · ✅ rå (`21 11` byte3.bit4) |
-| 027-05 | Shuttle valve switch — electrical failure (×254) | 🟠 loggad · ✅ rå (`21 11` byte10.bit4) |
-
-**Full lista (012–114):** `references/slabs_fault_codes.md` (📖 rswsolutions).
-*(Trolig tre-amigos-orsak: RF-givaren + shuttle valve.)*
-
-## ACE — Active Cornering Enhancement
-**Sedda på RDL 016 — AKTIVA fel:**
-| Kod | Beskrivning | Status |
-|---|---|---|
-| 004-02 | Riktningsventil 2 — ström utanför intervall | 🔴 aktuell |
-| 004-04 | Elfel riktningsventil 2-krets (fault 28) | 🔴 aktuell |
-| 004-05 | Elfel riktningsventil 1-krets (fault 29) | 🔴 aktuell |
-| 006-01 | Hydraultryck för lågt | 🔴 aktuell |
-
-**Full dokumenterad lista:** 📖 *(online-research pågår — fylls)*
-
-## EAT — Automatlåda (ZF4HP22/24)
-Gick **ej att läsa** med denna reference tool 1. Inga sedda koder.
-**Dokumenterad lista:** 📖 *(online-research pågår — fylls)*
-
-## SRS / Airbag
-**Sedda på RDL 016:**
-| Kod | Beskrivning | Status |
-|---|---|---|
-| 004 | Airbag-varningslampa — öppen krets | 🟠 intermittent |
-| 022 | Vänster bältessträckare — öppen krets | 🟠 intermittent |
-
-**Full dokumenterad lista:** 📖 *(online-research pågår — fylls)*
-
-## BCU — Valeo centralelektronik
-Ej sniffad än → inga sedda koder. (DRL disabled = inställning, ej felkod.)
-**Dokumenterad lista:** 📖 *(online-research pågår — fylls)*
-
----
-Se även: `references/slabs_fault_codes.md`, `src/d2diag/td5/faults.py`,
-minne `reference tool-d2-fault-baseline.md` (bilens aktuella fel per modul).
+**Arbetsgång:** sniffa → analysera (`decode_session.py`) → fyll **rå-bytes + status-
+encoding** i dicten (registret) → uppdatera vår kod (`faults.py` / SLABS-avkodare).
+Sniffen löser display-vs-raw-konflikter (t.ex. SLABS `027-05` = `0B10`; TD5 `01-07`).
