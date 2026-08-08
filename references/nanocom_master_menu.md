@@ -2107,3 +2107,64 @@ Auto Gearbox Inputs. The 26 GENERAL input items are kept in the supplied referen
 Airbag Settings. The TRW SPS Type 2A ECU exposes identification/configuration data and only VIN is documented as programmable. Keep read-settings traffic separate from any VIN write operation. The settings order above is preserved as the working protocol order.
 Airbag capability note. Unlike BCU/ACE, the Discovery 2 TRW SPS Type 2A is documented primarily for Read/Clear Faults and Settings; no separate live Inputs or Outputs page is assumed here unless a reference tool screen/capture demonstrates one.
 ```
+
+# TD5 Engine ECU (Lucas) — komplett reference tool-meny
+
+Källa: `reference tool_protocol_Discovery2_Master_TD5_Complete.docx` (register-repot,
+transkriberad 2026-08-08). Menyordning bevarad exakt. Driver TD5-kartan
+(`src/d2diag/td5/menu.py`). Vår rå-mappning: `td5/identifiers.py` (live) +
+`td5/faults.py` (`21 3B`).
+
+> ⚠️ **Displayvärdena nedan (ABNFE, svtnp006, ENABLED/DISABLED, ROBUST, 12.6 V …)
+> är transkriptionens screenshot-baslinje — INTE avläst på RDL 016.**
+> Faults/Inputs för TD5 hade INGA screenshots i .docx;
+> vår felavkodning kommer i stället ur Ekaitza + reference tool v1.12 (belagt).
+
+## Settings
+
+**Injektorkoder / typ** (6): Injector 1–5 = femteckens klassificeringskod
+(baslinje `ABNFE`), + `INJ. TYPE` (UI-action). *Byt bara ett fält i taget vid
+ev. kodningscapture.*
+
+**Read-only identification** (5):
+
+| # | Fält | Baslinje (screenshot) |
+|---|---|---|
+| 1 | Config Tune ID | `svtnp006` |
+| 2 | Fuel Tune ID | `svdhg003` |
+| 3 | ECU Part Number | `NNN000120` |
+| 4 | Homologation | `4213` |
+| 5 | GET VIN | (UI-action, egen tjänst) |
+
+**Feature / ECU configuration** (21, packat block-hypotes): Temperature Gauge,
+Tachometer, SLABS, Road Speed, Radiator Fan, MIL Lamp, Fuel Used, Fuel
+Temperature, EGR Modulator, EGR Inlet, Cruise Lamp, Cruise Control, Clutch Switch,
+CAN Bus, Auxiliary Fan, Auto Gearbox, Air Conditioning, Active Engine mount,
+Ambient Sensor, Wastegate Modulator (ENABLED/DISABLED-flaggor) + **ECU Status**
+(enum, baslinje `ROBUST`). *Toggla en i taget och läs om vid differential-capture.*
+
+## Inputs — switchar (12)
+Brake Switch 1, Brake Switch 2, Clutch Switch, Transfer Ratio, Gear Box,
+Cruise Control, Cruise Resume, Set Accelerate, AC Clutch Request, AC Clutch Drive,
+AC Fan Request, AC Fan Drive. *Brake 1/2 loggas ihop (komplementära kontakter);
+AC Request vs Drive jämförs som begäran-mot-utgång.*
+
+## Inputs — Fuelling / live (22)
+Engine Speed (rpm), Idle Speed Error (rpm), Road Speed (km/h), Battery (V),
+Accel. Way 1/2/3 (V), Accel. Supply (V), Coolant Temp (°C), Fuel Temp (°C),
+Air Inlet Temp (°C), Air Flow (gr/hr), Ambient Pressure (kPa), Manifold Turbo
+Pressure (kPa), EGR Modulator (%), EGR Inlet (%), Wastegate Modulator (%),
+Cylinder 1–5 (balans). *Vi avkodar redan de flesta (se kartan); notera att reference tool
+visar **tre** accelerator-spänningsspår medan vår `21 1B`-avkodning ger track1/
+track2 + demand% — verifiera Way 3.*
+
+## Outputs — aktiva tester (14, pulse)
+A/C Clutch, A/C Fan, MIL Lamp, Fuel Pump, Glow Plugs, Pulse Rev Counter,
+Wastegate Modul., Temp Gauge, EGR Throttle, Injector 1–5. *Sekvensen är oberoende
+bekräftad av reference tools TD5-dokumentation. Ej implementerat hos oss (kräver
+sändande kabel).*
+
+## Utilities (2) — säkerhet 🔴
+`GET SECURITY STATUS` (läs immobiliser-status — börja här, read-only) och
+`LEARN SECURITY CODE` (kan ändra immobiliser-state — **kör aldrig** under
+protokolltest förrän normal-state och återställning är förstådda).
