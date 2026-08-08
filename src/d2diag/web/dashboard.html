@@ -600,11 +600,11 @@
   });
 
   // ---- Fångst: batch-insamling (tryck "Ny insamling" → läs i reference tool → beskriv) ----
-  let _fTimer=null, _fBase={}, _fBatch=[], _fBatchRaw={}, _fArmed=false, _fArmStart=0, _fLastData=0,
+  let _fTimer=null, _fBase={}, _fBatch=[], _fBatchRaw={}, _fBatchCount={}, _fArmed=false, _fArmStart=0, _fLastData=0,
       _fSnap={}, _fMeta={}, _fStatus="idle", _fSig="";
   function stopFangst(){ if(_fTimer){ clearInterval(_fTimer); _fTimer=null; } }
   function armFangst(){
-    _fBatch=[]; _fBatchRaw={}; _fArmed=true; _fStatus="armed"; _fArmStart=Date.now(); _fLastData=0;
+    _fBatch=[]; _fBatchRaw={}; _fBatchCount={}; _fArmed=true; _fStatus="armed"; _fArmStart=Date.now(); _fLastData=0;
     _fBase={}; Object.values(_fSnap).forEach(l=>{ _fBase[l.lid]=l.count; }); _fSig=""; renderFangst();
   }
   function resetFangst(){ _fArmed=false; _fBatch=[]; _fBatchRaw={}; _fStatus="idle"; _fSig="x"; renderFangst(); }
@@ -620,7 +620,7 @@
         if(_fArmed){
           (d.lids||[]).forEach(l=>{ const base=_fBase[l.lid];
             if(base==null || l.count>base){ if(!_fBatch.includes(l.lid)) _fBatch.push(l.lid);
-              _fBatchRaw[l.lid]=l.raw; _fBase[l.lid]=l.count; _fLastData=Date.now(); } });
+              _fBatchRaw[l.lid]=l.raw; _fBatchCount[l.lid]=(_fBatchCount[l.lid]||0)+1; _fBase[l.lid]=l.count; _fLastData=Date.now(); } });
           const now=Date.now();
           if(_fBatch.length && now-_fLastData>4000){ _fArmed=false; _fStatus="done"; _fSig=""; }
           else if(!_fBatch.length && now-_fArmStart>4000){ _fArmed=false; _fStatus="timeout"; _fSig=""; }
@@ -645,14 +645,15 @@
     if(sig!==_fSig){ _fSig=sig; buildBatchCards(); }
     _fBatch.forEach(lid=>{ const card=document.querySelector('#fangst-active .fcard[data-lid="'+lid+'"]'); if(!card) return;
       const raw=card.querySelector(".fraw"); const rw=_fBatchRaw[lid]||((_fSnap[lid]||{}).raw)||""; if(raw&&raw.textContent!==rw) raw.textContent=rw;
-      const o=card.querySelector(".four"); if(o) o.textContent=fDecodeText(_fSnap[lid]); });
+      const o=card.querySelector(".four"); if(o) o.textContent=fDecodeText(_fSnap[lid]);
+      const cnt=card.querySelector(".fcnt"); if(cnt) cnt.textContent="×"+(_fBatchCount[lid]||1); });
     renderFangstLog();
   }
   function buildBatchCards(){
     const box=document.getElementById("fangst-active"); if(!box) return;
     if(!_fBatch.length){ box.innerHTML=""; return; }
     box.innerHTML=_fBatch.map(lid=>{ const l=_fSnap[lid]||{decode:[]}; const raw=_fBatchRaw[lid]||l.raw||"";
-      return '<div class="fcard" data-lid="'+lid+'"><div class="fcard-h"><b>21 '+lid+'</b><span class="fdot">fångad</span></div>'+
+      return '<div class="fcard" data-lid="'+lid+'"><div class="fcard-h"><b>21 '+lid+'</b><span class="fdot fcnt">×'+(_fBatchCount[lid]||1)+'</span></div>'+
         '<div class="fraw">'+raw+'</div>'+
         '<div class="fmap">vår mappning: <span class="four">'+fDecodeText(l)+'</span></div>'+
         '<div class="frow"><input class="ftext" placeholder="vad visar reference tool? (värden i visad ordning)"></div></div>'; }).join("")+
