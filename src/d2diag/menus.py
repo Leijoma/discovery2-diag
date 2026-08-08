@@ -4,6 +4,9 @@ Varje modul har en meny-lista (reference tool-meny + vår status), samma format 
 :data:`d2diag.slabs.menu.SLABS_MENU`. Tomma listor = ännu ej dokumenterade (roadmap).
 Uppdatera respektive ``*/menu.py`` under sniffning → Karta-fliken speglar det.
 """
+from .ace.menu import ACE_MENU
+from .airbag.menu import AIRBAG_MENU
+from .autobox.menu import AUTOBOX_MENU
 from .bcu.menu import BCU_MENU
 from .slabs.menu import SLABS_MENU
 
@@ -11,9 +14,9 @@ from .slabs.menu import SLABS_MENU
 MENUS: "dict[str, list]" = {
     "slabs": SLABS_MENU,
     "bcu": BCU_MENU,
-    "ace": [],
-    "autobox": [],
-    "airbag": [],
+    "ace": ACE_MENU,
+    "autobox": AUTOBOX_MENU,
+    "airbag": AIRBAG_MENU,
 }
 
 
