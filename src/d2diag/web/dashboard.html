@@ -69,10 +69,8 @@
   .mrow.seen, .mrow.seen.todo { opacity:1; }
   .mrow-top { cursor:pointer; }
   .mrow.focus { border-left-color:var(--accent); box-shadow:0 0 0 2px var(--accent) inset; background:var(--card2); }
-  .mlive-dot { width:8px; height:8px; border-radius:50%; background:var(--line); flex:0 0 auto; }
-  .mrow.focus .mlive-dot.on { background:var(--ok); animation:mpulse 1s ease-in-out infinite; }
-  .mrow:not(.focus) .mlive-dot { display:none; }
-  @keyframes mpulse { 0%,100%{ opacity:.35; } 50%{ opacity:1; } }
+  .mlive-dot { display:none; width:7px; height:7px; border-radius:50%; background:var(--ok); flex:0 0 auto; }
+  .mlive-dot.on { display:inline-block; }
   .mrow-live { display:flex; gap:8px; align-items:center; }
   .mour { color:var(--muted); font-size:12px; white-space:nowrap; } .mour b { color:var(--accent); }
   .mtruth { flex:1; min-width:70px; background:var(--card2); border:1px solid var(--line); color:var(--fg);
@@ -347,7 +345,7 @@
     const m=_kMeta||{};
     if(!m.configured) return '<span class="sniffbad off">○ ingen sniff — starta dashboarden med <code>--sniff PORT</code></span>';
     if(m.status==="fel") return `<span class="sniffbad err">● sniff-fel: ${m.error||"?"}</span>`;
-    if(m.status==="live" && m.age!=null && m.age<3){ const demo=(m.source||"").startsWith("replay")?" · demo":""; const pol=(_kActive&&_kActive.size)?(" · pollar "+Array.from(_kActive).slice(0,6).join(" ")):""; return `<span class="sniffbad ok">● LIVE · ${m.fps||0} ramar/s${pol}${demo}</span>`; }
+    if(m.status==="live" && m.age!=null && m.age<3){ const demo=(m.source||"").startsWith("replay")?" · demo":""; const pol=(_kActive&&_kActive.size)?(" · pollar "+Array.from(_kActive).slice(0,6).join(" ")):""; return `<span class="sniffbad ok">● LIVE · ${m.fps||0} ramar/s · ${m.frames||0} läsningar${pol}${demo}</span>`; }
     if(m.age!=null) return `<span class="sniffbad stale">● ingen trafik på ${m.age}s — sitter tappen rätt / är reference tool på?</span>`;
     return `<span class="sniffbad wait">○ väntar på trafik… (${(m.source||"").replace(/^serial:/,"")})</span>`;
   }
@@ -375,8 +373,16 @@
     const r=row.querySelector(".mrawv"); if(r) r.textContent=(lv&&lv.raw)||"";
     const d=row.querySelector(".mlive-dot"); if(d) d.classList.toggle("on", !!(lv&&lv.active));
   }
-  // varje sekund: uppdatera BARA badgen + den fokuserade raden (inget mass-flimmer)
-  function updateKartaLive(){ updateBadge(); refreshFocus(); }
+  // varje sekund: uppdatera badgen + live-VÄRDET på alla rader (lugnt: bara text, ingen animation)
+  function updateKartaLive(){
+    updateBadge();
+    document.querySelectorAll("#karta-body .mrow[data-lid]").forEach(row=>{
+      const lv=liveFor(row.dataset.lid, row.dataset.sig||"");
+      const o=row.querySelector(".mour b"); if(o){ const v=(lv&&lv.our!=null)?lv.our:"—"; if(o.textContent!==v) o.textContent=v; }
+      const r=row.querySelector(".mrawv"); if(r){ const rw=(lv&&lv.raw)||""; if(r.textContent!==rw) r.textContent=rw; }
+      const d=row.querySelector(".mlive-dot"); if(d) d.classList.toggle("on", !!(lv&&lv.active));
+    });
+  }
 
   // ---- dokument-flik (vy mot kanoniska markdown-filer, ej bunden till session) ----
   let _docsLoaded = false;
