@@ -18,12 +18,15 @@ SLABS_MENU = [
         {"name": "Radera fel", "status": "ok", "ref": "14 FF FF → 54"},
     ]},
     {"cat": "Settings", "items": [
-        # LID→funktion BELAGD RDL 016 2026-08-08 (fångad i Nanacom-visningsordning,
-        # en LID per setting; olika längd). Byte-kodningen (vilken bit=på/av) kräver differential.
-        {"name": "Test status (enabled)", "status": "maybe", "ref": "21 46 = 78 76 — LID belagd; kodning TBD", "lid": "46"},
-        {"name": "Transport mode (disabled)", "status": "maybe", "ref": "21 59 = 00 0f 0f 0f — byte0=00 = av?", "lid": "59"},
-        {"name": "ECU calibrated (yes)", "status": "maybe", "ref": "21 45 = 7f — LID belagd; kodning TBD", "lid": "45"},
-        {"name": "Suspension type (AIR)", "status": "maybe", "ref": "21 49 = 00 00 01 — sista byte 01 = AIR?", "lid": "49"},
+        # 4 settings-LID:er med STABILA råbytes (RDL 016). ⚠️ Vilken LID = vilken
+        # setting (test status / transport / ECU calibrated / suspension) är EJ löst:
+        # två ordningsbaserade märkningar (2026-08-08 vs -09) motsäger varandra —
+        # kortordningen är inte stabil. Lösning = DIFFERENTIAL: växla EN setting i
+        # reference tool → se vilken av 45/46/49/59 vars råbyte ändras = den LID:en + kodningen.
+        {"name": "Settings 21 45 (1 byte)", "status": "maybe", "ref": "råbyte 7f — en av de 4 settings (pairing olöst)", "lid": "45"},
+        {"name": "Settings 21 46 (2 byte)", "status": "maybe", "ref": "råbyte 78 76 — dito", "lid": "46"},
+        {"name": "Settings 21 49 (3 byte)", "status": "maybe", "ref": "råbyte 00 00 01 — dito", "lid": "49"},
+        {"name": "Settings 21 59 (4 byte)", "status": "maybe", "ref": "råbyte 00 0f 0f 0f — dito", "lid": "59"},
         {"name": "Left/Right stored height", "status": "todo",
          "ref": "⚠️ 21 54 = LIVE höjd (149/161), INTE stored (149/149) — stored-källa ej fångad"},
     ]},

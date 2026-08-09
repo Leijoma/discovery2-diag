@@ -88,7 +88,7 @@ isolera med riktade captures):
 | SLS-inputs | `21 53`, `21 54`, `21 55` | L/R sensor value (**`21 54` b0/b1 avkodad**), sensor supply, value (V), exhaust valve (V), compressor relay (V) |
 | ABS-inputs | `21 43`, `21 44`, `21 49`, `21 50`, `21 57` | hjulhastighet (`21 43`), ABS-sensor V (`21 50`), in-/utloppsventiler, pump relay/monitor, batteri, ECU-supply, ground ref, HDC brake, engine speed/torque/throttle (via CAN) |
 | Switchar | `21 42`, `21 48`, `21 56`, `21 58` | neutral, low range, diff lock, reverse, HDC, shuttle, **any-door (`21 56` byte0 bit0 — BELAGT: 00 stängd/01 öppen)**, plip |
-| Settings | `21 45`, `21 46`, `21 49`, `21 59` | **BELAGD LID→setting (RDL 016, fångad i visningsordning):** `21 46`=test status (`78 76`, enabled), `21 59`=transport mode (`00 0f 0f 0f`, disabled), `21 45`=ECU calibrated (`7f`, yes), `21 49`=suspension type (`00 00 01`, AIR). Byte-kodningen kräver differential. |
+| Settings | `21 45`, `21 46`, `21 49`, `21 59` | **Stabila råbytes belagda (RDL 016):** `45`=`7f`, `46`=`78 76`, `49`=`00 00 01`, `59`=`00 0f 0f 0f`. ⚠️ **LID→setting OLÖST** — två ordningsbaserade märkningar motsäger varandra (kortordning ostabil). Lös med DIFFERENTIAL: växla EN setting → se vilken råbyte ändras. |
 
 **Nästa steg för full avkodning:** riktade differential-captures — ändra EN sak
 (öppna en switch, lyft en hörna, mät en spänning mot multimeter) och jämför
