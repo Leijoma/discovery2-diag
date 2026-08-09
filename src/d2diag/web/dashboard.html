@@ -644,7 +644,7 @@
     const sig=_fStatus+"|"+_fBatch.join(",");
     if(sig!==_fSig){ _fSig=sig; buildBatchCards(); }
     _fBatch.forEach(lid=>{ const card=document.querySelector('#fangst-active .fcard[data-lid="'+lid+'"]'); if(!card) return;
-      const raw=card.querySelector(".fraw"); const rw=_fBatchRaw[lid]||((_fSnap[lid]||{}).raw)||""; if(raw&&raw.textContent!==rw) raw.textContent=rw;
+      const raw=card.querySelector(".fraw"); const rw=((_fSnap[lid]||{}).raw)||""; if(raw&&raw.textContent!==rw) raw.textContent=rw;
       const o=card.querySelector(".four"); if(o) o.textContent=fDecodeText(_fSnap[lid]);
       const cnt=card.querySelector(".fcnt"); if(cnt) cnt.textContent="×"+(_fBatchCount[lid]||1); });
     renderFangstLog();
@@ -652,7 +652,7 @@
   function buildBatchCards(){
     const box=document.getElementById("fangst-active"); if(!box) return;
     if(!_fBatch.length){ box.innerHTML=""; return; }
-    box.innerHTML=_fBatch.map(lid=>{ const l=_fSnap[lid]||{decode:[]}; const raw=_fBatchRaw[lid]||l.raw||"";
+    box.innerHTML=_fBatch.map(lid=>{ const l=_fSnap[lid]||{decode:[]}; const raw=l.raw||"";  // LIVE råbytes (uppdateras)
       return '<div class="fcard" data-lid="'+lid+'"><div class="fcard-h"><b>21 '+lid+'</b><span class="fdot fcnt">×'+(_fBatchCount[lid]||1)+'</span></div>'+
         '<div class="fraw">'+raw+'</div>'+
         '<div class="fmap">vår mappning: <span class="four">'+fDecodeText(l)+'</span></div>'+
@@ -664,7 +664,7 @@
     let n=0;
     for(const card of [...document.querySelectorAll('#fangst-active .fcard')]){
       const lid=card.dataset.lid, text=(card.querySelector('.ftext').value||"").trim(); if(!text) continue;
-      const raw=_fBatchRaw[lid]||((_fSnap[lid]||{}).raw)||"";
+      const raw=((_fSnap[lid]||{}).raw)||"";  // fångar aktuell live-råbytes vid spara
       try{ await fetch("/capture",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({module:_fMeta.module,lid:lid,raw:raw,text:text})}); }catch(_){}
       addFangstLog({lid:lid,raw:raw,text:text}); n++;
     }

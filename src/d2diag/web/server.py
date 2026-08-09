@@ -243,6 +243,14 @@ class DiagServer(ThreadingHTTPServer):
             return holder["result"]
         return {"ok": False, "error": "timeout — inget svar från diagnostiklagret"}
 
+    def handle_error(self, request, client_address) -> None:
+        """Tysta ofarliga klient-frånkopplingar (webbläsaren stänger fetch/SSE)."""
+        import sys
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError)):
+            return
+        super().handle_error(request, client_address)
+
     def modules(self) -> "list[str]":
         return list(self._modules)
 
