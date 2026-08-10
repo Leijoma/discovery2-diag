@@ -90,6 +90,26 @@ isolera med riktade captures):
 | Switchar | `21 42`, `21 48`, `21 56`, `21 58` | neutral, low range, diff lock, reverse, HDC, shuttle, **any-door (`21 56` byte0 bit0 — BELAGT: 00 stängd/01 öppen)**, plip |
 | Settings | `21 45`, `21 46`, `21 49`, `21 59` | **Stabila råbytes belagda (RDL 016):** `45`=`7f`, `46`=`78 76`, `49`=`00 00 01`, `59`=`00 0f 0f 0f`. ⚠️ **LID→setting OLÖST** — två ordningsbaserade märkningar motsäger varandra (kortordning ostabil). Lös med DIFFERENTIAL: växla EN setting → se vilken råbyte ändras. |
 
+## Byte-varians ur session.log (`analyze_capture.py --variance`)
+Vilka bytes som **rörde sig** under captet = redan-differential-kandidater. Smalnar
+av vad som ska korreleras mot Nanacom-värden:
+
+| LID | Byte-struktur (belagt ur varians) |
+|---|---|
+| `21 54` | **byte0 = vänster höjd, byte1 = höger höjd** (båda varierar = live). Bekräftat. |
+| `21 50` | 4 byte, **en ABS-sensor-spänning per hjul** (~`0x72`); byte1/2 varierade (två hjul). |
+| `21 43` | konstant `7c 00 ×4` stillastående = hjulhastighets-**baslinje** (≠0). |
+| `21 53` | byte0 ~`d1/d2` varierar (supply-kandidat); byte1 konst, byte2/3 = `0f 0f`. |
+| `21 55` | byte3 varierar (litet värde 00/02/03); resten `00`. |
+| `21 57` | byte0 varierar (`05/06/08`); resten `0f 0f 0f`. |
+| `21 44` | **rikt block** — offsets 2,3,4,6,8–13 varierar (ventiler/pump/batteri/supply). Kräver labels. |
+| `21 49` | konstant `00 00 01`. |
+
+**TD5-switchar (session.log):** `21 1E` byte1 = switch-bitfält (togglade `CA`→`EA`
+= bit `0x20`; byte0 konst); `21 36` konstant `00 0D` (fixa switchar). Vi vet alltså
+*vilken byte* men inte *vilken switch* — kräver annoterad toggle.
+
 **Nästa steg för full avkodning:** riktade differential-captures — ändra EN sak
 (öppna en switch, lyft en hörna, mät en spänning mot multimeter) och jämför
-råbytesen före/efter för att pinna offset/bit/skala.
+råbytesen före/efter för att pinna offset/bit/skala. Kör `analyze_capture.py
+--variance <logg>` för att se kandidaterna direkt.

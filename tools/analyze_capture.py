@@ -162,12 +162,45 @@ def analyze(path: str, window_s: float = 6.0):
             print()
 
 
+def variance(path: str):
+    """Vilka byte-offset VARIERAR per LID? = differential-kandidater ur befintlig data.
+
+    Konstant offset = statiskt fält; varierande = det som rörde sig under captet
+    (kandidat att korrelera mot Nanacom-värde/fysisk ändring)."""
+    from collections import defaultdict
+    resp = defaultdict(list)
+    for ms, k, p in parse(path):
+        if k != "data":
+            continue
+        for f, _ in [(f, 0) for f in split_frames(p)[0]]:
+            pl = f[1:-1]
+            if pl and pl[0] == 0x61 and len(pl) >= 2:
+                resp[pl[1]].append(tuple(pl[2:]))
+    print(f"### Byte-varians per 21-LID — {path}\n")
+    for lid in sorted(resp):
+        vals = resp[lid]
+        uniq = list(dict.fromkeys(vals))
+        if not uniq:
+            continue
+        n = min(len(v) for v in uniq)
+        varying = [i for i in range(n) if len({v[i] for v in uniq}) > 1]
+        tag = "VARIERAR " + str(varying) if varying else "konstant"
+        print(f"21 {lid:02x}: {len(vals):>4} svar, {len(uniq):>3} distinkta, {n} byte — {tag}")
+        if varying:
+            for v in uniq[:3]:
+                print("        " + " ".join(v))
+
+
 def main():
     ap = argparse.ArgumentParser(description="Analysera esp32_read-capture")
     ap.add_argument("log")
     ap.add_argument("--window", type=float, default=6.0, help="retroaktivt fönster (s) före markör")
+    ap.add_argument("--variance", action="store_true", help="byte-varians per LID (differential-kandidater)")
     args = ap.parse_args()
-    analyze(args.log, args.window)
+    if args.variance:
+        variance(args.log)
+    else:
+        analyze(args.log, args.window)
     return 0
 
 
