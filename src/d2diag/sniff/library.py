@@ -11,8 +11,15 @@ from . import capture
 
 # Verifierade icke-KWP-fakta (ur analys av loggarna, se protocol_state_handoff.md).
 KNOWN: "dict" = {
+    "td5_settings": {
+        "note": "TD5 settings ID-strängar är ASCII-avkodbara (belagt)",
+        "21 0e": "Config Tune ID, varannan-byte-dubblerad → 'sutdp008' (RDL 016)",
+        "21 32": "Config+Fuel Tune ID, rak ASCII → 'sutdp008' + 'suhde0244145' (RDL 016)",
+        "21 3d": "feature/config-block, 20 byte packat (docx: 21 flaggor) — kräver differential",
+    },
     "autobox": {
         "protocol": "proprietary-72",
+        "framing": "72 <len> <data> <XOR-cs> (request; XOR verifierat). Svar: 72 <len> 60 <data> <cs>",
         "note": "Nanacom 'unable to perform the function' men ECU:n SVARAR med datablock",
         "functions": {
             "read_faults": "72 05 04 00 73",
