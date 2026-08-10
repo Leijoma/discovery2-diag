@@ -188,7 +188,7 @@ def variance(path: str):
         print(f"21 {lid:02x}: {len(vals):>4} svar, {len(uniq):>3} distinkta, {n} byte — {tag}")
         if varying:
             for v in uniq[:3]:
-                print("        " + " ".join(v))
+                print("        " + " ".join(f"{x:02x}" for x in v))
 
 
 def main():
