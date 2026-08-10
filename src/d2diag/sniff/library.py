@@ -56,6 +56,8 @@ KNOWN: "dict" = {
         "eka_rdl016": "XXXX (3b cc XX XX XX XX)",
         "settings_ids": ["c7", "ca", "cb", "d3", "eb", "c6", "ce", "d4", "d5", "d6", "d7"],
         "connect": "tänd-cykling: off→key→on→key",
+        "security": "SecurityAccess (27 seed→key) krävs före outputs; sågs NEKAD (7f 27) + lyckad retry",
+        "outputs": "WriteLocalId 3B (sett 3b 22/23/c1/c2, skriver nollor) — mappning oklar (flaky capture)",
     },
 }
 
