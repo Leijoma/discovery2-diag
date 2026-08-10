@@ -1,0 +1,1425 @@
+{
+  "generated_from": [
+    "logs/session.log",
+    "logs/faultread-20260809.log",
+    "logs/faultread-20260809-2.log"
+  ],
+  "modules": {
+    "slabs": {
+      "protocol": "kwp2000-lengthprefix",
+      "lids": [
+        "11",
+        "22",
+        "25",
+        "2f",
+        "30",
+        "31",
+        "33",
+        "34",
+        "35",
+        "36",
+        "42",
+        "43",
+        "44",
+        "45",
+        "46",
+        "47",
+        "48",
+        "49",
+        "50",
+        "53",
+        "54",
+        "55",
+        "56",
+        "57",
+        "58",
+        "59",
+        "8a",
+        "8b",
+        "8d",
+        "ff"
+      ],
+      "transactions": [
+        {
+          "req": "14 ff ff",
+          "service": "ClearFaults",
+          "lid": "ff",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "clear faults"
+          ]
+        },
+        {
+          "req": "1a 8a",
+          "service": "ReadEcuId",
+          "lid": "8a",
+          "example_resp": "5a 8a 00 37 44 60 44 03 10 ff 31 90 10 86 40 ff 06 29 00 00 00 00 00 ff 00 00 23 d6",
+          "count": 5,
+          "annotations": [
+            "abs module bleed",
+            "abs-sls switsh",
+            "read settings",
+            "tändning av fungerade ej"
+          ]
+        },
+        {
+          "req": "1a 8b",
+          "service": "ReadEcuId",
+          "lid": "8b",
+          "example_resp": "5a 8b 4b 52 54 45 34 39 42 30 00 30 30 30 30 30 30 30 30 00 48 44 54 45 31 36 41 30 00 45 42 54 45 38 37 41 30 00 43 44 54 45 39 31 41 30 00 4b 57 54 50 31 31 41 30",
+          "count": 2,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "1a 8d",
+          "service": "ReadEcuId",
+          "lid": "8d",
+          "example_resp": "5a 8d 53 41 4c 4c 54 47 4d 39 34 59 41 32 35 37 32 35 32",
+          "count": 2,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 11",
+          "service": "ReadLocalId",
+          "lid": "11",
+          "example_resp": "61 11 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+          "count": 1,
+          "annotations": [
+            "tändning av fungerade ej"
+          ]
+        },
+        {
+          "req": "21 42",
+          "service": "ReadLocalId",
+          "lid": "42",
+          "example_resp": "61 42 82",
+          "count": 116,
+          "annotations": [
+            "abs sls swittch testfel",
+            "abs-sls switsh",
+            "anu door open",
+            "any door is closed"
+          ]
+        },
+        {
+          "req": "21 43",
+          "service": "ReadLocalId",
+          "lid": "43",
+          "example_resp": "61 43 7c 00 7c 00 7c 00 7c 00",
+          "count": 276,
+          "annotations": [
+            "abs inputds",
+            "abs inputs",
+            "battery viltage",
+            "bext"
+          ]
+        },
+        {
+          "req": "21 44",
+          "service": "ReadLocalId",
+          "lid": "44",
+          "example_resp": "61 44 00 80 01 02 01 01 02 01 02 02 03 04 b3 b1",
+          "count": 276,
+          "annotations": [
+            "abs inputds",
+            "abs inputs",
+            "battery viltage",
+            "bext"
+          ]
+        },
+        {
+          "req": "21 45",
+          "service": "ReadLocalId",
+          "lid": "45",
+          "example_resp": "61 45 7f",
+          "count": 2,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 46",
+          "service": "ReadLocalId",
+          "lid": "46",
+          "example_resp": "61 46 78 76",
+          "count": 2,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 47",
+          "service": "ReadLocalId",
+          "lid": "47",
+          "example_resp": "61 47 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+          "count": 1,
+          "annotations": [
+            "tändning av fungerade ej"
+          ]
+        },
+        {
+          "req": "21 48",
+          "service": "ReadLocalId",
+          "lid": "48",
+          "example_resp": "61 48 94 61",
+          "count": 116,
+          "annotations": [
+            "abs sls swittch testfel",
+            "abs-sls switsh",
+            "anu door open",
+            "any door is closed"
+          ]
+        },
+        {
+          "req": "21 49",
+          "service": "ReadLocalId",
+          "lid": "49",
+          "example_resp": "61 49 00 00 01",
+          "count": 278,
+          "annotations": [
+            "abs inputds",
+            "abs inputs",
+            "battery viltage",
+            "bext"
+          ]
+        },
+        {
+          "req": "21 50",
+          "service": "ReadLocalId",
+          "lid": "50",
+          "example_resp": "61 50 72 73 73 72",
+          "count": 275,
+          "annotations": [
+            "abs inputds",
+            "abs inputs",
+            "battery viltage",
+            "bext"
+          ]
+        },
+        {
+          "req": "21 53",
+          "service": "ReadLocalId",
+          "lid": "53",
+          "example_resp": "61 53 d2 d2 0f 0f",
+          "count": 256,
+          "annotations": [
+            "compressor",
+            "exhause valve",
+            "inputs",
+            "left sensor"
+          ]
+        },
+        {
+          "req": "21 54",
+          "service": "ReadLocalId",
+          "lid": "54",
+          "example_resp": "61 54 91 9c 0f 0f",
+          "count": 260,
+          "annotations": [
+            "compressor",
+            "exhause valve",
+            "inputs",
+            "left sensor"
+          ]
+        },
+        {
+          "req": "21 55",
+          "service": "ReadLocalId",
+          "lid": "55",
+          "example_resp": "61 55 00 00 00 02",
+          "count": 256,
+          "annotations": [
+            "compressor",
+            "exhause valve",
+            "inputs",
+            "left sensor"
+          ]
+        },
+        {
+          "req": "21 56",
+          "service": "ReadLocalId",
+          "lid": "56",
+          "example_resp": "61 56 01 0f 0f 0f",
+          "count": 116,
+          "annotations": [
+            "abs sls swittch testfel",
+            "abs-sls switsh",
+            "anu door open",
+            "any door is closed"
+          ]
+        },
+        {
+          "req": "21 57",
+          "service": "ReadLocalId",
+          "lid": "57",
+          "example_resp": "61 57 06 0f 0f 0f",
+          "count": 275,
+          "annotations": [
+            "abs inputds",
+            "abs inputs",
+            "battery viltage",
+            "bext"
+          ]
+        },
+        {
+          "req": "21 58",
+          "service": "ReadLocalId",
+          "lid": "58",
+          "example_resp": "61 58 32 0f 0f 0f",
+          "count": 116,
+          "annotations": [
+            "abs sls swittch testfel",
+            "abs-sls switsh",
+            "anu door open",
+            "any door is closed"
+          ]
+        },
+        {
+          "req": "21 59",
+          "service": "ReadLocalId",
+          "lid": "59",
+          "example_resp": "61 59 00 0f 0f 0f",
+          "count": 2,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "31 22 04 00 40 00 00 00 00 00 00 00 00 00",
+          "service": "StartRoutine",
+          "lid": "22",
+          "example_resp": "71 22 20",
+          "count": 1,
+          "annotations": [
+            "abs abs power bleed"
+          ]
+        },
+        {
+          "req": "31 22 04 00 49 c4 00 00 00 00 00 00 00 00",
+          "service": "StartRoutine",
+          "lid": "22",
+          "example_resp": "71 22 20",
+          "count": 1,
+          "annotations": [
+            "abs abs power bleed"
+          ]
+        },
+        {
+          "req": "31 22 10 03 c1 f4 00 00 00 00 00 00 00 00",
+          "service": "StartRoutine",
+          "lid": "22",
+          "example_resp": "71 22 20",
+          "count": 10,
+          "annotations": [
+            "front right test"
+          ]
+        },
+        {
+          "req": "31 22 11 00 c0 7d 00 bb 00 00 00 00 00 00",
+          "service": "StartRoutine",
+          "lid": "22",
+          "example_resp": "71 22 20",
+          "count": 1,
+          "annotations": [
+            "abs module bleed"
+          ]
+        },
+        {
+          "req": "31 22 11 0c c1 f4 00 00 00 00 00 00 00 00",
+          "service": "StartRoutine",
+          "lid": "22",
+          "example_resp": "71 22 20",
+          "count": 10,
+          "annotations": [
+            "front left test"
+          ]
+        },
+        {
+          "req": "31 22 12 00 c0 7d 00 bb 00 00 00 00 00 00",
+          "service": "StartRoutine",
+          "lid": "22",
+          "example_resp": "71 22 20",
+          "count": 1,
+          "annotations": [
+            "abs module bleed"
+          ]
+        },
+        {
+          "req": "31 22 12 30 c1 f4 00 00 00 00 00 00 00 00",
+          "service": "StartRoutine",
+          "lid": "22",
+          "example_resp": "71 22 20",
+          "count": 10,
+          "annotations": [
+            "rear right test"
+          ]
+        },
+        {
+          "req": "31 22 13 00 c0 7d 00 bb 00 00 00 00 00 00",
+          "service": "StartRoutine",
+          "lid": "22",
+          "example_resp": "71 22 20",
+          "count": 1,
+          "annotations": [
+            "abs module bleed"
+          ]
+        },
+        {
+          "req": "31 22 13 c0 c1 f4 00 00 00 00 00 00 00 00",
+          "service": "StartRoutine",
+          "lid": "22",
+          "example_resp": "71 22 20",
+          "count": 10,
+          "annotations": [
+            "rear left test"
+          ]
+        },
+        {
+          "req": "31 22 14 00 c0 7d 00 bb 00 00 00 00 00 00",
+          "service": "StartRoutine",
+          "lid": "22",
+          "example_resp": "71 22 20",
+          "count": 1,
+          "annotations": [
+            "abs module bleed"
+          ]
+        },
+        {
+          "req": "31 25 02 fa",
+          "service": "StartRoutine",
+          "lid": "25",
+          "example_resp": "71 25 20",
+          "count": 2,
+          "annotations": [
+            "sls busser on off"
+          ]
+        },
+        {
+          "req": "31 25 08 fa",
+          "service": "StartRoutine",
+          "lid": "25",
+          "example_resp": "71 25 20",
+          "count": 1,
+          "annotations": [
+            "abs pump relay on off"
+          ]
+        },
+        {
+          "req": "31 2f 28",
+          "service": "StartRoutine",
+          "lid": "2f",
+          "example_resp": "71 2f 20",
+          "count": 2,
+          "annotations": [
+            "sls exhause valva"
+          ]
+        },
+        {
+          "req": "31 30 28",
+          "service": "StartRoutine",
+          "lid": "30",
+          "example_resp": "71 30 20",
+          "count": 1,
+          "annotations": [
+            "sls compressor on off"
+          ]
+        },
+        {
+          "req": "31 31 0a",
+          "service": "StartRoutine",
+          "lid": "31",
+          "example_resp": "71 31 20",
+          "count": 1,
+          "annotations": [
+            "sls busser on off"
+          ]
+        },
+        {
+          "req": "31 33 28",
+          "service": "StartRoutine",
+          "lid": "33",
+          "example_resp": "71 33 20",
+          "count": 5,
+          "annotations": [
+            "raise left"
+          ]
+        },
+        {
+          "req": "31 34 28",
+          "service": "StartRoutine",
+          "lid": "34",
+          "example_resp": "71 34 20",
+          "count": 5,
+          "annotations": [
+            "raise right"
+          ]
+        },
+        {
+          "req": "31 35 28",
+          "service": "StartRoutine",
+          "lid": "35",
+          "example_resp": "71 35 20",
+          "count": 5,
+          "annotations": [
+            "lower left"
+          ]
+        },
+        {
+          "req": "31 36 28",
+          "service": "StartRoutine",
+          "lid": "36",
+          "example_resp": "71 36 20",
+          "count": 5,
+          "annotations": [
+            "lower right"
+          ]
+        }
+      ]
+    },
+    "td5": {
+      "protocol": "kwp2000-lengthprefix",
+      "lids": [
+        "01",
+        "02",
+        "09",
+        "0d",
+        "0e",
+        "10",
+        "1a",
+        "1b",
+        "1c",
+        "1e",
+        "20",
+        "21",
+        "23",
+        "24",
+        "32",
+        "36",
+        "37",
+        "38",
+        "3b",
+        "3d",
+        "40",
+        "57",
+        "87",
+        "a0",
+        "a1",
+        "a2",
+        "a3",
+        "a4",
+        "b3",
+        "b7",
+        "ba",
+        "bd",
+        "be",
+        "c0",
+        "c2"
+      ],
+      "transactions": [
+        {
+          "req": "c1 57 8f",
+          "service": null,
+          "lid": "57",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "slabs end"
+          ]
+        },
+        {
+          "req": "30 a1 ff",
+          "service": "IOControl",
+          "lid": "a1",
+          "example_resp": "70 a1",
+          "count": 1,
+          "annotations": [
+            "fuel pump"
+          ]
+        },
+        {
+          "req": "30 a2 ff",
+          "service": "IOControl",
+          "lid": "a2",
+          "example_resp": "70 a2",
+          "count": 1,
+          "annotations": [
+            "mil lamp"
+          ]
+        },
+        {
+          "req": "30 a3 ff",
+          "service": "IOControl",
+          "lid": "a3",
+          "example_resp": "70 a3",
+          "count": 3,
+          "annotations": [
+            "ac clutch",
+            "test outputs"
+          ]
+        },
+        {
+          "req": "30 a4 ff",
+          "service": "IOControl",
+          "lid": "a4",
+          "example_resp": "70 a4",
+          "count": 1,
+          "annotations": [
+            "ac fan"
+          ]
+        },
+        {
+          "req": "30 b3 ff",
+          "service": "IOControl",
+          "lid": "b3",
+          "example_resp": "70 b3",
+          "count": 1,
+          "annotations": [
+            "glow plugs"
+          ]
+        },
+        {
+          "req": "30 b7 ff",
+          "service": "IOControl",
+          "lid": "b7",
+          "example_resp": "70 b7",
+          "count": 1,
+          "annotations": [
+            "pulse rev counter"
+          ]
+        },
+        {
+          "req": "30 ba ff",
+          "service": "IOControl",
+          "lid": "ba",
+          "example_resp": "70 ba",
+          "count": 1,
+          "annotations": [
+            "temp guager"
+          ]
+        },
+        {
+          "req": "30 bd ff 00 fa 13 88",
+          "service": "IOControl",
+          "lid": "bd",
+          "example_resp": "70 bd",
+          "count": 1,
+          "annotations": [
+            "egr throttle"
+          ]
+        },
+        {
+          "req": "30 be ff 00 0a 13 88",
+          "service": "IOControl",
+          "lid": "be",
+          "example_resp": "70 be",
+          "count": 1,
+          "annotations": [
+            "(markör)"
+          ]
+        },
+        {
+          "req": "30 c0 f0",
+          "service": "IOControl",
+          "lid": "c0",
+          "example_resp": "70 c0",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "1a 87",
+          "service": "ReadEcuId",
+          "lid": "87",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 09",
+          "service": "ReadLocalId",
+          "lid": "09",
+          "example_resp": "61 09 02 fa",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 0d",
+          "service": "ReadLocalId",
+          "lid": "0d",
+          "example_resp": "61 0d 00",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 0e",
+          "service": "ReadLocalId",
+          "lid": "0e",
+          "example_resp": "61 0e 73 73 75 75 74 74 64 64 70 70 30 30 30 30 38 38",
+          "count": 1,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 10",
+          "service": "ReadLocalId",
+          "lid": "10",
+          "example_resp": "61 10 35 ab 35 da",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 1a",
+          "service": "ReadLocalId",
+          "lid": "1a",
+          "example_resp": "61 1a 0d 24 04 81 0b dd 09 5f 10 88 00 04 0c 51 07 59",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 1b",
+          "service": "ReadLocalId",
+          "lid": "1b",
+          "example_resp": "61 1b 02 86 11 21 00 00 13 92",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 1c",
+          "service": "ReadLocalId",
+          "lid": "1c",
+          "example_resp": "61 1c 27 5e 27 74 00 00 00 9c",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 1e",
+          "service": "ReadLocalId",
+          "lid": "1e",
+          "example_resp": "61 1e 00 ca",
+          "count": 10,
+          "annotations": [
+            "read switch"
+          ]
+        },
+        {
+          "req": "21 20",
+          "service": "ReadLocalId",
+          "lid": "20",
+          "example_resp": "61 20 1b bb 0c 8f",
+          "count": 2,
+          "annotations": [
+            "read fuelling",
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 21",
+          "service": "ReadLocalId",
+          "lid": "21",
+          "example_resp": "61 21 00 03",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 23",
+          "service": "ReadLocalId",
+          "lid": "23",
+          "example_resp": "61 23 27 30 27 46",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 24",
+          "service": "ReadLocalId",
+          "lid": "24",
+          "example_resp": "61 24 02",
+          "count": 1,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 32",
+          "service": "ReadLocalId",
+          "lid": "32",
+          "example_resp": "61 32 73 75 74 64 70 30 30 38 73 75 68 64 65 30 32 34 34 31 34 35 20 20 20 20",
+          "count": 1,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 36",
+          "service": "ReadLocalId",
+          "lid": "36",
+          "example_resp": "61 36 00 0d",
+          "count": 10,
+          "annotations": [
+            "read switch"
+          ]
+        },
+        {
+          "req": "21 37",
+          "service": "ReadLocalId",
+          "lid": "37",
+          "example_resp": "61 37 00 00",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 38",
+          "service": "ReadLocalId",
+          "lid": "38",
+          "example_resp": "61 38 00 00",
+          "count": 10,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 3b",
+          "service": "ReadLocalId",
+          "lid": "3b",
+          "example_resp": "61 3b 40 00 00 01 40 00 00 00 00 00 00 00 00 00 00 44 00 40 00 00 00 20 00 00 00 20 00 00 00 00 00 00 00 00 00",
+          "count": 1,
+          "annotations": [
+            "slabs end"
+          ]
+        },
+        {
+          "req": "21 3d",
+          "service": "ReadLocalId",
+          "lid": "3d",
+          "example_resp": "61 3d 02 04 fc 02 0c 00 12 0e 20 14 0a 00 00 02 00 00 00 00",
+          "count": 1,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 40",
+          "service": "ReadLocalId",
+          "lid": "40",
+          "example_resp": "61 40 00 01 ff ff ff fe 00 02 00 00",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "33 c0",
+          "service": "RoutineResults",
+          "lid": "c0",
+          "example_resp": "73 c0 03",
+          "count": 1,
+          "annotations": [
+            "security status"
+          ]
+        },
+        {
+          "req": "27 01",
+          "service": "SecurityAccess",
+          "lid": "01",
+          "example_resp": "67 01 d3 e6",
+          "count": 1,
+          "annotations": [
+            "slabs end"
+          ]
+        },
+        {
+          "req": "27 02 ad 87",
+          "service": "SecurityAccess",
+          "lid": "02",
+          "example_resp": "67 02",
+          "count": 1,
+          "annotations": [
+            "slabs end"
+          ]
+        },
+        {
+          "req": "10 a0",
+          "service": "StartDiagSession",
+          "lid": "a0",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "slabs end"
+          ]
+        },
+        {
+          "req": "31 c0",
+          "service": "StartRoutine",
+          "lid": "c0",
+          "example_resp": "71 c0",
+          "count": 1,
+          "annotations": [
+            "security status"
+          ]
+        },
+        {
+          "req": "31 c2 01",
+          "service": "StartRoutine",
+          "lid": "c2",
+          "example_resp": "71 c2",
+          "count": 1,
+          "annotations": [
+            "injector 1"
+          ]
+        },
+        {
+          "req": "31 c2 02",
+          "service": "StartRoutine",
+          "lid": "c2",
+          "example_resp": "71 c2",
+          "count": 1,
+          "annotations": [
+            "injector 1"
+          ]
+        },
+        {
+          "req": "31 c2 03",
+          "service": "StartRoutine",
+          "lid": "c2",
+          "example_resp": "71 c2",
+          "count": 1,
+          "annotations": [
+            "injector 1"
+          ]
+        },
+        {
+          "req": "31 c2 04",
+          "service": "StartRoutine",
+          "lid": "c2",
+          "example_resp": "71 c2",
+          "count": 1,
+          "annotations": [
+            "injector 1"
+          ]
+        },
+        {
+          "req": "31 c2 05",
+          "service": "StartRoutine",
+          "lid": "c2",
+          "example_resp": "71 c2",
+          "count": 1,
+          "annotations": [
+            "injector 1"
+          ]
+        }
+      ]
+    },
+    "okänd": {
+      "protocol": "kwp2000-lengthprefix",
+      "lids": [
+        "01",
+        "02",
+        "2c",
+        "2d",
+        "c6",
+        "c7",
+        "ca",
+        "cb",
+        "cc",
+        "ce",
+        "d3",
+        "d4",
+        "d5",
+        "d6",
+        "d7",
+        "d8",
+        "d9",
+        "da",
+        "db",
+        "dc",
+        "dd",
+        "de",
+        "df",
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "eb"
+      ],
+      "transactions": [
+        {
+          "req": "1a",
+          "service": "ReadEcuId",
+          "lid": null,
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "21 2c",
+          "service": "ReadLocalId",
+          "lid": "2c",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 2d",
+          "service": "ReadLocalId",
+          "lid": "2d",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 c6",
+          "service": "ReadLocalId",
+          "lid": "c6",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "21 c7",
+          "service": "ReadLocalId",
+          "lid": "c7",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "21 ca",
+          "service": "ReadLocalId",
+          "lid": "ca",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "21 cb",
+          "service": "ReadLocalId",
+          "lid": "cb",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "21 cc",
+          "service": "ReadLocalId",
+          "lid": "cc",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read set eka"
+          ]
+        },
+        {
+          "req": "21 ce",
+          "service": "ReadLocalId",
+          "lid": "ce",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "21 d3",
+          "service": "ReadLocalId",
+          "lid": "d3",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "21 d4",
+          "service": "ReadLocalId",
+          "lid": "d4",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "21 d5",
+          "service": "ReadLocalId",
+          "lid": "d5",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "21 d6",
+          "service": "ReadLocalId",
+          "lid": "d6",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "21 d7",
+          "service": "ReadLocalId",
+          "lid": "d7",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "21 d8",
+          "service": "ReadLocalId",
+          "lid": "d8",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 d9",
+          "service": "ReadLocalId",
+          "lid": "d9",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 da",
+          "service": "ReadLocalId",
+          "lid": "da",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 db",
+          "service": "ReadLocalId",
+          "lid": "db",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 dc",
+          "service": "ReadLocalId",
+          "lid": "dc",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 dd",
+          "service": "ReadLocalId",
+          "lid": "dd",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 de",
+          "service": "ReadLocalId",
+          "lid": "de",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 df",
+          "service": "ReadLocalId",
+          "lid": "df",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 e0",
+          "service": "ReadLocalId",
+          "lid": "e0",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 e1",
+          "service": "ReadLocalId",
+          "lid": "e1",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 e2",
+          "service": "ReadLocalId",
+          "lid": "e2",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 e3",
+          "service": "ReadLocalId",
+          "lid": "e3",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 e4",
+          "service": "ReadLocalId",
+          "lid": "e4",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 e5",
+          "service": "ReadLocalId",
+          "lid": "e5",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 e6",
+          "service": "ReadLocalId",
+          "lid": "e6",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 e7",
+          "service": "ReadLocalId",
+          "lid": "e7",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 e8",
+          "service": "ReadLocalId",
+          "lid": "e8",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 e9",
+          "service": "ReadLocalId",
+          "lid": "e9",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "21 eb",
+          "service": "ReadLocalId",
+          "lid": "eb",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings experimental"
+          ]
+        },
+        {
+          "req": "27 01",
+          "service": "SecurityAccess",
+          "lid": "01",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "27 02 4b 5c",
+          "service": "SecurityAccess",
+          "lid": "02",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "3b 2c 21 00 00 00",
+          "service": "WriteLocalId",
+          "lid": "2c",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "3b 2d 00 22 23 24",
+          "service": "WriteLocalId",
+          "lid": "2d",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "unable to init coms testing with ignition off"
+          ]
+        },
+        {
+          "req": "3b cc XX XX XX XX",
+          "service": "WriteLocalId",
+          "lid": "cc",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "eka 4 006"
+          ]
+        }
+      ]
+    },
+    "autobox": {
+      "protocol": "proprietary-72",
+      "note": "Nanacom 'unable to perform the function' men ECU:n SVARAR med datablock",
+      "functions": {
+        "read_faults": "72 05 04 00 73",
+        "clear_faults": "72 04 05 73",
+        "read_settings": "72 05 93 00 e4",
+        "inputs_pressure": "72 05 0b 00 7c",
+        "inputs_general": "72 05 0b 03 7f",
+        "reset_adaptive": "72 06 83 ff 07 08 ff"
+      },
+      "response_marker": "72 <len> 60 <data> <cs>",
+      "open": "ramformat/checksum + innehållstolkning (kräver lyckad session)"
+    },
+    "ace": {
+      "protocol": "bulk; par-vis framing (67 67 / e0 e0 / f0 f0 — EJ uniform → protokoll, ej artefakt)",
+      "fault_block": "67 67 11 e0 e0 f0 f0 00 00 00 1a 00 00 08 09 80 92 00 00",
+      "fault_set_seen": [
+        "004-02",
+        "004-04",
+        "004-05",
+        "006-1"
+      ],
+      "utilities": {
+        "calib_acc1": "15 15 ff",
+        "calib_acc2": "16 16 ff",
+        "set_calibrated": "10 10 00"
+      },
+      "keepalive": [
+        "04 04 00",
+        "07 07 00"
+      ],
+      "open": "inputs = ett bulk-block → differential-captures för fält-mappning"
+    },
+    "airbag": {
+      "protocol": "kwp-variant",
+      "fault_read": "21 02",
+      "clear": "14 -> 54",
+      "record": "[status][number]; number = Nanacoms display-nr (90 04 = 004, 90 16 = 022)",
+      "status_seen": {
+        "0x90": "open circuit intermittent (kandidat)"
+      },
+      "decoded_in_code": "src/d2diag/airbag/faults.py",
+      "open": "statusbytens bit-betydelser; 21 01 vs 21 02"
+    },
+    "bcu": {
+      "protocol": "valeo",
+      "eka_read": "21 cc",
+      "eka_write": "3b cc <4 byte>",
+      "eka_rdl016": "XXXX (3b cc XX XX XX XX)",
+      "settings_ids": [
+        "c7",
+        "ca",
+        "cb",
+        "d3",
+        "eb",
+        "c6",
+        "ce",
+        "d4",
+        "d5",
+        "d6",
+        "d7"
+      ],
+      "connect": "tänd-cykling: off→key→on→key"
+    }
+  }
+}
