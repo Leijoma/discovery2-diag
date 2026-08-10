@@ -2,18 +2,21 @@
 
 status: "ok" (bekräftat i vår kod), "maybe" (facit känd men rå ej fångad), "todo".
 Menyordning bevarad exakt från reference tool (se `references/reference tool_master_menu.md`,
-avsnitt Auto Gearbox). Inget "ok" än — EAT gick **inte** att läsa med lånade
-reference tool 1 (2026-08-07), så rå-frames saknas helt. Felkodslistan i dicten (39 RAVE
-P-koder) är official + forumbekräftad, men inte on-wire-verifierad av oss.
+avsnitt Auto Gearbox). **Eget protokoll (`72`-ramat)** — sniffat 2026-08-10:
+Nanacom sa "unable to perform the function" MEN ECU:n SVARAR med datablock.
+Funktions-ID:n belagda (nedan); innehållstolkning väntar på lyckad session.
+Felkodslistan i dicten (39 RAVE P-koder) är official + forumbekräftad.
 """
 
 AUTOBOX_MENU = [
     {"cat": "Felkoder", "items": [
         {"name": "Läs fel (Faults - Read)", "status": "maybe",
-         "ref": "dicten 39 P-koder (RAVE, official) + forumbekräftad the factory tool 1–39; EJ läsbar m. reference tool 1; rå ej sniffad"},
-        {"name": "Radera fel (Faults - Clear)", "status": "todo", "ref": "sniffa separat från Read"},
+         "ref": "cmd 72 05 04 00 73 belagt (ECU svarar 72 09 60 …); dicten 39 P-koder; innehåll TBD"},
+        {"name": "Radera fel (Faults - Clear)", "status": "maybe", "ref": "cmd 72 04 05 73 belagt"},
     ]},
     {"cat": "Inputs — general (26)", "items": [
+        # inputs läses via 72 05 0B 00 (pressure) / 72 05 0B 03 (general); svar 72 16 60 … (bulk)
+
         {"name": "1. Throttle position (%)", "status": "todo", "ref": ""},
         {"name": "2. Engine torque (%)", "status": "todo", "ref": ""},
         {"name": "3. Torque requested (%)", "status": "todo", "ref": ""},

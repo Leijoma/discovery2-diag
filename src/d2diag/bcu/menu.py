@@ -153,6 +153,8 @@ BCU_MENU = [
         {"name": "Volumetric sensor", "status": "todo", "ref": ""},
         {"name": "Market", "status": "todo", "ref": "★ enum; marknadskod ej mappad (styr DRL m.m.)"},
         {"name": "EKA option", "status": "todo", "ref": "★ en/dis; kopplat till EKA-kod-utility"},
+        {"name": "EKA-kod (läs/skriv)", "status": "maybe", "ref": "BELAGT: läs 21 CC, skriv 3B CC <4B>. RDL 016 = XXXX (3b cc XX XX XX XX). ⚠️ skriv aldrig blint"},
+        {"name": "BCU settings-ID:er", "status": "maybe", "ref": "auto-extraherade: 21 C6/C7/CA/CB/D3/D4-D7/EB (matcha mot settings-grupper)"},
         {"name": "Cruise control", "status": "todo", "ref": ""},
         {"name": "Air conditioning", "status": "todo", "ref": ""},
         {"name": "Fuel burning heater", "status": "todo", "ref": ""},
