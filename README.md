@@ -1,57 +1,77 @@
 # Discovery 2 Td5 — Open Diagnostic Platform
 
-En öppen, modulär diagnostikplattform för Land Rover Discovery 2 Td5. Målet är
-inte ännu en OBD-läsare, utan ett **bibliotek** där Td5 är första
-implementationen men arkitekturen håller för andra fordon och protokoll.
+An open, modular diagnostics platform for the Land Rover Discovery 2 Td5. The
+D2 is a little too old for CAN bus, so it talks to its control modules over
+**K-line**. With a cheap OBD2-to-USB cable (~€20–30) this project speaks that
+protocol from your own computer — no proprietary tool required.
 
-## Arkitektur
+The goal isn't just another fault-code reader: it's a **library** where the Td5
+is the first implementation, but the layered architecture is meant to extend to
+other modules, vehicles and protocols. There's also a mobile-friendly web
+dashboard on top so it's usable in the driveway from a phone.
 
-Strikt lagerindelning. Varje lager är frikopplat och byggs nerifrån och upp:
+> ⚠️ **Hobby / research project.** Reverse-engineered from bus traffic and
+> community documentation. It reads a lot reliably, but it is not a finished
+> product like a commercial tool. Use at your own risk; see the safety notes.
+
+## What it can do today
+
+- **Read & clear fault codes** — TD5 and SLABS (ABS + self-levelling air
+  suspension) are proven against the car; SRS/airbag is **experimental** and
+  strictly read-only.
+- **Live engine data** from the TD5 ECU — rpm, coolant/air/fuel temperatures,
+  manifold (boost) pressure, battery, accelerator tracks, injector balance, …
+- **SLABS actuator tests** — ABS pump, per-wheel valve tests and the **ABS
+  bleed procedure**, ride-height raise/lower, compressor, exhaust valve, buzzer.
+- **BCU** — read the EKA (emergency key access) code and other settings.
+- **Web dashboard** — a mock mode to explore without a car, and a live mode that
+  talks to the vehicle; switchable at runtime. Plus a "Faults" tab that reads
+  the fault memory from every module in one click.
+- **Reverse-engineering tools** — a passive sniff decoder, an active
+  differential-mapping harness, and a declarative signal store that turns each
+  session into permanent, machine-readable knowledge.
+
+ACE, the automatic gearbox (EAT) and BCU fault lists are partially
+reverse-engineered but not yet decoded in code.
+
+## Hardware
+
+- A generic **OBD2-to-USB K-line cable** (KKL 409.1 style, FTDI FT232 / CH340 /
+  CP210x). ~€20–30 on the usual sites. That's it.
+- Optional, for **passive sniffing** of another tool's traffic: an ESP32 + an
+  L9637D K-line front-end (RX-only), or an OBD splitter with pin 7 passed through.
+
+## Architecture
+
+A strict, bottom-up layer stack — each layer is decoupled and unit-tested:
 
 ```
-Td5        (seed/key ✓ · identifiers/datakonvertering kvar)          ← delvis
-KWP2000    (10/27/3E/21 · negativa svar · responsePending)           ← implementerat
-K-Line     (checksumma, ramformat adr+oadr, fast init, retries)      ← implementerat
-Transport  (rå bytes in/ut — ingen protokollkunskap)                 ← implementerat
+Web dashboard   (stdlib HTTP + SSE, vanilla JS, mobile-first, zero deps)
+Module layer    (Td5 · Slabs · Airbag — establish / read faults / live data / actuators)
+KWP2000         (10/27/3E/21/30/31 · negative responses · responsePending · addressed mode)
+K-Line          (framing addressed+unaddressed, checksum, fast + 5-baud slow init, retries)
+Transport       (raw bytes in/out — no protocol knowledge; pyserial)
 ```
 
-Td5:ans ramning: fast init är **adresserad** (`81 13 F7 81 0C`), resten av
-sessionen **oadresserad** (`02 10 A0 B2`). Båda hanteras av ram-lagret.
-
-Inget ovanför transportlagret vet *hur* bytesen färdas:
+Supporting pieces: a **signal store** (`src/d2diag/signals/*.json`) read and
+written by both the decoders and the auto-mapper, a passive **sniff** subsystem,
+and the `web` dashboard. Nothing above the transport layer knows *how* the bytes
+travel:
 
 ```python
 from d2diag.transport import SerialTransport
-transport = SerialTransport("/dev/ttyUSB0")   # 10400 baud, 8N1
-# kwp = KWP2000(transport)                     # nästa lager
-# td5 = Td5Engine(kwp)
+from d2diag.kwp2000 import KWP2000
+from d2diag.kline import KLine
+from d2diag.td5 import Td5
+
+td5 = Td5(KWP2000(KLine(SerialTransport("/dev/cu.usbserial-XXXX")), tolerant=True))
+with td5:
+    td5.establish()             # fast init → session → SecurityAccess unlock
+    print(td5.read_faults())
+    print(td5.read_all())       # decoded live data
 ```
 
-## Var det körs
-
-Biblioteket körs **på Raspberry Pi:n** (`signalK-test`, nås som `ssh pi`) där
-USB KKL-kabeln sitter. Den seriella porten är därmed lokal, så den tidskänsliga
-K-Line-trafiken (fast init, byte-timing) slipper ett nätverkshopp. Ingen
-TCP-relä till en annan dator behövs.
-
-- **Utveckling:** editeras på Mac (detta repo) / VS Code Remote-SSH, körs på Pi.
-- **`TcpTransport`/brygga:** uppskjuten. Abstraktionen finns, men byggs bara om
-  vi någon gång vill köra biblioteket från Mac mot icke-tidskänsliga tjänster.
-- **Loggning:** `LoggingTransport` sparar all rå TX/RX med tidsstämpel till fil.
-
-## Transportlagret (implementerat)
-
-| Klass | Ansvar |
-|---|---|
-| `Transport` | Abstrakt bas: `open/close/send/receive` + context manager |
-| `SerialTransport` | Seriell K-Line-adapter via pyserial. Testbar med `loop://` |
-| `LoggingTransport` | Dekorerar en Transport, loggar TX/RX till fil |
-
-`SerialTransport` exponerar även seriell lågnivåkontroll (`send_break`,
-`baudrate`, `reset_input_buffer`) som *K-Line-lagret* kommer att använda för fast
-init — aldrig lagren ovanför.
-
-## Köra
+## Quick start
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
@@ -59,52 +79,100 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-Testerna kör utan hårdvara via pyserials `loop://`-ekoport.
+Tests run without hardware against a simulated half-duplex ECU (pyserial's
+`loop://`), so you can hack on it with no car attached.
 
-### Serieport på macOS (KKL-kabeln)
-
-`resolve_serial_port("auto")` hittar kabeln automatiskt (`/dev/cu.usbserial-*`,
-`/dev/cu.wchusbserial*`, `/dev/cu.SLAB_USBtoUART*`), eller ange porten explicit.
-
-- Använd **`/dev/cu.*`**, aldrig `/dev/tty.*` — `tty` blockar och väntar på
-  carrier (DCD); `cu` (call-out) är rätt för en KKL-kabel.
-- **Drivare:** FTDI och CH34x är inbyggda i moderna macOS. CH340-kloner kan kräva
-  WCH VCP-drivaren; CP210x kan kräva Silicon Labs VCP.
-- Ingen `dialout`-grupp/root behövs för `/dev/cu.*` på macOS.
-- FTDI:s standard-latency-timer (16 ms) kan jittra K-line fast-init, men den
-  toleranta `converse()`/`establish()`-retryn kompenserar — behåll `tolerant=True`.
+Run the dashboard:
 
 ```bash
-PYTHONPATH=src python3 tools/verify_ecu.py td5 /dev/cu.usbserial-XXXX   # read-only
+# Try it with no car (mock data):
+PYTHONPATH=src python3 tools/dashboard.py --mock
+
+# Against the real vehicle (ignition on, stationary):
+PYTHONPATH=src python3 tools/dashboard.py --serial /dev/cu.usbserial-XXXX
 ```
+
+Then open <http://localhost:8080> — from the same machine, or from your phone on
+the same network. You can switch mock ↔ live from the header. The machine with
+the cable runs the server; the phone is just a browser (it never touches the
+cable).
+
+Read-only sanity check against a module:
+
+```bash
+PYTHONPATH=src python3 tools/verify_ecu.py td5   /dev/cu.usbserial-XXXX
+PYTHONPATH=src python3 tools/verify_ecu.py slabs /dev/cu.usbserial-XXXX
+```
+
+### Serial port on macOS
+
+`resolve_serial_port("auto")` finds the cable automatically
+(`/dev/cu.usbserial-*`, `/dev/cu.wchusbserial*`, `/dev/cu.SLAB_USBtoUART*`), or
+pass the port explicitly.
+
+- Use **`/dev/cu.*`**, never `/dev/tty.*` — `tty` blocks waiting for carrier
+  (DCD); `cu` (call-out) is correct for a KKL cable.
+- **Drivers:** FTDI and CH34x are built into modern macOS. CH340 clones may need
+  the WCH VCP driver; CP210x may need the Silicon Labs VCP.
+- No `dialout` group / root needed for `/dev/cu.*` on macOS.
+- FTDI's default 16 ms latency timer can jitter K-line fast init, but the
+  tolerant `converse()`/`establish()` retry compensates — keep `tolerant=True`.
+
+## Safety
+
+K-line is a shared bus and this tool can *write* to ECUs. The design is
+read-first and conservative:
+
+- Fault reads and live data are read-only.
+- Actuator tests (ABS pump, valves, air suspension) run only when you press the
+  button, always behind a confirmation, and should be done **stationary with the
+  ignition on**.
+- **The airbag/SRS module is read-only by construction** — no clear, no outputs,
+  no security writes. Never actuate pyrotechnic circuits.
+- BCU output writes and the active mapping harness are gated / read-only by
+  default.
 
 ## Status
 
-- [x] Transport (SerialTransport, LoggingTransport, tester)
-- [x] K-Line (ramformat adresserat+oadresserat, checksumma, fast init, eko, timeout/retries)
-- [x] KWP2000 (StartDiagnosticSession, TesterPresent, SecurityAccess, ReadDataByLocalIdentifier, negativa svar, responsePending)
-- [~] Td5 (SecurityAccess seed→key ✓ · session ✓ · identifiers/skalning kvar)
+- [x] Transport, K-Line (addressed + unaddressed framing, fast + slow init), KWP2000
+- [x] Td5 — SecurityAccess seed→key, session, identifiers/scaling (validated on the car)
+- [x] SLABS — faults, live data, actuator tests + ABS bleed
+- [~] Airbag/SRS — read-only fault read (experimental, addressed framing at 0x5B)
+- [~] ACE / auto gearbox (EAT) / BCU — partially reverse-engineered
+- [x] Web dashboard, signal store, sniff decoder, active differential mapping
 
-Hårdvara under första utvecklingen: USB KKL 409.1 (FTDI FT232RL). Alla lager är
-enhetstestade utan hårdvara mot en simulerad halv-duplex-ECU; den skarpa
-verifieringen sker när kabeln sitter i bilen.
+~160 unit tests, all passing, run without hardware.
 
-## Krediter och referenser
+## Contributing
 
-Det här projektet står på axlarna av andras arbete. Fullständiga licenser och
-exakt vad som använts finns i [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+If you're equally nerdy — building something similar, have useful documentation,
+or want to help develop and test — contributions of **data, mappings, docs or
+code** are very welcome. Verifying every mapping (warning lights, sensor values,
+status bits) against the car is slow, so extra hands and extra cars help a lot.
+Open an issue or a pull request.
 
-- **seed→key** (immobiliser SecurityAccess): portad från
+## Credits & references
+
+This project stands on other people's work. Full licenses and exactly what was
+used are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+- **seed→key** (immobiliser SecurityAccess): ported from
   [pajacobson/td5keygen](https://github.com/pajacobson/td5keygen) (BSD-2-Clause).
-- **protokollreferens** (ramformat, ECU-adresser, init/session, identifiers,
-  felkodskarta): [EA2EGA/Ekaitza_Itzali](https://github.com/EA2EGA/Ekaitza_Itzali)
-  — endast protokollfakta, ingen kod kopierad. Krediter där till OffTrack
-  (ECU-disassembly) och Luca72 (Arduino-referens).
-- **K-line-front** (fast init-timing, burst-läsning, L9637D):
+- **protocol reference** (framing, ECU addresses, init/session, identifiers,
+  fault-code map): [EA2EGA/Ekaitza_Itzali](https://github.com/EA2EGA/Ekaitza_Itzali)
+  — protocol facts only, no code copied. Credits there to OffTrack (ECU
+  disassembly) and Luca72 (Arduino reference).
+- **K-line front-end** (fast-init timing, burst reads, L9637D):
   [muki01/OBD2_K-line_Reader](https://registry.platformio.org/libraries/muki01/OBD2%20K-Line) (MIT).
-- **Td5-felkodstexter**: korsvaliderade mot en publik, community-spridd Td5-felkodslista
-  (endast offset/bit → feltext).
-- Tack till **Land Rover-communityn** (forum och delade anteckningar) för felkoder,
-  menystrukturer och protokolltips som gjort reverse engineering-arbetet möjligt.
+- **Td5 fault-code text**: cross-validated against a public, community-maintained
+  Td5 fault-code list (offset/bit → fault text only).
+- Thanks to the **Land Rover community** (forums and shared notes) for fault
+  codes, menu structures and protocol tips that made the reverse engineering
+  possible.
 
-Om du bidrar med data eller kod: lägg gärna till dig själv här.
+Contributing data or code? Add yourself here.
+
+## License
+
+MIT (see `pyproject.toml`). Third-party components retain their own licenses —
+see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
