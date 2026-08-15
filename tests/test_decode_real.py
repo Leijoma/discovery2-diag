@@ -65,13 +65,13 @@ def test_running_injector_balance_40():
 
 
 # --------------------------------------------------------------------------- #
-# LID 1B — accelerator-pedalgivare. Nanacom: Accel. Way 1/2/3 (V) + Supply (V).
+# LID 1B — accelerator-pedalgivare. reference tool: Accel. Way 1/2/3 (V) + Supply (V).
 # 4 spänningsfält (foten av pedalen → way3 = 0 V). SNIFFAT 2026-08-08.
 # --------------------------------------------------------------------------- #
 def test_accel_1b_four_voltage_ways():
     v = decode_lid(0x1B, _d("02 86 11 1c 00 00 13 92"))
     assert round(v["accel_way1"], 3) == 0.646
     assert round(v["accel_way2"], 3) == 4.380
-    assert round(v["accel_way3"], 2) == 0.0     # Nanacom "Way 3 (V)", foten av → 0 V
+    assert round(v["accel_way3"], 2) == 0.0     # reference tool "Way 3 (V)", foten av → 0 V
     assert round(v["accel_supply"], 2) == 5.01  # 5V-referens
     assert len(v) == 4  # exakt fyra fält (Way 1/2/3 + Supply)

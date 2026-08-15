@@ -1,7 +1,7 @@
 """Airbag (TRW SPS Type 2A) reference tool-meny + vår täckning — driver Karta-fliken.
 
 status: "ok" (bekräftat i vår kod), "maybe" (facit känd men rå ej fångad), "todo".
-Menyordning bevarad exakt från reference tool (se `references/reference tool_master_menu.md`,
+Menyordning bevarad exakt från reference tool (se `references/reference_tool_master_menu.md`,
 avsnitt Airbag). ECU:n är begränsad: Read/Clear Faults + Settings (ID/config) —
 **ingen** live Inputs- eller Outputs-sida antas.
 

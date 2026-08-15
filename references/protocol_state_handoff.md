@@ -2,7 +2,7 @@
 
 Detta dokument sammanfattar vad som är **belagt** vs **kandidat** vs **öppet**, så
 en andra analytiker kan bygga vidare utan att härleda om. Bilen: RDL 016, Td5 ES,
-ZF4HP22/24. Sniff = passiv ESP32 (RX-only) på K-line pin 7, medan Nanacom kör.
+ZF4HP22/24. Sniff = passiv ESP32 (RX-only) på K-line pin 7, medan reference tool kör.
 
 ## Loggfiler (rådata)
 | Fil | Innehåll |
@@ -30,7 +30,7 @@ ZF4HP22/24. Sniff = passiv ESP32 (RX-only) på K-line pin 7, medan Nanacom kör.
 - **Fuelling (BELAGT mot bil, se labeled_captures):** `09`=rpm, `0D`=road speed,
   `10`=batteri(u16/1000), `1A`=temp×4 (u16/10−273.2; ext_temp@8 = oansluten 150°C),
   `1B`=accel way1/2/3+supply (4×u16/1000 V), `1C`@0=MAP, `21`=idle err(s16), `23`=ambient×2,
-  `40`=cyl-balans 1–5 (s16). OBS Nanacom visar tryck i **kPa** = vår bar × 100.
+  `40`=cyl-balans 1–5 (s16). OBS reference tool visar tryck i **kPa** = vår bar × 100.
 - **Outputs (30 xx FF):** A1 fuel pump, A2 MIL, A3 AC-clutch, A4 AC-fan, B3 glow, B7 rev-counter,
   BA temp-gauge, BE wastegate(+PWM), BD EGR(+PWM). **Injektorer:** `31 C2 0<n>` (cyl 1–5). Kodat.
 - **Security:** `31 C0` + `33 C0` → `73 C0 03` (03 = ej immobiliserad). Kodat.
@@ -64,7 +64,7 @@ ZF4HP22/24. Sniff = passiv ESP32 (RX-only) på K-line pin 7, medan Nanacom kör.
   read-only-klass kräver stöd för adresserad per-meddelande-framing (annan väg än Td5/Slabs).
 
 ## Auto Gearbox (EAT, Bosch GS8.87) — **annat protokoll (`72`-ramat)**
-- Nanacom sa "unable to perform the function", MEN ECU:n **svarar med datablock**.
+- reference tool sa "unable to perform the function", MEN ECU:n **svarar med datablock**.
 - **BEKRÄFTAT (reproducerat i två oberoende sessioner — `faultread-20260809.log` + `-3.log`):**
   - Read faults: `72 05 04 00 73` → **`72 09 60 01 00 00 00 00 1B`**
   - Clear faults: `72 04 05 73` → `72 04 60 99 FF`
@@ -73,7 +73,7 @@ ZF4HP22/24. Sniff = passiv ESP32 (RX-only) på K-line pin 7, medan Nanacom kör.
   - Payload `01 00 00 00 00` i read-fault-svaret: **tolka INTE** ännu (ej fault-count/tom lista/DTC-struktur).
 - Övriga funktioner (ur äldre logg): settings `72 05 93 00 E4`, inputs pressure `72 05 0B 00 7C`,
   inputs general `72 05 0B 03 7F`, reset adaptive `72 06 83 FF 07 08 FF`. Svar: `72 <len> 60 <data> <cs>`.
-- **ÖPPET:** innehållstolkning, `60`-betydelsen, varför Nanacom förkastar svaret — vänta på lyckad session.
+- **ÖPPET:** innehållstolkning, `60`-betydelsen, varför reference tool förkastar svaret — vänta på lyckad session.
 
 ## ACE (Lucas) — bulk-block
 - Fault-block (engångs): `67 67 11 e0 e0 f0 f0 00 00 00 1a 00 00 08 09 80 92 00 00` = fel-set

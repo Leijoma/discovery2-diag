@@ -1,7 +1,7 @@
-# Felkodsläsning — krysslista (innan Nanacom lämnas tillbaka)
+# Felkodsläsning — krysslista (innan reference tool lämnas tillbaka)
 
 Mål: läs **Read Faults** på så många moduler som möjligt. Du behöver **inte**
-sniff-verktyget för detta — läs på Nanacoms skärm och notera. För varje kod:
+sniff-verktyget för detta — läs på reference tools skärm och notera. För varje kod:
 **kod + text + current/logged/intermittent (+ occurrence om det visas).**
 
 > ⚠️ **Airbag/SRS: bara LÄSA.** Aktivera aldrig outputs (pyroteknik).
@@ -32,7 +32,7 @@ Detta är enda modulen vi inte fått ut felkoder från (gick ej läsa förra gå
       (tidigare: `004` varningslampa + `022` v. bältessträckare)
 
 ## 6. BCU (Valeo) — ingen konventionell felkodslista
-- [ ] Anslut: Nanacom säger *"turn off ignition then press a key"* → slå **av** tänd, tryck tangent →
+- [ ] Anslut: reference tool säger *"turn off ignition then press a key"* → slå **av** tänd, tryck tangent →
       *"turn on transmission then press a key"* → slå **på** tänd, tryck tangent → ansluter
 - [ ] (Ingen felkodslista att läsa; hoppa om tidsbrist. EKA-koden `XXXX` är redan noterad.)
 

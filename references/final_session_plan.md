@@ -1,7 +1,7 @@
-# Kort Nanacom-session — fånga exakt detta (prioriterat)
+# Kort reference tool-session — fånga exakt detta (prioriterat)
 
 Vi har redan **råbytesen** för det mesta (ur `session.log`) — det vi saknar är
-Nanacoms **klartext-värden** att korrelera mot. Därför är de mest värdefulla
+reference tools **klartext-värden** att korrelera mot. Därför är de mest värdefulla
 uppgifterna **"läs på skärmen"** och behöver **inte** ens en fungerande sniff.
 
 ## 0. Snabbkoll av sniffern (30 s)

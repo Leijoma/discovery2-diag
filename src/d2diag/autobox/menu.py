@@ -1,9 +1,9 @@
 """Auto Gearbox GS8.87.0 (Bosch, ZF4HP22-24) reference tool-meny + vår täckning.
 
 status: "ok" (bekräftat i vår kod), "maybe" (facit känd men rå ej fångad), "todo".
-Menyordning bevarad exakt från reference tool (se `references/reference tool_master_menu.md`,
+Menyordning bevarad exakt från reference tool (se `references/reference_tool_master_menu.md`,
 avsnitt Auto Gearbox). **Eget protokoll (`72`-ramat)** — sniffat 2026-08-10:
-Nanacom sa "unable to perform the function" MEN ECU:n SVARAR med datablock.
+reference tool sa "unable to perform the function" MEN ECU:n SVARAR med datablock.
 Funktions-ID:n belagda (nedan); innehållstolkning väntar på lyckad session.
 Felkodslistan i dicten (39 RAVE P-koder) är official + forumbekräftad.
 """

@@ -1,7 +1,7 @@
 """Airbag (TRW SPS 2A) felavkodning — BELAGT ur sniff 2026-08-10 (RDL 016).
 
 Felminnet läses via ``21 02`` (svaret börjar ``61 02``). Datafältet är poster om
-**2 byte: [status][fault-number]**, där fault-number är **Nanacoms display-nummer
+**2 byte: [status][fault-number]**, där fault-number är **reference tools display-nummer
 direkt** (`0x04`=004, `0x16`=022). Tomma poster = `00 00`. Radera = `14` → `54`.
 
 Belagt exempel (RDL 016): ``61 02 90 04 90 16 00 00 …`` →
@@ -24,7 +24,7 @@ STATUS = {0x90: "open circuit intermittent (candidate)"}
 def decode_faults(data: bytes) -> "list[dict]":
     """Avkoda datafältet (efter ``61 02``) → lista med ``{number, status, status_text}``.
 
-    Number = Nanacoms display-felnummer (t.ex. 4 → 004). Slå upp texten i dicten
+    Number = reference tools display-felnummer (t.ex. 4 → 004). Slå upp texten i dicten
     (Airbag position=display-kod)."""
     out: "list[dict]" = []
     for i in range(0, len(data) - 1, 2):

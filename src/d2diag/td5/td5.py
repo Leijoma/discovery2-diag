@@ -24,7 +24,7 @@ FAULT_LID = 0x3B
 _CLEAR_FAULTS_ROUTINE = 0xDD
 _CLEAR_FAULTS_PADDING = b"\x00" * 18
 
-# Output-tester — BELAGT ur sniff 2026-08-08 (session.log, RDL 016). Nanacom
+# Output-tester — BELAGT ur sniff 2026-08-08 (session.log, RDL 016). reference tool
 # pulsar TD5-utgångar via IOControl `30 <lid> ff`; wastegate/EGR tar PWM-parametrar.
 # Injektorklick är StartRoutine `31 C2 0<n>`. Alla svarar `70/71 <id>` (ack, ingen data).
 _OUTPUTS: "dict[str, tuple[int, bytes]]" = {
@@ -157,7 +157,7 @@ class Td5(EcuSession):
         """Läs immobiliser-status (`31 C0` starta + `33 C0` läs). Returnerar
         statusbyten — **0x03 = ej immobiliserad** (belagt RDL 016). Read-only.
 
-        (Motsvarar Nanacoms 'GET SECURITY STATUS'. 'LEARN SECURITY CODE' är en
+        (Motsvarar reference tools 'GET SECURITY STATUS'. 'LEARN SECURITY CODE' är en
         annan, tillståndsändrande rutin och implementeras medvetet inte.)"""
         self._kwp.start_routine(_SECURITY_ROUTINE)
         result = self._kwp.request_routine_results(_SECURITY_ROUTINE)

@@ -1365,7 +1365,7 @@
     "autobox": {
       "protocol": "proprietary-72",
       "framing": "72 <len> <data> <XOR-cs> (request; XOR verifierat). Svar: 72 <len> 60 <data> <cs>",
-      "note": "Nanacom 'unable to perform the function' men ECU:n SVARAR med datablock",
+      "note": "reference tool 'unable to perform the function' men ECU:n SVARAR med datablock",
       "functions": {
         "read_faults": "72 05 04 00 73",
         "clear_faults": "72 04 05 73",
@@ -1401,7 +1401,7 @@
       "protocol": "kwp-variant",
       "fault_read": "21 02",
       "clear": "14 -> 54",
-      "record": "[status][number]; number = Nanacoms display-nr (90 04 = 004, 90 16 = 022)",
+      "record": "[status][number]; number = reference tools display-nr (90 04 = 004, 90 16 = 022)",
       "status_seen": {
         "0x90": "open circuit intermittent (kandidat)"
       },

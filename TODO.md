@@ -33,6 +33,20 @@ Status 2026-08-03: **uppe på 192.168.68.62, SSH öppen, lösenordsinlogg funkar
 Klart: Td5 (livedata + felkoder + skalning korsvaliderad), tolerant läsning, 5-baud slow init,
 SLABS-skelett, passiv sniffer, realtidsdashboard (motorschema + radera-felkoder). 76 pytest gröna.
 
+## Distribution / paketering (för icke-tekniska användare)
+- [ ] **Dubbelklickbar app med PyInstaller** → `.app` (Mac) + `.exe` (Windows) som
+      startar servern och öppnar webbläsaren automatiskt. Ingen terminal/pip/GitHub.
+      Behöver: launcher-entrypoint (starta `DiagServer` + `webbrowser.open`), `.spec`-fil,
+      byggskript per OS (PyInstaller kan inte cross-compila — Mac bygger Mac, Windows Windows).
+      Distribuera som zip-nedladdning (hemsida/Drive/Release-länk). OBS Gatekeeper/SmartScreen-
+      varning för osignerad app (instruera "högerklicka → Öppna", eller signera senare).
+- [ ] **Kabel-drivrutinsnotis** i kom-igång: FTDI/CH34x inbyggt i macOS; Windows+CH340 kan
+      kräva WCH VCP-drivrutin.
+- Mobil (utrett): iPhone kan **inte** använda USB-K-line-kabeln (iOS släpper ej in USB-serial).
+  Android kan tekniskt via native app (`usb-serial-for-android`) men timingkänsligt (fast/slow
+  init) — avvaktar. **Rekommenderad väg:** telefonen som *skärm* (webbläsare mot dator/Pi), inte
+  kabelvärd. "Bara telefon i bilen" = Raspberry Pi Zero W med kabeln + WiFi.
+
 ## Kräver hårdvara/extern
 - OBD-splitter med **pin 7 genomkopplad** (för sniffning).
 - Ev. lånat D2-verktyg (reference tool/a commercial tool) att sniffa.

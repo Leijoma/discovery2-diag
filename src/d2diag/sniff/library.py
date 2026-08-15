@@ -20,7 +20,7 @@ KNOWN: "dict" = {
     "autobox": {
         "protocol": "proprietary-72",
         "framing": "72 <len> <data> <XOR-cs> (request; XOR verifierat). Svar: 72 <len> 60 <data> <cs>",
-        "note": "Nanacom 'unable to perform the function' men ECU:n SVARAR med datablock",
+        "note": "reference tool 'unable to perform the function' men ECU:n SVARAR med datablock",
         "confirmed": {
             "read_faults": "72 05 04 00 73 -> 72 09 60 01 00 00 00 00 1b (reproducerat i 2 sessioner)",
             "clear_faults": "72 04 05 73 -> 72 04 60 99 ff",
@@ -38,7 +38,7 @@ KNOWN: "dict" = {
             "72 04 60 99 ff = GENERISKT ack (= svaret pa keepalive 72 04 1e 68), EJ fault-specifikt",
             "read-fault-payload 01 00 00 00 00: tolka INTE som count/tom-lista/DTC annu",
         ],
-        "open": "innehallstolkning, 60-betydelsen, varfor Nanacom forkastar svaret (kraver lyckad session)",
+        "open": "innehallstolkning, 60-betydelsen, varfor reference tool forkastar svaret (kraver lyckad session)",
     },
     "ace": {
         "protocol": "bulk; par-vis framing (67 67 / e0 e0 / f0 f0 — EJ uniform → protokoll, ej artefakt)",
@@ -54,7 +54,7 @@ KNOWN: "dict" = {
         "framing_example": "82 5b f7 21 02 -> f7 5b 61 02 90 04 90 16 00 00 (faultread-20260809.log rad 885)",
         "fault_read": "21 02",
         "clear": "14 -> 54",
-        "record": "[status][number]; number = Nanacoms display-nr (90 04 = 004, 90 16 = 022)",
+        "record": "[status][number]; number = reference tools display-nr (90 04 = 004, 90 16 = 022)",
         "status_seen": {"0x90": "open circuit intermittent (kandidat)"},
         "security": "SecurityAccess pa 0x5B: seed 44 8E -> key 00 6E -> positivt 67 02 (troligen fore clear). "
                     "KORR: detta par ar AIRBAG, ej 'osaker/BCU' (enda kompletta seed->key med positiv kvittens)",

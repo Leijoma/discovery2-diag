@@ -3,7 +3,7 @@
 Under sniffning: kör → analysera → **uppdatera status/ref här** → repeat. Dashboardens
 "Karta"-flik renderar detta. status: "ok" (bekräftat i kod/avkodning), "maybe"
 (troligt, ej verifierat), "todo" (ej mappat än). `ref` = LID/rutin/kommando.
-Källa till menyn: ägarens `Discovery 2/reference tool.txt`. Se `references/reference tool_menu_map.md`.
+Källa till menyn: ägarens `Discovery 2/reference tool.txt`. Se `references/reference_tool_menu_map.md`.
 
 Uppdatering 2026-08-08: full per-input-svep sniffad (session.log). **Alla input-
 LID:er identifierade** — SLS analog `21 53/54/55`, ABS analog `21 43/44/49/50/57`,

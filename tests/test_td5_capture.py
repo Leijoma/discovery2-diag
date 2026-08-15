@@ -1,4 +1,4 @@
-"""TD5-lagret verifierat mot VERKLIG sniffad Nanacom-trafik (2026-08-08, RDL 016).
+"""TD5-lagret verifierat mot VERKLIG sniffad reference tool-trafik (2026-08-08, RDL 016).
 
 Exakta bytes ur ``logs/session.log`` (TD5-sessionen). Bevisar att vårt lager:
   - räknar rätt SecurityAccess-nyckel (seed→key),

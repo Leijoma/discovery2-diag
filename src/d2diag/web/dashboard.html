@@ -309,7 +309,7 @@
   <!-- ===================== MAP / COVERAGE ===================== -->
   <div class="view" id="view-karta">
     <section>
-      <h2>Coverage — reference tool menu vs our code</h2>
+      <h2>Coverage — reference tool vs our code</h2>
       <div id="karta-picker" class="btns" style="margin-bottom:10px"></div>
       <div id="karta-body"><div class="hint">Loading…</div></div>
     </section>
@@ -330,7 +330,7 @@
   <div class="view" id="view-fangst">
     <section>
       <h2>Capture — label the codes as they stream</h2>
-      <div class="hint">Pick a screen in reference tool. Codes polled over and over show up here. Type what reference tool shows (values in displayed order) and save.</div>
+      <div class="hint">Pick a screen on the reference tool. Codes polled over and over show up here. Type what the reference tool shows (values in displayed order) and save.</div>
       <div id="fangst-badge" style="margin:8px 0"></div>
       <div class="btns"><button class="btn ok wide" id="fangst-new">⬤ New capture — wait for a read</button></div>
       <div id="fangst-status" style="margin:10px 0"></div>
@@ -421,7 +421,7 @@
   }
   document.getElementById("faults-run").onclick=runFaultScan;
 
-  // ---- Map: live sniff integration (lights up when reference tool polls the field) ----
+  // ---- Map: live sniff integration (lights up when the reference tool polls the field) ----
   let _kSniffTimer=null, _ksniff=null, _kCounts={}, _kActive=new Set(), _kModule=null, _kMeta={}, _kFocus=null, _kBaked=false;
   function stopKartaSniff(){ if(_kSniffTimer){ clearInterval(_kSniffTimer); _kSniffTimer=null; } }
   function startKartaSniff(module){
@@ -445,7 +445,7 @@
     if(m.status==null) return '<span class="sniffbad off">○ no sniff — start the dashboard with <code>--sniff PORT</code></span>';
     if(m.status==="error") return `<span class="sniffbad err">● sniff error: ${m.error||"?"}</span>`;
     if(m.status==="live" && m.age!=null && m.age<3){ const demo=(m.source||"").startsWith("replay")?" · demo":""; const pol=(active&&active.size)?(" · polling "+Array.from(active).slice(0,6).join(" ")):""; return `<span class="sniffbad ok">● LIVE · ${m.fps||0} frames/s · ${m.frames||0} reads${pol}${demo}</span>`; }
-    if(m.age!=null) return `<span class="sniffbad stale">● no traffic for ${m.age}s — is the tap connected / is reference tool on?</span>`;
+    if(m.age!=null) return `<span class="sniffbad stale">● no traffic for ${m.age}s — is the tap connected / is the reference tool on?</span>`;
     return `<span class="sniffbad wait">○ waiting for traffic… (${(m.source||"").replace(/^serial:/,"")})</span>`;
   }
   function truthKey(cat,name){ return "truth:"+_kModule+"|"+cat+"|"+name; }
@@ -556,7 +556,7 @@
     return `<div class="mrow ${i.status}" data-lid="${i.lid}" data-sig="${i.sig||""}" data-cat="${encodeURIComponent(cat)}" data-name="${encodeURIComponent(i.name)}">`+
       `<div class="mrow-top"><span>${mIcon(i.status)} ${i.name}</span><span class="mref">${i.ref||""}</span></div>`+
       `<div class="mrow-live"><span class="mlive-dot"></span><span class="mour">ours: <b>${our}</b></span>`+
-        `<input class="mtruth" placeholder="read from reference tool (plaintext)">`+
+        `<input class="mtruth" placeholder="read from the reference tool (plaintext)">`+
         `<button class="mrec">save</button></div>`+
       `<div class="mrow-raw"><code class="mrawv">${raw}</code></div>`+
       `<div class="mauto"></div></div>`;
@@ -573,7 +573,7 @@
       const save=()=>{
         const text=(inp.value||"").trim(); if(!text){ inp.focus(); return; }
         const raws={}; row.dataset.lid.split(/\s+/).forEach(x=>{ if(_ksniff&&_ksniff[x]) raws[x]=_ksniff[x].raw; });
-        if(!Object.keys(raws).length){ showCmd("No sniff data for that LID yet — is reference tool on the field?", false); return; }
+        if(!Object.keys(raws).length){ showCmd("No sniff data for that LID yet — is the reference tool on the field?", false); return; }
         const rs=getReadings(rk); rs.push({text, raws}); setReadings(rk,rs); inp.value="";
         autoSolve(row, rk);
       };
@@ -704,7 +704,7 @@
     btn.disabled = false;
   });
 
-  // ---- Capture: batch collection (press "New capture" → read in reference tool → describe) ----
+  // ---- Capture: batch collection (press "New capture" → read on the reference tool → describe) ----
   let _fTimer=null, _fBase={}, _fBatch=[], _fBatchRaw={}, _fBatchCount={}, _fArmed=false, _fArmStart=0, _fLastData=0,
       _fSnap={}, _fMeta={}, _fStatus="idle", _fSig="";
   function stopFangst(){ if(_fTimer){ clearInterval(_fTimer); _fTimer=null; } }
@@ -741,10 +741,10 @@
     const st=document.getElementById("fangst-status");
     if(st){
       if(_fStatus==="armed"){ const left=Math.max(0,4-Math.round((Date.now()-(_fLastData||_fArmStart))/1000));
-        st.innerHTML='<span class="sniffbad stale">● waiting for a read… press READ in reference tool ('+left+'s)</span>'; }
+        st.innerHTML='<span class="sniffbad stale">● waiting for a read… press READ on the reference tool ('+left+'s)</span>'; }
       else if(_fStatus==="done") st.innerHTML='<span class="sniffbad ok">● '+_fBatch.length+' codes captured — describe and save</span>';
-      else if(_fStatus==="timeout") st.innerHTML='<span class="sniffbad err">no data arrived — press READ in reference tool and try again</span>';
-      else st.innerHTML='<span class="sniffbad off">press "New capture", read in reference tool, describe the codes</span>';
+      else if(_fStatus==="timeout") st.innerHTML='<span class="sniffbad err">no data arrived — press READ on the reference tool and try again</span>';
+      else st.innerHTML='<span class="sniffbad off">press "New capture", read on the reference tool, describe the codes</span>';
     }
     const sig=_fStatus+"|"+_fBatch.join(",");
     if(sig!==_fSig){ _fSig=sig; buildBatchCards(); }
@@ -761,7 +761,7 @@
       return '<div class="fcard" data-lid="'+lid+'"><div class="fcard-h"><b>21 '+lid+'</b><span class="fdot fcnt">×'+(_fBatchCount[lid]||1)+'</span></div>'+
         '<div class="fraw">'+raw+'</div>'+
         '<div class="fmap">our mapping: <span class="four">'+fDecodeText(l)+'</span></div>'+
-        '<div class="frow"><input class="ftext" placeholder="what does reference tool show? (values in displayed order)"></div></div>'; }).join("")+
+        '<div class="frow"><input class="ftext" placeholder="what does the reference tool show? (values in displayed order)"></div></div>'; }).join("")+
       '<button class="btn ok wide" id="fangst-savebatch">Save batch</button>';
     const sb=document.getElementById("fangst-savebatch"); if(sb) sb.onclick=saveBatch;
   }

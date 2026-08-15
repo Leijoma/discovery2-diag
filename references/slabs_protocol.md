@@ -79,7 +79,7 @@ finns men måste **loggas om** (lista gärna reference tool-ordningen samtidigt)
 Td5-lagrets toleranta läsning + samma sessionsmönster.
 
 ## Input-LID:er (sniffat 2026-08-08, full per-input-svep)
-Nanacom pollar en fast LID-uppsättning per skärm; operatören stegade igenom
+reference tool pollar en fast LID-uppsättning per skärm; operatören stegade igenom
 posterna. Alla input-LID:er nu identifierade (offset/skala per post återstår att
 isolera med riktade captures):
 
@@ -92,7 +92,7 @@ isolera med riktade captures):
 
 ## Byte-varians ur session.log (`analyze_capture.py --variance`)
 Vilka bytes som **rörde sig** under captet = redan-differential-kandidater. Smalnar
-av vad som ska korreleras mot Nanacom-värden:
+av vad som ska korreleras mot reference tool-värden:
 
 | LID | Byte-struktur (belagt ur varians) |
 |---|---|
@@ -109,7 +109,7 @@ av vad som ska korreleras mot Nanacom-värden:
 = bit `0x20`; byte0 konst); `21 36` konstant `00 0D` (fixa switchar). Vi vet alltså
 *vilken byte* men inte *vilken switch* — kräver annoterad toggle.
 
-## Fält-identitet ur Nanacom-skärmläsning 2026-08 (struktur belagd, skala kandidat)
+## Fält-identitet ur reference tool-skärmläsning 2026-08 (struktur belagd, skala kandidat)
 Värden avlästa på skärmen, korrelerade mot gammal råbyte (ej samma ögonblick →
 skala = kandidat). **Struktur (vilken LID = vilken skärmsektion) är belagd** via
 visningsordning + värdeintervall:
@@ -117,7 +117,7 @@ visningsordning + värdeintervall:
 | LID | Fält | Kandidat |
 |---|---|---|
 | `21 43` | **4× hjulhastighet** (2 byte/hjul) | stillastående `7c 00` = 1,7 km/h (baslinje) |
-| `21 50` | **4× ABS-sensor-spänning** (1 byte/hjul) | FR byte0 `0x72`=114 → 2,17 V (≈×0,019); FL blank i Nanacom |
+| `21 50` | **4× ABS-sensor-spänning** (1 byte/hjul) | FR byte0 `0x72`=114 → 2,17 V (≈×0,019); FL blank i reference tool |
 | `21 44` | **stort analogblock (14 byte):** 8 ventilspänningar + pump relay/monitor + batteri + ECU-supply | ventiler `0x01–03`→ ×0,01 V (0,01–0,03); **byte12/13 = batteri/ECU-supply** (~`0xb3/b1`→ ×1/16 ≈ 11,3–11,5 V; VARIERAR = matchar) |
 | `21 53` | **L/R sensor-supply** (byte0/1) | `0xd1`=209 → ~5 V (≈×0,024); byte2/3 `0f 0f` |
 | `21 54` | **L/R höjd** (byte0=vä, byte1=hö) | **belagt** (149/162) |
@@ -125,7 +125,7 @@ visningsordning + värdeintervall:
 | `21 49`/`21 57` | CAN-härlett: engine speed (brus 195–235 motor av), torque, throttle | throttle 0–86 vid gaspådrag |
 
 ⚠️ **Exakt byte↔ventil-ordning och skalor kräver EN färsk sniff-capture** (rå +
-Nanacom-värde i samma ögonblick) av ABS-/SLS-inputs-skärmarna. Utan det är detta
+reference tool-värde i samma ögonblick) av ABS-/SLS-inputs-skärmarna. Utan det är detta
 taket. Batteri/ECU-supply (21 44 byte12/13) är starkast — de varierar och matchar.
 
 **Nästa steg för full avkodning:** riktade differential-captures — ändra EN sak

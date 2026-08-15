@@ -61,7 +61,7 @@ def main() -> int:
         outfile = sys.argv[3]
     else:
         os.makedirs("logs", exist_ok=True)
-        outfile = os.path.join("logs", f"reference tool_sniff-{time.strftime('%Y%m%d-%H%M%S')}.log")
+        outfile = os.path.join("logs", f"reference_tool_sniff-{time.strftime('%Y%m%d-%H%M%S')}.log")
 
     ser = serial.serial_for_url(
         port, baudrate=10400, bytesize=8, parity="N", stopbits=1, timeout=gap

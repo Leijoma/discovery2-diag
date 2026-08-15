@@ -11,7 +11,7 @@ RDL 016 2026-08-10) — skiljer sig från Td5/SLABS:
   - Felminne: **`21 02`** → `61 02` + poster `[status][fault-number]` (avkodas av
     :func:`decode_faults`). `21 01` sågs tomt.
 
-⚠️ **Overifierat mot bilen av oss.** Nanacom gjorde SecurityAccess (seed→key) FÖRE
+⚠️ **Overifierat mot bilen av oss.** reference tool gjorde SecurityAccess (seed→key) FÖRE
 läsningen; vi kan inte reproducera den (endast ett fångat par, ingen algoritm).
 Om `21 02` KRÄVER upplåst session felar detta med negativt svar — då är airbag-
 läsning blockerad tills algoritmen är känd. Läsning är ofarlig; misslyckas den

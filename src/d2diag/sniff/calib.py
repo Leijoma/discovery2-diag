@@ -1,4 +1,4 @@
-"""Lös skala/offset ur (rå-värde, Nanacom-visat-värde)-prover.
+"""Lös skala/offset ur (rå-värde, reference tool-visat-värde)-prover.
 
 Modell: ``visat = rå · scale + bias`` (minsta-kvadrat). Ger även ett förslag på en
 färdig :class:`d2diag.td5.identifiers.Signal`-rad att klistra in.

@@ -177,7 +177,7 @@ class KWP2000:
     def io_control(self, lid: int, params: bytes = b"\xff") -> bytes:
         """InputOutputControlByLocalIdentifier (0x30) — output-tester.
 
-        Standard-param är en enda ``0xFF`` (så Nanacom pulsar TD5-utgångar, t.ex.
+        Standard-param är en enda ``0xFF`` (så reference tool pulsar TD5-utgångar, t.ex.
         ``30 A3 FF`` = A/C-koppling). Parametriserade utgångar (wastegate/EGR) tar
         fler bytes. Returnerar svaret utan positiv SID (börjar med ekad LID)."""
         return self.request(INPUT_OUTPUT_CONTROL_BY_LOCAL_ID, bytes([lid]) + bytes(params))

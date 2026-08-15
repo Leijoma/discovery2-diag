@@ -91,5 +91,20 @@ verifieringen sker när kabeln sitter i bilen.
 
 ## Krediter och referenser
 
-- **seed→key**: portad från [pajacobson/td5keygen](https://github.com/pajacobson/td5keygen) (BSD-2-Clause). Se [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
-- **protokollreferens**: [EA2EGA/Ekaitza_Itzali](https://github.com/EA2EGA/Ekaitza_Itzali) (endast protokollfakta, ingen kod kopierad).
+Det här projektet står på axlarna av andras arbete. Fullständiga licenser och
+exakt vad som använts finns i [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+- **seed→key** (immobiliser SecurityAccess): portad från
+  [pajacobson/td5keygen](https://github.com/pajacobson/td5keygen) (BSD-2-Clause).
+- **protokollreferens** (ramformat, ECU-adresser, init/session, identifiers,
+  felkodskarta): [EA2EGA/Ekaitza_Itzali](https://github.com/EA2EGA/Ekaitza_Itzali)
+  — endast protokollfakta, ingen kod kopierad. Krediter där till OffTrack
+  (ECU-disassembly) och Luca72 (Arduino-referens).
+- **K-line-front** (fast init-timing, burst-läsning, L9637D):
+  [muki01/OBD2_K-line_Reader](https://registry.platformio.org/libraries/muki01/OBD2%20K-Line) (MIT).
+- **Td5-felkodstexter**: korsvaliderade mot en publik, community-spridd Td5-felkodslista
+  (endast offset/bit → feltext).
+- Tack till **Land Rover-communityn** (forum och delade anteckningar) för felkoder,
+  menystrukturer och protokolltips som gjort reverse engineering-arbetet möjligt.
+
+Om du bidrar med data eller kod: lägg gärna till dig själv här.

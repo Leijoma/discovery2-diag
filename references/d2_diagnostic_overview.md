@@ -74,7 +74,7 @@ forumet använda ISO 9141 0,4 kb/s). Kreativt: **passiv sniff vid nyckel-på** (
 gateway kan väcka/pinga moduler → adresser utan att gissa init). Total tystnad hittills
 tyder ändå på ovanlig init/adress → **sniffa ett lånat verktyg** är fortsatt säkraste vägen.
 
-## NANOCOM-SNIFF 2026-08-07 — SLABS = FAST INIT 0x29 (bekräftat), BCU = SLOW
+## REFERENCE-TOOL SNIFF 2026-08-07 — SLABS = FAST INIT 0x29 (bekräftat), BCU = SLOW
 Lånad **reference tool 1** (läser motor/SLABS/BCU/ABS/airbag/ACE; **ej autolåda**). Passiv
 sniff av pin 7 (Y-kabel + KKL) fångade reference toolens init per modul:
 - **SLABS: `81 29 F7 81 22` (FAST init, adress `0x29`) → svar `03 c1 57 8f aa`**

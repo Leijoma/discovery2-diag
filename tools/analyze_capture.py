@@ -166,7 +166,7 @@ def variance(path: str):
     """Vilka byte-offset VARIERAR per LID? = differential-kandidater ur befintlig data.
 
     Konstant offset = statiskt fält; varierande = det som rörde sig under captet
-    (kandidat att korrelera mot Nanacom-värde/fysisk ändring)."""
+    (kandidat att korrelera mot reference tool-värde/fysisk ändring)."""
     from collections import defaultdict
     resp = defaultdict(list)
     for ms, k, p in parse(path):

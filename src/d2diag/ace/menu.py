@@ -2,7 +2,7 @@
 
 status: "ok" (bekräftat i vår kod/avkodning), "maybe" (facit/text känd men rå ej
 fångad av oss), "todo" (ej mappat än). `ref` = LID/rutin/kommando eller nästa steg.
-Menyordning bevarad exakt från reference tool (se `references/reference tool_master_menu.md`,
+Menyordning bevarad exakt från reference tool (se `references/reference_tool_master_menu.md`,
 avsnitt ACE). Inget är "ok" än — ACE är ännu inte sniffad.
 
 ⚠️ ACE-caveat: reference tools ventilkoder är opålitliga (tryckgivarfel visas som

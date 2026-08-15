@@ -59,7 +59,7 @@ def _contains(seq: "list[int]", sub: "tuple[int, ...]") -> bool:
 
 
 def decode_known(module: str, lid: int, data: bytes) -> "list[dict]":
-    """Vår nuvarande avkodning av en LID (för jämförelse mot Nanacom-skärmen).
+    """Vår nuvarande avkodning av en LID (för jämförelse mot reference tool-skärmen).
 
     Modulgenerisk: läser fältdefinitionerna ur den deklarativa storen
     (:mod:`d2diag.signals`). Ett fält med ``states`` (t.ex. any_door) ger sin
