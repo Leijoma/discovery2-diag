@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from ..td5 import identifiers as td5id
+from ..signals import load_signals
 
 # Fast-init-signaturer → modul (så vi vet vilken ECU LID:erna hör till).
 _INIT_SIGS = {
@@ -59,23 +59,23 @@ def _contains(seq: "list[int]", sub: "tuple[int, ...]") -> bool:
 
 
 def decode_known(module: str, lid: int, data: bytes) -> "list[dict]":
-    """Vår nuvarande avkodning av en LID (för jämförelse mot Nanacom-skärmen)."""
+    """Vår nuvarande avkodning av en LID (för jämförelse mot Nanacom-skärmen).
+
+    Modulgenerisk: läser fältdefinitionerna ur den deklarativa storen
+    (:mod:`d2diag.signals`). Ett fält med ``states`` (t.ex. any_door) ger sin
+    tillståndsetikett som ``value``; övriga ger sitt numeriska värde."""
     out: "list[dict]" = []
-    if module == "td5":
-        for s in td5id.signals_for_lid(lid):
-            if s.fits(data):
-                out.append({
-                    "name": s.name, "offset": s.offset, "kind": s.kind,
-                    "value": round(s.decode(data), 3), "unit": s.unit,
-                })
-    elif module == "slabs" and lid == 0x54 and len(data) >= 2:
-        # 21 54: höjder vänster/höger (byte0/byte1) — avkodat i SlabsDataSource.
-        out.append({"name": "height_left", "offset": 0, "kind": "u8", "value": data[0], "unit": ""})
-        out.append({"name": "height_right", "offset": 1, "kind": "u8", "value": data[1], "unit": ""})
-    elif module == "slabs" and lid == 0x56 and len(data) >= 1:
-        # 21 56 byte0 bit0: any-door — BELAGT via differential 2026-08-08.
-        out.append({"name": "any_door", "offset": 0, "kind": "bit0",
-                    "value": "öppen" if data[0] & 0x01 else "stängd", "unit": ""})
+    for s in load_signals(module):
+        if s.lid != lid or not s.fits(data):
+            continue
+        named = s.decode_named(data)
+        if named is not None:
+            kind = f"bit{s.bit}" if s.kind == "bit" else s.kind
+            out.append({"name": s.name, "offset": s.offset, "kind": kind,
+                        "value": named, "unit": s.unit})
+        else:
+            out.append({"name": s.name, "offset": s.offset, "kind": s.kind,
+                        "value": round(s.decode(data), 3), "unit": s.unit})
     return out
 
 

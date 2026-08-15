@@ -29,7 +29,7 @@ def _calibrate(req: "dict") -> "dict":
     except (TypeError, ValueError, IndexError):
         fit = None
     if fit is None:
-        return {"ok": False, "error": "behöver ≥2 prover med olika rå-värde"}
+        return {"ok": False, "error": "need ≥2 samples with different raw values"}
     lid = req.get("lid", 0)
     if isinstance(lid, str):
         lid = int(lid, 16)
@@ -74,6 +74,37 @@ def _automap(req: "dict") -> "dict":
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
+_ALLOWED_MODULES = ("td5", "slabs", "airbag")
+
+
+def _signal_upsert(req: "dict") -> "dict":
+    """Skriv en bekräftad/kandidat-mappning till den deklarativa signalstoren
+    (write-back — stänger mappnings-loopen). Ersätter localStorage för det
+    värdefulla RE-arbetet: mappning gjord i bilen överlever server-side."""
+    from ..signals import upsert_field
+
+    module = (req.get("module") or "").lower()
+    if module not in _ALLOWED_MODULES:
+        return {"ok": False, "error": f"unknown module: {module!r}"}
+    rec = req.get("record") or {}
+    if not rec.get("name") or rec.get("lid") is None or rec.get("offset") is None:
+        return {"ok": False, "error": "record requires at least name, lid, offset"}
+    try:
+        upsert_field(module, rec)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    return {"ok": True, "module": module, "name": rec["name"]}
+
+
+def _signals_list(module: str) -> "dict":
+    """Läs storen för en modul (för UI: visa mappade fält + konfidens)."""
+    from ..signals import load_records
+
+    if module not in _ALLOWED_MODULES:
+        return {"module": module, "signals": []}
+    return {"module": module, "signals": load_records(module)}
+
+
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *args) -> None:  # tyst logg
         pass
@@ -105,6 +136,10 @@ class _Handler(BaseHTTPRequestHandler):
                 from urllib.parse import parse_qs, urlparse
                 q = parse_qs(urlparse(self.path).query)
                 self._json(self.server.sniffer.snapshot(q.get("module", [None])[0]))
+        elif self.path.split("?")[0] == "/signals":
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            self._json(_signals_list((q.get("module", ["td5"])[0]) or "td5"))
         elif self.path == "/docs":
             self._json({"docs": self.server.docs.index()})
         elif self.path.split("?")[0] == "/doc":
@@ -126,7 +161,10 @@ class _Handler(BaseHTTPRequestHandler):
                 cmd = json.loads(raw or b"{}")
             except (ValueError, TypeError):
                 cmd = {}
-            result = self.server.enqueue_command(cmd)
+            # Basic-mode-skanningen är sekventiell över flera moduler (slow init
+            # för airbag) → ge den rejält med tid; övriga kommandon är snabba.
+            timeout = 45.0 if cmd.get("action") == "read_all_faults" else 8.0
+            result = self.server.enqueue_command(cmd, timeout=timeout)
             self._json(result, code=200 if result.get("ok") else 400)
         elif self.path == "/calib":
             length = int(self.headers.get("Content-Length", 0) or 0)
@@ -145,15 +183,20 @@ class _Handler(BaseHTTPRequestHandler):
                 req = {}
             self._json(_automap(req))
         elif self.path == "/capture":
-            length = int(self.headers.get("Content-Length", 0) or 0)
-            raw = self.rfile.read(length) if length else b"{}"
-            try:
-                req = json.loads(raw or b"{}")
-            except (ValueError, TypeError):
-                req = {}
-            self._json(_append_capture(self.server.captures_path, req))
+            self._json(_append_capture(self.server.captures_path, self._body()))
+        elif self.path == "/signal":
+            res = _signal_upsert(self._body())
+            self._json(res, code=200 if res.get("ok") else 400)
         else:
             self.send_error(404)
+
+    def _body(self) -> "dict":
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        raw = self.rfile.read(length) if length else b"{}"
+        try:
+            return json.loads(raw or b"{}")
+        except (ValueError, TypeError):
+            return {}
 
     # ---- svar ---------------------------------------------------------- #
     def _send(self, body: bytes, content_type: str, code: int = 200) -> None:
@@ -196,7 +239,7 @@ class DiagServer(ThreadingHTTPServer):
 
     def __init__(
         self,
-        source: "DataSource | dict",
+        source: "DataSource | dict | None" = None,
         host: str = "0.0.0.0",
         port: int = 8080,
         poll_interval: float = 0.5,
@@ -207,19 +250,36 @@ class DiagServer(ThreadingHTTPServer):
         docs: "DocLibrary | None" = None,
         sniffer=None,
         captures_path: "str | None" = None,
+        variants: "dict | None" = None,
+        mode: "str | None" = None,
+        scan_port: str = "auto",
     ) -> None:
         super().__init__((host, port), _Handler)
+        self._scan_port = scan_port  # port för "läs alla felkoder" (basic mode)
         self._menus = menus or {}  # modul → meny-lista (Karta-fliken)
         self.docs = docs or DocLibrary()  # markdown-vy (Dokument-fliken)
         self.sniffer = sniffer  # passiv sniff-feed (Mappning-fliken), valfri
         self.captures_path = captures_path  # märkta live-fångster → JSONL
-        # source kan vara en enda DataSource (bakåtkompat) eller en dict
-        # {modulnamn: DataSource}. Bara en modul är aktiv åt gången — K-line är
-        # en delad buss, så att byta flik = släppa gammal session och etablera ny.
-        if isinstance(source, dict):
-            self._modules: "dict[str, DataSource]" = dict(source)
+        # ``variants`` = {modul: {läge: DataSource}} → mock/live kan väljas i UI:t
+        # och bytas i drift. ``source`` (enkel DataSource eller {modul: DataSource})
+        # är bakåtkompatibelt (inget lägesval). Bara EN modul är aktiv åt gången
+        # (K-line = delad buss) → flikbyte släpper gammal session och etablerar ny.
+        if variants:
+            self._variants: "dict | None" = {n: dict(v) for n, v in variants.items()}
+            self._modes = sorted({m for v in self._variants.values() for m in v})
+            self._mode: "str | None" = mode if mode in self._modes else self._modes[0]
+            self._modules: "dict[str, DataSource]" = {
+                n: (v.get(self._mode) or next(iter(v.values()))) for n, v in self._variants.items()}
         else:
-            self._modules = {source.name: source}
+            self._variants = None
+            self._modes = []
+            self._mode = None
+            if isinstance(source, dict):
+                self._modules = dict(source)
+            elif source is not None:
+                self._modules = {source.name: source}
+            else:
+                raise ValueError("DiagServer requires source or variants")
         self._active = active if active in self._modules else next(iter(self._modules))
         self.source = self._modules[self._active]
         self.poll_interval = poll_interval
@@ -227,7 +287,8 @@ class DiagServer(ThreadingHTTPServer):
         self.logger = logger  # valfri SnapshotLogger → loggar varje poll till fil
         self.latest: "dict" = {
             "status": "connecting", "source": self.source.name,
-            "module": self._active, "signals": {}, "faults": [],
+            "module": self._active, "mode": self._mode, "modes": self._modes,
+            "signals": {}, "faults": [],
         }
         self._stop = threading.Event()
         self._commands: "queue.Queue" = queue.Queue()
@@ -241,7 +302,7 @@ class DiagServer(ThreadingHTTPServer):
         self._commands.put((cmd, holder))
         if holder["event"].wait(timeout):
             return holder["result"]
-        return {"ok": False, "error": "timeout — inget svar från diagnostiklagret"}
+        return {"ok": False, "error": "timeout — no response from the diagnostic layer"}
 
     def handle_error(self, request, client_address) -> None:
         """Tysta ofarliga klient-frånkopplingar (webbläsaren stänger fetch/SSE)."""
@@ -274,7 +335,7 @@ class DiagServer(ThreadingHTTPServer):
         """Byt aktiv modul: släpp gamla sessionen, aktivera den nya (etableras
         lazily vid nästa poll). K-line är en delad buss → bara en session åt gången."""
         if name not in self._modules:
-            return {"ok": False, "error": f"okänd modul: {name}"}
+            return {"ok": False, "error": f"unknown module: {name}"}
         if name != self._active:
             try:
                 self.source.disconnect()  # släpp K-line-porten/sessionen
@@ -283,8 +344,43 @@ class DiagServer(ThreadingHTTPServer):
             self._active = name
             self.source = self._modules[name]
             self.latest = {"status": "connecting", "source": self.source.name,
-                           "module": name, "signals": {}, "faults": []}
-        return {"ok": True, "message": f"modul: {name}", "module": name}
+                           "module": name, "mode": self._mode, "modes": self._modes,
+                           "signals": {}, "faults": []}
+        return {"ok": True, "message": f"module: {name}", "module": name}
+
+    def _set_mode(self, mode: "str | None") -> "dict":
+        """Växla datakälla mock↔live i drift (utan omstart). Släpper aktiv session
+        och pekar om alla moduler till det valda lägets variant."""
+        if not self._variants or mode not in self._modes:
+            return {"ok": False, "error": f"unknown mode: {mode}"}
+        if mode != self._mode:
+            try:
+                self.source.disconnect()  # släpp ev. K-line-session före byte
+            except Exception:  # noqa: BLE001
+                pass
+            self._mode = mode
+            self._modules = {n: (v.get(mode) or next(iter(v.values())))
+                             for n, v in self._variants.items()}
+            self.source = self._modules[self._active]
+            self.latest = {"status": "connecting", "source": self.source.name,
+                           "module": self._active, "mode": mode, "modes": self._modes,
+                           "signals": {}, "faults": []}
+        return {"ok": True, "message": f"mode: {mode}", "mode": mode}
+
+    def _read_all_faults(self) -> "dict":
+        """Basic mode: läs felkoder från alla moduler sekventiellt. Släpper den
+        aktiva sessionen först (frigör K-line-porten), skannar, låter sedan
+        normal pollning återansluta. Körs i pollertråden → serialiserat med bussen."""
+        try:
+            self.source.disconnect()  # frigör porten före sekvensskanning
+        except Exception:  # noqa: BLE001
+            pass
+        from ..faultscan import read_all
+        try:
+            report = read_all(self._mode or "mock", self._scan_port)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        return {"ok": True, "mode": self._mode or "mock", "report": report}
 
     def _drain_commands(self) -> None:
         while True:
@@ -297,6 +393,11 @@ class DiagServer(ThreadingHTTPServer):
                 if action == "select_module":
                     params = cmd.get("params") or {}
                     holder["result"] = self._select(params.get("module") or cmd.get("module"))
+                elif action == "set_mode":
+                    params = cmd.get("params") or {}
+                    holder["result"] = self._set_mode(params.get("mode") or cmd.get("mode"))
+                elif action == "read_all_faults":
+                    holder["result"] = self._read_all_faults()
                 else:
                     holder["result"] = self.source.command(action, cmd.get("params"))
             except Exception as exc:  # noqa: BLE001
@@ -315,6 +416,8 @@ class DiagServer(ThreadingHTTPServer):
                     "signals": {}, "faults": [], "error": f"{type(exc).__name__}: {exc}",
                 }
             snap["module"] = active  # vilken flik datan hör till
+            snap["mode"] = self._mode  # aktivt datakällsläge (mock/live)
+            snap["modes"] = self._modes  # valbara lägen (för UI-toggeln)
             self.latest = snap
             if self.logger is not None:
                 try:

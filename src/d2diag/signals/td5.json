@@ -1,0 +1,311 @@
+[
+  {
+    "name": "rpm",
+    "lid": "09",
+    "offset": 0,
+    "kind": "u16",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "rpm",
+    "confidence": "belagt",
+    "limits": [
+      0,
+      4800
+    ],
+    "source": "fuelling verifierat mot bilen (RDL 016)"
+  },
+  {
+    "name": "speed",
+    "lid": "0D",
+    "offset": 0,
+    "kind": "u8",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "km/h",
+    "confidence": "belagt",
+    "limits": [
+      0,
+      200
+    ],
+    "source": "fuelling verifierat mot bilen"
+  },
+  {
+    "name": "battery",
+    "lid": "10",
+    "offset": 0,
+    "kind": "u16",
+    "scale": 0.001,
+    "bias": 0.0,
+    "unit": "V",
+    "confidence": "belagt",
+    "limits": [
+      11.5,
+      15.5
+    ],
+    "source": "u16/1000 V, verifierat mot bilen"
+  },
+  {
+    "name": "coolant_temp",
+    "lid": "1A",
+    "offset": 0,
+    "kind": "u16",
+    "scale": 0.1,
+    "bias": -273.2,
+    "unit": "°C",
+    "confidence": "belagt",
+    "limits": [
+      -40,
+      105
+    ],
+    "source": "21 1A@0 u16/10−273.2; verifierat 2026-08-03 (59.2 °C)"
+  },
+  {
+    "name": "air_temp",
+    "lid": "1A",
+    "offset": 4,
+    "kind": "u16",
+    "scale": 0.1,
+    "bias": -273.2,
+    "unit": "°C",
+    "confidence": "belagt",
+    "limits": [
+      -30,
+      80
+    ],
+    "source": "21 1A@4, samma temp-skala"
+  },
+  {
+    "name": "ext_temp",
+    "lid": "1A",
+    "offset": 8,
+    "kind": "u16",
+    "scale": 0.1,
+    "bias": -273.2,
+    "unit": "°C",
+    "confidence": "kandidat",
+    "limits": null,
+    "source": "givare EJ monterad → konstant 0x1088=150 °C (oansluten)"
+  },
+  {
+    "name": "fuel_temp",
+    "lid": "1A",
+    "offset": 12,
+    "kind": "u16",
+    "scale": 0.1,
+    "bias": -273.2,
+    "unit": "°C",
+    "confidence": "belagt",
+    "limits": [
+      -30,
+      90
+    ],
+    "source": "21 1A@12, samma temp-skala"
+  },
+  {
+    "name": "accel_way1",
+    "lid": "1B",
+    "offset": 0,
+    "kind": "u16",
+    "scale": 0.001,
+    "bias": 0.0,
+    "unit": "V",
+    "confidence": "belagt",
+    "limits": [
+      0.0,
+      5.1
+    ],
+    "source": "21 1B@0 u16/1000 V; sniffat 2026-08-08"
+  },
+  {
+    "name": "accel_way2",
+    "lid": "1B",
+    "offset": 2,
+    "kind": "u16",
+    "scale": 0.001,
+    "bias": 0.0,
+    "unit": "V",
+    "confidence": "belagt",
+    "limits": [
+      0.0,
+      5.1
+    ],
+    "source": "21 1B@2 u16/1000 V"
+  },
+  {
+    "name": "accel_way3",
+    "lid": "1B",
+    "offset": 4,
+    "kind": "u16",
+    "scale": 0.001,
+    "bias": 0.0,
+    "unit": "V",
+    "confidence": "kandidat",
+    "limits": [
+      0.0,
+      5.1
+    ],
+    "source": "21 1B@4; tredje spänningsspår, skala ej bekräftad (0 V i fångst)"
+  },
+  {
+    "name": "accel_supply",
+    "lid": "1B",
+    "offset": 6,
+    "kind": "u16",
+    "scale": 0.001,
+    "bias": 0.0,
+    "unit": "V",
+    "confidence": "belagt",
+    "limits": [
+      4.7,
+      5.3
+    ],
+    "source": "21 1B@6 u16/1000 V (5V-referens)"
+  },
+  {
+    "name": "manifold_press",
+    "lid": "1C",
+    "offset": 0,
+    "kind": "u16",
+    "scale": 0.0001,
+    "bias": 0.0,
+    "unit": "bar",
+    "confidence": "belagt",
+    "limits": [
+      0.8,
+      2.6
+    ],
+    "source": "21 1C@0 u16/10000 bar; BEKRÄFTAT 2026-08-03 (1.0→1.2 bar)"
+  },
+  {
+    "name": "maf_raw",
+    "lid": "1C",
+    "offset": 4,
+    "kind": "u16",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": null,
+    "source": "21 1C@4; ingen MAF på tidig ROM — rått fält, tolka ej som mg"
+  },
+  {
+    "name": "rpm_error",
+    "lid": "21",
+    "offset": 0,
+    "kind": "s16",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "rpm",
+    "confidence": "kandidat",
+    "limits": [
+      -300,
+      300
+    ],
+    "source": "21 21@0 s16; idle-reglerfel"
+  },
+  {
+    "name": "ambient_press_1",
+    "lid": "23",
+    "offset": 0,
+    "kind": "u16",
+    "scale": 0.0001,
+    "bias": 0.0,
+    "unit": "bar",
+    "confidence": "belagt",
+    "limits": [
+      0.8,
+      1.1
+    ],
+    "source": "21 23@0 u16/10000 bar"
+  },
+  {
+    "name": "ambient_press_2",
+    "lid": "23",
+    "offset": 2,
+    "kind": "u16",
+    "scale": 0.0001,
+    "bias": 0.0,
+    "unit": "bar",
+    "confidence": "belagt",
+    "limits": [
+      0.8,
+      1.1
+    ],
+    "source": "21 23@2 u16/10000 bar"
+  },
+  {
+    "name": "balance_1",
+    "lid": "40",
+    "offset": 0,
+    "kind": "s16",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": [
+      -12,
+      12
+    ],
+    "source": "21 40@0 s16; cylinderbalans 1"
+  },
+  {
+    "name": "balance_2",
+    "lid": "40",
+    "offset": 2,
+    "kind": "s16",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": [
+      -12,
+      12
+    ],
+    "source": "21 40@2 s16; cylinderbalans 2"
+  },
+  {
+    "name": "balance_3",
+    "lid": "40",
+    "offset": 4,
+    "kind": "s16",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": [
+      -12,
+      12
+    ],
+    "source": "21 40@4 s16; cylinderbalans 3"
+  },
+  {
+    "name": "balance_4",
+    "lid": "40",
+    "offset": 6,
+    "kind": "s16",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": [
+      -12,
+      12
+    ],
+    "source": "21 40@6 s16; cylinderbalans 4"
+  },
+  {
+    "name": "balance_5",
+    "lid": "40",
+    "offset": 8,
+    "kind": "s16",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": [
+      -12,
+      12
+    ],
+    "source": "21 40@8 s16; cylinderbalans 5"
+  }
+]

@@ -11,31 +11,42 @@ import glob
 import math
 import random
 
+from ..signals import load_signals
 from ..td5.identifiers import BY_NAME, signal_status
 
 # Chip-ledtrådar för att känna igen en KKL/OBD-kabel bland flera USB-seriella enheter.
 _KKL_HINTS = ("ft232", "ftdi", "ch340", "cp210", "usb-serial", "usb_uart", "obd", "kkl")
 
 
+# macOS call-out-portar (använd cu.*, ALDRIG tty.* — tty blockar på DCD).
+_MAC_GLOBS = (
+    "/dev/cu.usbserial-*", "/dev/cu.usbmodem*",
+    "/dev/cu.wchusbserial*", "/dev/cu.SLAB_USBtoUART*",
+)
+
+
 def resolve_serial_port(spec: "str | None") -> str:
     """Returnera en konkret serieport.
 
     ``spec`` som är en riktig sökväg returneras oförändrad. ``None`` eller
-    ``"auto"`` autodetekterar en USB-seriell enhet — föredrar de **stabila**
-    ``/dev/serial/by-id/``-länkarna (helst en känd KKL-chip), sedan ``ttyUSB*`` /
-    ``ttyACM*``. Höjer :class:`FileNotFoundError` om ingen hittas (t.ex. kabeln
-    inte inkopplad än) — anropas om vid varje anslutningsförsök.
+    ``"auto"`` autodetekterar en USB-seriell enhet. Ordning: **stabila**
+    ``/dev/serial/by-id/``-länkar (Linux) → ``/dev/cu.*`` (macOS) → ``ttyUSB*`` /
+    ``ttyACM*``. Inom by-id och cu.* föredras en känd KKL-chip (``_KKL_HINTS``).
+    Höjer :class:`FileNotFoundError` om ingen hittas (t.ex. kabeln inte inkopplad
+    än) — anropas om vid varje anslutningsförsök.
     """
     if spec and spec != "auto":
         return spec
     by_id = sorted(glob.glob("/dev/serial/by-id/*"))
-    preferred = [p for p in by_id if any(h in p.lower() for h in _KKL_HINTS)]
-    for candidates in (preferred, by_id,
+    mac = sorted(p for pat in _MAC_GLOBS for p in glob.glob(pat))
+    preferred_id = [p for p in by_id if any(h in p.lower() for h in _KKL_HINTS)]
+    preferred_mac = [p for p in mac if any(h in p.lower() for h in _KKL_HINTS)]
+    for candidates in (preferred_id, by_id, preferred_mac, mac,
                        sorted(glob.glob("/dev/ttyUSB*")),
                        sorted(glob.glob("/dev/ttyACM*"))):
         if candidates:
             return candidates[0]
-    raise FileNotFoundError("ingen USB-seriell enhet hittad (KKL ej ansluten?)")
+    raise FileNotFoundError("no USB serial device found (KKL not connected?)")
 
 # Enhetskarta från identifier-tabellen (namn → enhet).
 UNITS = {name: sig.unit for name, sig in BY_NAME.items()}
@@ -73,7 +84,7 @@ class DataSource(abc.ABC):
         krockar. Skrivningar mot ECU:n är känsliga — bara uttryckligt stödda
         åtgärder tillåts; riskabla (ställdonstester, settings) exponeras inte här.
         """
-        return {"ok": False, "error": f"okänt kommando: {action}"}
+        return {"ok": False, "error": f"unknown command: {action}"}
 
 
 class MockDataSource(DataSource):
@@ -132,12 +143,31 @@ class MockDataSource(DataSource):
         if action == "clear_faults":
             self._faults = []
             self._cleared_ticks = 4  # tomt i ~4 polls, sen återkommer aktivt fel
-            return {"ok": True, "message": "Felkoder raderade (mock)"}
-        return {"ok": False, "error": f"okänt kommando: {action}"}
+            return {"ok": True, "message": "Fault codes cleared (mock)"}
+        return {"ok": False, "error": f"unknown command: {action}"}
 
     def menu_map(self) -> "list":
         from ..td5.menu import TD5_MENU
         return TD5_MENU
+
+
+def _read_block_cmd(session, params: "dict | None") -> "dict":
+    """Läs en LID-uppsättning via en live-session → {ok, raws:{lidhex:hex}}.
+
+    Read-only-primitiven bakom den aktiva differential-mappningen i Karta-fliken
+    (baslinje/läs-igen). Delas av Td5- och SLABS-källorna."""
+    if session is None:
+        return {"ok": False, "error": "not connected"}
+    lids_in = (params or {}).get("lids") or []
+    try:
+        lids = [int(x, 16) if isinstance(x, str) else int(x) for x in lids_in]
+    except (ValueError, TypeError):
+        return {"ok": False, "error": "ogiltiga lids"}
+    try:
+        raws = session.read_block(lids)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    return {"ok": True, "raws": {k: v.hex() for k, v in raws.items()}}
 
 
 class Td5DataSource(DataSource):
@@ -187,7 +217,7 @@ class Td5DataSource(DataSource):
             if not signals:
                 # sessionen "uppe" men alla läsningar föll (brus/tappad kabel) →
                 # behandla som tappad kontakt så vi återansluter nästa poll.
-                raise RuntimeError("inga signaler lästes — brus eller tappad kontakt")
+                raise RuntimeError("no signals read — noise or lost connection")
             # läs felkoder mer sällan (dyrt); var ~10:e poll
             if self._read_faults and self._fault_tick % 10 == 0:
                 try:
@@ -212,16 +242,18 @@ class Td5DataSource(DataSource):
                     "error": f"{type(exc).__name__}: {exc}"}
 
     def command(self, action: str, params: "dict | None" = None) -> "dict":
+        if action == "read_block":
+            return _read_block_cmd(self._td5, params)
         if action == "clear_faults":
             if self._td5 is None:
-                return {"ok": False, "error": "inte ansluten till ECU:n"}
+                return {"ok": False, "error": "not connected to the ECU"}
             try:
                 self._td5.clear_faults()
                 self._fault_tick = 0  # tvinga om-läsning av felkoder nästa poll
-                return {"ok": True, "message": "Felkoder raderade"}
+                return {"ok": True, "message": "Fault codes cleared"}
             except Exception as exc:  # noqa: BLE001
                 return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-        return {"ok": False, "error": f"okänt kommando: {action}"}
+        return {"ok": False, "error": f"unknown command: {action}"}
 
 
 # --- SLABS (Wabco ABS/SLS) ------------------------------------------------ #
@@ -241,12 +273,12 @@ def _slabs_faults_flat(f: "dict[str, list]") -> "list[str]":
 
 # Ställdons-actions (webb → SLABS). Namn → svensk etikett (för mock-svar/UI).
 _SLABS_ACTUATORS = {
-    "buzzer": "SLS-summer", "compressor": "Kompressor", "exhaust": "Avluftningsventil",
-    "pump_on": "ABS-pump på", "pump_off": "ABS-pump av",
-    "raise_left": "Höj vänster", "raise_right": "Höj höger",
-    "lower_left": "Sänk vänster", "lower_right": "Sänk höger",
-    "wheel_fl": "Ventiltest VF", "wheel_fr": "Ventiltest HF",
-    "wheel_rl": "Ventiltest VB", "wheel_rr": "Ventiltest HB",
+    "buzzer": "SLS buzzer", "compressor": "Compressor", "exhaust": "Exhaust valve",
+    "pump_on": "ABS pump on", "pump_off": "ABS pump off",
+    "raise_left": "Raise left", "raise_right": "Raise right",
+    "lower_left": "Lower left", "lower_right": "Lower right",
+    "wheel_fl": "Valve test FL", "wheel_fr": "Valve test FR",
+    "wheel_rl": "Valve test RL", "wheel_rr": "Valve test RR",
 }
 
 
@@ -269,7 +301,7 @@ def _slabs_do(slabs, action: str) -> None:
     elif action.startswith("wheel_"):
         slabs.wheel_test(action.split("_", 1)[1])
     else:
-        raise ValueError(f"okänt kommando: {action}")
+        raise ValueError(f"unknown command: {action}")
 
 
 class MockSlabsDataSource(DataSource):
@@ -281,7 +313,7 @@ class MockSlabsDataSource(DataSource):
         self._t = 0.0
         self._faults = {
             "loggade": [
-                "020: höger fram hjulhastighetsgivare — output too low",
+                "020: front right wheel speed sensor — output too low",
                 "027: shuttle valve switch — electrical failure",
             ],
             "aktuella": [],
@@ -311,10 +343,10 @@ class MockSlabsDataSource(DataSource):
         if action == "clear_faults":
             self._faults = {"loggade": [], "aktuella": []}
             self._cleared = 4
-            return {"ok": True, "message": "Felkoder raderade (mock)"}
+            return {"ok": True, "message": "Fault codes cleared (mock)"}
         if action in _SLABS_ACTUATORS:
             return {"ok": True, "message": f"{_SLABS_ACTUATORS[action]} (mock)"}
-        return {"ok": False, "error": f"okänt kommando: {action}"}
+        return {"ok": False, "error": f"unknown command: {action}"}
 
     def menu_map(self) -> "list":
         from ..slabs.menu import SLABS_MENU
@@ -362,21 +394,29 @@ class SlabsDataSource(DataSource):
             if self._slabs is None:
                 self._slabs = self._connect()
             self._slabs.tester_present()
-            h = self._slabs.read_data(0x54)  # höjder: byte0=vänster, byte1=höger
+            # Läs alla LID:er storen bryr sig om + dashboardens (SVG) i ETT svep.
+            store = load_signals("slabs")
+            lids = {s.lid for s in store} | {0x54, 0x43, 0x50}
+            raws = self._slabs.read_block(lids)  # {lid_hex: bytes}, felande hoppas över
+            # Store-drivna signaler → nya bekräftade mappningar syns automatiskt.
+            vals: "dict[str, float]" = {}
+            for s in store:
+                raw = raws.get(f"{s.lid:02x}")
+                if raw is not None and s.fits(raw) and s.decode_named(raw) is None:
+                    vals[s.name] = round(s.decode(raw), 3)
+            # Dashboard-specifika härledda fält (den handritade SVG-bilen).
+            h = raws.get("54", b"")
             hl = h[0] if len(h) > 0 else 0
             hr = h[1] if len(h) > 1 else 0
-            vals = {
-                "height_left": hl, "height_right": hr,
-                "height_left_mm": hl * 1.4, "height_right_mm": hr * 1.4,
-            }
-            try:
-                sp = self._slabs.read_data(0x43)  # 4 hjulhastigheter (7c 00-mönster)
-                vo = self._slabs.read_data(0x50)  # 4 givarspänningar (rå ADC)
-                for i, w in enumerate(("fl", "fr", "rl", "rr")):  # ordning preliminär
-                    vals[f"speed_{w}"] = sp[i * 2] if len(sp) > i * 2 else 0
-                    vals[f"volt_{w}"] = round(vo[i] * 0.02, 2) if len(vo) > i else 0
-            except Exception:  # noqa: BLE001 — hjuldata är best-effort
-                pass
+            vals.update({"height_left": hl, "height_right": hr,
+                         "height_left_mm": hl * 1.4, "height_right_mm": hr * 1.4})
+            sp = raws.get("43", b"")
+            vo = raws.get("50", b"")
+            for i, w in enumerate(("fl", "fr", "rl", "rr")):  # ordning preliminär
+                if len(sp) > i * 2:
+                    vals[f"speed_{w}"] = sp[i * 2]
+                if len(vo) > i:
+                    vals[f"volt_{w}"] = round(vo[i] * 0.02, 2)
             signals = _slabs_sig(vals)
             if self._read_faults and self._tick % 10 == 0:
                 try:
@@ -397,19 +437,21 @@ class SlabsDataSource(DataSource):
                     "error": f"{type(exc).__name__}: {exc}"}
 
     def command(self, action: str, params: "dict | None" = None) -> "dict":
+        if action == "read_block":
+            return _read_block_cmd(self._slabs, params)
         if self._slabs is None:
-            return {"ok": False, "error": "inte ansluten till SLABS"}
+            return {"ok": False, "error": "not connected to SLABS"}
         try:
             if action == "clear_faults":
                 self._slabs.clear_faults()
                 self._tick = 0
-                return {"ok": True, "message": "Felkoder raderade"}
+                return {"ok": True, "message": "Fault codes cleared"}
             if action in _SLABS_ACTUATORS:
                 _slabs_do(self._slabs, action)
                 return {"ok": True, "message": f"{_SLABS_ACTUATORS[action]} ✓"}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-        return {"ok": False, "error": f"okänt kommando: {action}"}
+        return {"ok": False, "error": f"unknown command: {action}"}
 
     def menu_map(self) -> "list":
         from ..slabs.menu import SLABS_MENU

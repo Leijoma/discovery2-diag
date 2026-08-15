@@ -89,6 +89,30 @@ def test_resolve_serial_auto_prefers_known_chip(monkeypatch):
     assert "FTDI" in s.resolve_serial_port("auto")
 
 
+def test_resolve_serial_auto_macos_cu_port(monkeypatch):
+    import d2diag.web.sources as s
+    # macOS: inga Linux-portar, men en CH340- och en FTDI-kabel som cu.*
+    mapping = {
+        "/dev/cu.usbserial-*": ["/dev/cu.usbserial-0001"],
+        "/dev/cu.wchusbserial*": ["/dev/cu.wchusbserial1420"],
+    }
+    monkeypatch.setattr(s.glob, "glob", lambda pat: mapping.get(pat, []))
+    # föredrar en känd KKL-chip (usbserial matchar _KKL_HINTS "usb-serial"? nej —
+    # men "usbserial" gör inte det; verifiera bara att en cu.*-port väljs)
+    assert s.resolve_serial_port("auto").startswith("/dev/cu.")
+
+
+def test_resolve_serial_auto_mac_preferred_over_ttyusb(monkeypatch):
+    import d2diag.web.sources as s
+    mapping = {
+        "/dev/cu.usbserial-*": ["/dev/cu.usbserial-FTDI99"],
+        "/dev/ttyUSB*": ["/dev/ttyUSB0"],
+    }
+    monkeypatch.setattr(s.glob, "glob", lambda pat: mapping.get(pat, []))
+    # mac cu.* (med FTDI-hint) går före den generiska ttyUSB-fallbacken
+    assert s.resolve_serial_port("auto") == "/dev/cu.usbserial-FTDI99"
+
+
 def test_resolve_serial_auto_falls_back_to_ttyusb(monkeypatch):
     import d2diag.web.sources as s
     mapping = {"/dev/ttyUSB*": ["/dev/ttyUSB0"]}
@@ -102,6 +126,132 @@ def test_resolve_serial_auto_none_raises(monkeypatch):
     monkeypatch.setattr(s.glob, "glob", lambda pat: [])
     with pytest.raises(FileNotFoundError):
         s.resolve_serial_port("auto")
+
+
+def test_signal_upsert_and_list_round_trip(tmp_path, monkeypatch):
+    from d2diag import signals as store
+    from d2diag.web.server import _signal_upsert, _signals_list
+
+    monkeypatch.setattr(store, "_DIR", tmp_path)
+    store._CACHE.clear()
+    (tmp_path / "slabs.json").write_text("[]", encoding="utf-8")
+
+    ok = _signal_upsert({"module": "slabs", "record": {
+        "name": "transport_mode", "lid": "45", "offset": 0, "kind": "bit", "bit": 3,
+        "states": {"0": "av", "1": "på"}}})
+    assert ok["ok"] and ok["module"] == "slabs"
+
+    listing = _signals_list("slabs")
+    assert [s["name"] for s in listing["signals"]] == ["transport_mode"]
+    assert listing["signals"][0]["confidence"] == "kandidat"  # default
+
+
+def test_signal_upsert_validation():
+    from d2diag.web.server import _signal_upsert
+    assert not _signal_upsert({"module": "nope", "record": {"name": "x", "lid": "1", "offset": 0}})["ok"]
+    assert not _signal_upsert({"module": "td5", "record": {"lid": "1"}})["ok"]  # saknar name/offset
+
+
+def test_read_block_command_returns_hex():
+    from d2diag.kline import KLine, encode
+    from d2diag.kwp2000 import KWP2000
+    from d2diag.slabs import Slabs
+    from d2diag.web.sources import SlabsDataSource
+    from tests.fakes import FakeKLineEcu
+
+    def _f(d):
+        return encode(d, addressed=False)
+
+    resp = {_f(b"\x21\x54"): _f(b"\x61\x54\x91\x9c")}
+    src = SlabsDataSource(port="x", read_faults=False)
+    src._slabs = Slabs(KWP2000(KLine(FakeKLineEcu(resp))))
+    src._slabs.open()
+    out = src.command("read_block", {"lids": ["54"]})
+    assert out["ok"] and out["raws"] == {"54": "919c"}
+
+
+def test_read_block_command_not_connected():
+    from d2diag.web.sources import SlabsDataSource
+    src = SlabsDataSource(port="x", read_faults=False)
+    assert not src.command("read_block", {"lids": ["54"]})["ok"]  # _slabs is None
+
+
+def test_mode_toggle_switches_variant():
+    from d2diag.web import MockDataSource, MockSlabsDataSource
+    from d2diag.web.server import DiagServer
+
+    mock_motor, live_motor = MockDataSource(), MockDataSource()
+    variants = {"motor": {"mock": mock_motor, "live": live_motor},
+                "slabs": {"mock": MockSlabsDataSource(), "live": MockSlabsDataSource()}}
+    srv = DiagServer(host="127.0.0.1", port=0, variants=variants, mode="mock", active="motor")
+    try:
+        assert srv._mode == "mock" and srv._modes == ["live", "mock"]
+        assert srv.source is mock_motor
+        r = srv._set_mode("live")
+        assert r["ok"] and srv._mode == "live" and srv.source is live_motor
+        assert srv.latest["mode"] == "live" and srv.latest["modes"] == ["live", "mock"]
+        assert not srv._set_mode("nope")["ok"]   # okänt läge avvisas
+    finally:
+        srv.server_close()
+
+
+def test_read_all_faults_command_mock():
+    from d2diag.web import MockDataSource, MockSlabsDataSource
+    from d2diag.web.server import DiagServer
+
+    variants = {"motor": {"mock": MockDataSource(), "live": MockDataSource()},
+                "slabs": {"mock": MockSlabsDataSource(), "live": MockSlabsDataSource()}}
+    srv = DiagServer(host="127.0.0.1", port=0, variants=variants, mode="mock", active="motor")
+    try:
+        r = srv._read_all_faults()
+        assert r["ok"] and r["mode"] == "mock"
+        mods = {x["module"] for x in r["report"]}
+        assert {"TD5", "SLABS", "Airbag"} <= mods
+    finally:
+        srv.server_close()
+
+
+def test_single_source_has_no_mode_toggle():
+    from d2diag.web import MockDataSource
+    from d2diag.web.server import DiagServer
+
+    srv = DiagServer(MockDataSource(), host="127.0.0.1", port=0)   # bakåtkompat
+    try:
+        assert srv._modes == [] and srv.latest["modes"] == []
+        assert not srv._set_mode("live")["ok"]
+    finally:
+        srv.server_close()
+
+
+def test_slabs_source_decodes_live_via_store():
+    # Binder ihop read_block (EcuSession) + signalstoren i SlabsDataSource.poll.
+    from d2diag.kline import KLine, encode
+    from d2diag.kwp2000 import KWP2000
+    from d2diag.slabs import Slabs
+    from d2diag.web.sources import SlabsDataSource
+    from tests.fakes import FakeKLineEcu
+
+    def _f(d):
+        return encode(d, addressed=False)
+
+    resp = {
+        _f(b"\x3e\x01"): _f(b"\x7e\x01"),                       # tester_present
+        _f(b"\x21\x54"): _f(b"\x61\x54\x91\x9c\x0f\x0f"),        # höjder 145/156
+        _f(b"\x21\x56"): _f(b"\x61\x56\x01\x0f\x0f\x0f"),        # any_door bit0=1 (öppen)
+        _f(b"\x21\x43"): _f(b"\x61\x43\x7c\x00\x7c\x00\x7c\x00\x7c\x00"),
+        _f(b"\x21\x50"): _f(b"\x61\x50\x72\x73\x73\x72"),
+        _f(b"\x21\x44"): _f(b"\x61\x44" + bytes(14)),            # batteri/ecu_supply = 0
+    }
+    src = SlabsDataSource(port="x", read_faults=False)
+    src._slabs = Slabs(KWP2000(KLine(FakeKLineEcu(resp))))
+    src._slabs.open()
+    out = src.poll()
+
+    assert out["status"] == "connected"
+    sig = out["signals"]
+    assert sig["height_left"]["v"] == 145 and sig["height_right"]["v"] == 156   # SVG-fält
+    assert "battery" in sig and "ecu_supply" in sig                            # store-drivna
+    assert "any_door" not in sig    # state-fält → visas i Karta (decode_known), ej som numerisk gauge
 
 
 def test_mock_clear_faults_command():

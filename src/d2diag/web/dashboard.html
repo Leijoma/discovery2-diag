@@ -1,5 +1,5 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Discovery 2 · diagnostik</title>
+<title>Discovery 2 · diagnostics</title>
 <style>
   :root {
     --bg:#0e1116; --card:#161b22; --card2:#1c232e; --fg:#e6edf3; --muted:#8b98a5;
@@ -16,7 +16,7 @@
   .dot { width:9px; height:9px; border-radius:50%; background:var(--muted); }
   .dot.connected { background:var(--ok); } .dot.error { background:var(--err); }
   .dot.connecting { background:var(--warn); }
-  /* flikar */
+  /* tabs */
   .tabs { display:flex; gap:6px; padding:0 12px 10px; position:sticky; top:44px; background:var(--bg); z-index:4; }
   .tab { flex:1; text-align:center; padding:10px; border-radius:11px; background:var(--card);
     color:var(--muted); font-weight:600; font-size:14px; border:1px solid var(--line); cursor:pointer; }
@@ -26,7 +26,7 @@
   .hint { color:var(--muted); text-align:center; padding:40px 10px; font-size:14px; }
   section { margin-top:16px; }
   section h2 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin:0 0 8px; }
-  /* signalkort */
+  /* signal cards */
   .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
   .row { display:flex; justify-content:space-between; padding:9px 12px; background:var(--card); border-radius:9px; }
   .row .n { color:var(--muted); } .row .val { font-weight:650; } .u { color:var(--muted); font-size:.8em; }
@@ -34,12 +34,12 @@
   .hero { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
   .card { background:var(--card); border-radius:12px; padding:12px 14px; }
   .card .k { color:var(--muted); font-size:12px; } .card .v { font-size:26px; font-weight:700; }
-  /* felkoder */
+  /* fault codes */
   .faults { display:flex; flex-direction:column; gap:7px; }
   .fault { padding:10px 12px; border-radius:9px; background:var(--card2); border-left:4px solid var(--warn); }
   .fault.current { border-left-color:var(--err); } .fault .tag { font-size:11px; color:var(--muted); margin-left:6px; }
   .none { color:var(--muted); }
-  /* knappar */
+  /* buttons */
   .btns { display:flex; flex-wrap:wrap; gap:8px; }
   .btn { flex:1; min-width:calc(50% - 4px); padding:13px 10px; border-radius:11px; border:1px solid var(--line);
     background:var(--card); color:var(--fg); font-size:14px; font-weight:600; cursor:pointer; }
@@ -48,7 +48,7 @@
   .btn.wide { min-width:100%; }
   .cmd { margin-top:8px; font-size:13px; min-height:18px; } .cmd.ok { color:var(--ok); } .cmd.bad { color:var(--err); }
   .err { color:var(--err); font-size:13px; margin-top:8px; }
-  /* bil ovanifrån */
+  /* car from above */
   .carwrap { display:flex; justify-content:center; }
   #car { width:100%; max-width:320px; }
   #car .body { fill:var(--card); stroke:var(--line); stroke-width:2; }
@@ -57,7 +57,7 @@
   #car .lbl { fill:var(--muted); font-size:9px; } #car .val { fill:var(--fg); font-size:12px; font-weight:700; }
   #car .val2 { fill:var(--accent); font-size:10px; } #car .cap { fill:var(--muted); font-size:8px; text-transform:uppercase; letter-spacing:.5px; }
   footer { color:var(--muted); font-size:11px; text-align:center; padding:16px; }
-  /* karta / täckning */
+  /* map / coverage */
   .mapsum { color:var(--muted); font-size:13px; margin:6px 0 10px; }
   .mapsum b { color:var(--fg); }
   .mrow { display:flex; flex-direction:column; gap:6px; padding:8px 11px;
@@ -89,18 +89,33 @@
   .mdiff { font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--accent); margin:2px 0 4px; }
   .mdiff.none { color:var(--warn); font-family:inherit; }
   .mclr { background:none; border:0; color:var(--err); cursor:pointer; font-size:11px; }
+  .mstore { background:none; border:1px solid var(--ok); color:var(--ok); cursor:pointer;
+            font-size:11px; border-radius:6px; padding:2px 8px; margin-right:6px; }
+  .mstore:disabled { opacity:.6; cursor:default; }
   .sniffbad { display:inline-block; padding:2px 8px; border-radius:8px; font-size:12px; font-weight:600; }
   .sniffbad code { background:var(--bg); padding:0 4px; border-radius:4px; }
   .sniffbad.ok { color:#04121f; background:var(--ok); }
   .sniffbad.stale { color:#04121f; background:var(--warn); }
   .sniffbad.err { color:#fff; background:var(--err); }
   .sniffbad.wait, .sniffbad.off { color:var(--muted); background:var(--card2); }
-  /* fångst-flik */
+  /* capture tab */
   .fcard { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--ok);
     border-radius:10px; padding:11px 12px; margin-bottom:10px; }
   .fcard-h { display:flex; justify-content:space-between; align-items:center; }
   .fcard-h b { font-family:ui-monospace,Menlo,monospace; font-size:15px; }
   .fdot { color:var(--ok); font-size:11px; }
+  /* Faults tab (basic mode) */
+  #faults-body .fcard-h { justify-content:flex-start; gap:9px; }
+  #faults-body .fstat { font-size:15px; font-weight:700; width:16px; text-align:center; }
+  .fcard.f-faults { border-left-color:var(--warn); }
+  .fcard.f-error { border-left-color:var(--err); }
+  .fcard.f-unimplemented { border-left-color:var(--line); opacity:.72; }
+  .fnote { color:var(--muted); font-size:11px; font-weight:400; }
+  .flist { margin:7px 0 0; padding-left:20px; }
+  .flist li { margin:2px 0; font-size:13px; }
+  .fok { color:var(--ok); font-size:13px; margin-top:5px; }
+  .ferr { color:var(--err); font-size:12px; margin-top:5px; font-family:ui-monospace,Menlo,monospace; }
+  .fmuted { color:var(--muted); font-size:12px; margin-top:5px; }
   .fraw { font-family:ui-monospace,Menlo,monospace; font-size:14px; color:var(--accent); margin:6px 0;
     word-break:break-all; }
   .fmap { color:var(--muted); font-size:12px; margin-bottom:8px; } .fmap .four { color:var(--fg); }
@@ -113,7 +128,7 @@
   .flog .flid { font-family:ui-monospace,Menlo,monospace; color:var(--accent); }
   .flog code { background:var(--card2); padding:0 5px; border-radius:4px; font-size:11.5px; }
   section h2 .gcount { color:var(--muted); font-weight:600; font-size:11px; text-transform:none; letter-spacing:0; }
-  /* täckningsbarer (Karta-pickern + kart-header) */
+  /* coverage bars (Map picker + map header) */
   #karta-picker { display:flex; flex-direction:column; gap:7px; }
   .kmod { display:block; width:100%; text-align:left; padding:9px 11px; border-radius:10px;
     border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
@@ -124,7 +139,7 @@
   .kbar { display:flex; height:6px; border-radius:4px; overflow:hidden; background:var(--card2); }
   .kbar.big { height:9px; margin:8px 0 4px; }
   .kbar i { display:block; height:100%; } .kbar i.ok { background:var(--ok); } .kbar i.mb { background:var(--warn); }
-  /* dokument-flik */
+  /* docs tab */
   .dokpick { display:flex; flex-direction:column; gap:6px; }
   .dokgrp { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; margin:8px 0 2px; }
   .dokitem { text-align:left; padding:11px 12px; border-radius:9px; border:1px solid var(--line);
@@ -152,7 +167,7 @@
     white-space:nowrap; }
   .doc th { background:var(--card2); color:var(--muted); position:sticky; top:0; }
   .doc td code { white-space:nowrap; }
-  /* mappning / kalibrering */
+  /* mapping / calibration */
   .snlids { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
   .snlid { padding:8px 10px; border-radius:9px; border:1px solid var(--line); background:var(--card);
     color:var(--fg); font-size:13px; cursor:pointer; font-family:ui-monospace,Menlo,monospace; }
@@ -181,31 +196,39 @@
   .snresult code { display:block; margin-top:6px; font-family:ui-monospace,Menlo,monospace; font-size:12.5px;
     background:var(--bg); padding:8px; border-radius:7px; overflow-x:auto; white-space:pre; }
   .snlive { color:var(--accent); font-family:ui-monospace,Menlo,monospace; font-weight:650; }
+  .modesw { display:inline-flex; gap:2px; padding:2px; border-radius:9px; background:var(--card2);
+            border:1px solid var(--line); }
+  .modeb { border:0; background:none; color:var(--muted); font-size:12px; font-weight:600;
+           padding:3px 10px; border-radius:7px; cursor:pointer; }
+  .modeb.active { background:var(--accent); color:#04121f; }
+  .modeb.active[data-mode="live"] { background:var(--ok); }
 </style>
 
 <header>
   <h1 id="title">Discovery 2</h1>
-  <span class="pill"><span id="dot" class="dot connecting"></span><span id="status">ansluter…</span></span>
+  <span class="modesw" id="modesw"></span>
+  <span class="pill"><span id="dot" class="dot connecting"></span><span id="status">connecting…</span></span>
 </header>
 
 <div class="tabs">
-  <div class="tab active" data-tab="motor">Motor</div>
+  <div class="tab active" data-tab="motor">Engine</div>
   <div class="tab" data-tab="slabs">SLABS</div>
-  <div class="tab" data-tab="fangst">Fångst</div>
-  <div class="tab" data-tab="karta">Karta</div>
-  <div class="tab" data-tab="dok">Dokument</div>
+  <div class="tab" data-tab="faults">Faults</div>
+  <div class="tab" data-tab="fangst">Capture</div>
+  <div class="tab" data-tab="karta">Map</div>
+  <div class="tab" data-tab="dok">Docs</div>
 </div>
 
 <main>
-  <!-- ===================== MOTOR ===================== -->
+  <!-- ===================== ENGINE ===================== -->
   <div class="view active" id="view-motor">
-    <div id="motor-hint" class="hint">Väntar på motordata… (kör dashboarden mot Td5)</div>
+    <div id="motor-hint" class="hint">Waiting for engine data… (run the dashboard against the Td5)</div>
     <div id="motor-body" style="display:none">
       <div class="hero" id="hero"></div>
-      <section><h2>Alla signaler</h2><div class="grid" id="signals"></div></section>
+      <section><h2>All signals</h2><div class="grid" id="signals"></div></section>
       <section>
-        <h2>Felkoder</h2>
-        <div class="btns"><button class="btn wide warn" data-cmd="clear_faults" data-confirm="Radera lagrade felkoder i ECU:n?">Radera felkoder</button></div>
+        <h2>Fault codes</h2>
+        <div class="btns"><button class="btn wide warn" data-cmd="clear_faults" data-confirm="Clear stored fault codes in the ECU?">Clear fault codes</button></div>
         <div class="faults" id="m_faults" style="margin-top:10px"></div>
       </section>
     </div>
@@ -213,129 +236,140 @@
 
   <!-- ===================== SLABS ===================== -->
   <div class="view" id="view-slabs">
-    <div id="slabs-hint" class="hint">Väntar på SLABS-data… (kör med <code>--slabs</code>)</div>
+    <div id="slabs-hint" class="hint">Waiting for SLABS data… (run with <code>--slabs</code>)</div>
     <div id="slabs-body" style="display:none">
       <section>
-        <h2>Bilen ovanifrån</h2>
+        <h2>Vehicle from above</h2>
         <div class="carwrap">
         <svg id="car" viewBox="0 0 200 340" xmlns="http://www.w3.org/2000/svg">
-          <text class="cap" x="100" y="12" text-anchor="middle">Fram</text>
+          <text class="cap" x="100" y="12" text-anchor="middle">Front</text>
           <rect class="body" x="46" y="20" width="108" height="300" rx="20"/>
-          <!-- hjul -->
+          <!-- wheels -->
           <rect class="wheel" x="24" y="46" width="24" height="52" rx="6"/>
           <rect class="wheel" x="152" y="46" width="24" height="52" rx="6"/>
           <rect class="wheel" x="24" y="242" width="24" height="52" rx="6"/>
           <rect class="wheel" x="152" y="242" width="24" height="52" rx="6"/>
-          <!-- ABS-modulator (mitten fram = motorrummet) -->
+          <!-- ABS modulator (front centre = engine bay) -->
           <rect class="abs" x="66" y="34" width="68" height="46" rx="8"/>
-          <text class="cap" x="100" y="49" text-anchor="middle">ABS-block</text>
+          <text class="cap" x="100" y="49" text-anchor="middle">ABS block</text>
           <text class="val2" id="c_abs" x="100" y="66" text-anchor="middle">–</text>
-          <!-- hjuldata -->
-          <text class="lbl" x="30" y="112">VF</text><text class="val" id="c_fl_s" x="30" y="126">–</text><text class="val2" id="c_fl_v" x="30" y="138">–</text>
-          <text class="lbl" x="158" y="112">HF</text><text class="val" id="c_fr_s" x="158" y="126">–</text><text class="val2" id="c_fr_v" x="158" y="138">–</text>
-          <text class="lbl" x="30" y="228">VB</text><text class="val" id="c_rl_s" x="30" y="242">–</text><text class="val2" id="c_rl_v" x="30" y="254">–</text>
-          <text class="lbl" x="158" y="228">HB</text><text class="val" id="c_rr_s" x="158" y="242">–</text><text class="val2" id="c_rr_v" x="158" y="254">–</text>
-          <!-- höjder (luftfjädring) -->
-          <text class="cap" x="100" y="176" text-anchor="middle">Höjd (luftfjädring)</text>
+          <!-- wheel data -->
+          <text class="lbl" x="30" y="112">FL</text><text class="val" id="c_fl_s" x="30" y="126">–</text><text class="val2" id="c_fl_v" x="30" y="138">–</text>
+          <text class="lbl" x="158" y="112">FR</text><text class="val" id="c_fr_s" x="158" y="126">–</text><text class="val2" id="c_fr_v" x="158" y="138">–</text>
+          <text class="lbl" x="30" y="228">RL</text><text class="val" id="c_rl_s" x="30" y="242">–</text><text class="val2" id="c_rl_v" x="30" y="254">–</text>
+          <text class="lbl" x="158" y="228">RR</text><text class="val" id="c_rr_s" x="158" y="242">–</text><text class="val2" id="c_rr_v" x="158" y="254">–</text>
+          <!-- heights (air suspension) -->
+          <text class="cap" x="100" y="176" text-anchor="middle">Height (air suspension)</text>
           <text class="val" id="c_h_l" x="76" y="196" text-anchor="middle">–</text>
           <text class="val" id="c_h_r" x="124" y="196" text-anchor="middle">–</text>
-          <text class="lbl" x="76" y="208" text-anchor="middle">vänster</text>
-          <text class="lbl" x="124" y="208" text-anchor="middle">höger</text>
+          <text class="lbl" x="76" y="208" text-anchor="middle">left</text>
+          <text class="lbl" x="124" y="208" text-anchor="middle">right</text>
         </svg>
         </div>
       </section>
 
       <section>
-        <h2>ABS-block</h2>
+        <h2>ABS block</h2>
         <div class="btns">
-          <button class="btn warn" data-cmd="pump_on" data-confirm="Aktivera ABS-pumpen?">Pump på</button>
-          <button class="btn" data-cmd="pump_off">Pump av</button>
+          <button class="btn warn" data-cmd="pump_on" data-confirm="Activate the ABS pump?">Pump on</button>
+          <button class="btn" data-cmd="pump_off">Pump off</button>
         </div>
-        <h2 style="margin-top:14px">Ventiltest per hjul ⚠️</h2>
+        <h2 style="margin-top:14px">Valve test per wheel ⚠️</h2>
         <div class="btns">
-          <button class="btn warn" data-cmd="wheel_fl" data-confirm="Ventiltest vänster fram?">VF</button>
-          <button class="btn warn" data-cmd="wheel_fr" data-confirm="Ventiltest höger fram?">HF</button>
-          <button class="btn warn" data-cmd="wheel_rl" data-confirm="Ventiltest vänster bak?">VB</button>
-          <button class="btn warn" data-cmd="wheel_rr" data-confirm="Ventiltest höger bak?">HB</button>
+          <button class="btn warn" data-cmd="wheel_fl" data-confirm="Valve test front left?">FL</button>
+          <button class="btn warn" data-cmd="wheel_fr" data-confirm="Valve test front right?">FR</button>
+          <button class="btn warn" data-cmd="wheel_rl" data-confirm="Valve test rear left?">RL</button>
+          <button class="btn warn" data-cmd="wheel_rr" data-confirm="Valve test rear right?">RR</button>
         </div>
       </section>
 
       <section>
-        <h2>Luftfjädring ⚠️</h2>
+        <h2>Air suspension ⚠️</h2>
         <div class="btns">
-          <button class="btn warn" data-cmd="raise_left" data-confirm="Höj vänster?">Höj vä</button>
-          <button class="btn warn" data-cmd="lower_left" data-confirm="Sänk vänster?">Sänk vä</button>
-          <button class="btn warn" data-cmd="raise_right" data-confirm="Höj höger?">Höj hö</button>
-          <button class="btn warn" data-cmd="lower_right" data-confirm="Sänk höger?">Sänk hö</button>
+          <button class="btn warn" data-cmd="raise_left" data-confirm="Raise left?">Raise L</button>
+          <button class="btn warn" data-cmd="lower_left" data-confirm="Lower left?">Lower L</button>
+          <button class="btn warn" data-cmd="raise_right" data-confirm="Raise right?">Raise R</button>
+          <button class="btn warn" data-cmd="lower_right" data-confirm="Lower right?">Lower R</button>
         </div>
         <div class="btns" style="margin-top:8px">
-          <button class="btn warn" data-cmd="compressor" data-confirm="Kör kompressorn?">Kompressor</button>
-          <button class="btn warn" data-cmd="exhaust" data-confirm="Öppna avluftningsventilen?">Avluft</button>
-          <button class="btn" data-cmd="buzzer">🔔 Summer</button>
+          <button class="btn warn" data-cmd="compressor" data-confirm="Run the compressor?">Compressor</button>
+          <button class="btn warn" data-cmd="exhaust" data-confirm="Open the exhaust valve?">Vent</button>
+          <button class="btn" data-cmd="buzzer">🔔 Buzzer</button>
         </div>
       </section>
 
       <section>
-        <h2>Felkoder</h2>
-        <div class="btns"><button class="btn wide warn" data-cmd="clear_faults" data-confirm="Radera SLABS-felkoder?">Radera felkoder</button></div>
+        <h2>Fault codes</h2>
+        <div class="btns"><button class="btn wide warn" data-cmd="clear_faults" data-confirm="Clear SLABS fault codes?">Clear fault codes</button></div>
         <div class="faults" id="s_faults" style="margin-top:10px"></div>
       </section>
     </div>
   </div>
 
-  <!-- ===================== KARTA / TÄCKNING ===================== -->
+  <!-- ===================== MAP / COVERAGE ===================== -->
   <div class="view" id="view-karta">
     <section>
-      <h2>Täckning — reference tool-meny vs vår kod</h2>
+      <h2>Coverage — reference tool menu vs our code</h2>
       <div id="karta-picker" class="btns" style="margin-bottom:10px"></div>
-      <div id="karta-body"><div class="hint">Laddar…</div></div>
+      <div id="karta-body"><div class="hint">Loading…</div></div>
     </section>
   </div>
 
-  <!-- ===================== FÅNGST (märk live-strömmande koder) ===================== -->
+  <!-- ===================== FAULTS (basic mode — all modules) ===================== -->
+  <div class="view" id="view-faults">
+    <section>
+      <h2>Fault codes — all modules</h2>
+      <div class="hint">Reads the fault memory from each module in turn (K-line = one session at a time). In mock mode the RDL 016 baseline is shown. Live requires a transmitting cable + ignition on.</div>
+      <div class="btns"><button class="btn ok wide" id="faults-run">⬤ Read all fault codes</button></div>
+      <div id="faults-status" class="hint" style="margin:8px 0"></div>
+      <div id="faults-body"></div>
+    </section>
+  </div>
+
+  <!-- ===================== CAPTURE (label live-streaming codes) ===================== -->
   <div class="view" id="view-fangst">
     <section>
-      <h2>Fångst — märk koderna som strömmar</h2>
-      <div class="hint">Välj en skärm i reference tool. Koder som pollas om och om igen dyker upp här. Skriv vad reference tool visar (värden i visad ordning) och spara.</div>
+      <h2>Capture — label the codes as they stream</h2>
+      <div class="hint">Pick a screen in reference tool. Codes polled over and over show up here. Type what reference tool shows (values in displayed order) and save.</div>
       <div id="fangst-badge" style="margin:8px 0"></div>
-      <div class="btns"><button class="btn ok wide" id="fangst-new">⬤ Ny insamling — vänta på läsning</button></div>
+      <div class="btns"><button class="btn ok wide" id="fangst-new">⬤ New capture — wait for a read</button></div>
       <div id="fangst-status" style="margin:10px 0"></div>
       <div id="fangst-active"></div>
-      <div class="btns" style="margin-top:6px"><button class="btn" id="fangst-reset">↺ Avbryt</button></div>
-      <h2 style="margin-top:18px">Sparade fångster</h2>
+      <div class="btns" style="margin-top:6px"><button class="btn" id="fangst-reset">↺ Cancel</button></div>
+      <h2 style="margin-top:18px">Saved captures</h2>
       <div id="fangst-log"></div>
     </section>
   </div>
 
-  <!-- ===================== DOKUMENT ===================== -->
+  <!-- ===================== DOCS ===================== -->
   <div class="view" id="view-dok">
     <section>
-      <h2>Dokumentation — underlag & felkoder</h2>
-      <div class="hint">Live-vy av de kanoniska källfilerna (facit + referens). Redigeras i markdownen, aldrig här.</div>
+      <h2>Documentation — reference & fault codes</h2>
+      <div class="hint">Live view of the canonical source files (reference & ground truth). Edit the markdown, never here.</div>
       <div id="dok-picker" class="dokpick" style="margin:10px 0"></div>
-      <div id="dok-body" class="doc"><div class="hint">Välj ett dokument…</div></div>
+      <div id="dok-body" class="doc"><div class="hint">Choose a document…</div></div>
     </section>
   </div>
 
   <div id="cmdResult" class="cmd"></div>
   <div class="err" id="error"></div>
 </main>
-<footer>Realtid via SSE · discovery2-diag</footer>
+<footer>Realtime via SSE · discovery2-diag</footer>
 
 <script>
   const $ = id => document.getElementById(id);
   const fmt = x => (Math.abs(x) >= 100 ? Math.round(x) : x.toFixed(1));
   const LABELS = {
-    rpm:"Varvtal", speed:"Fart", battery:"Batteri", coolant_temp:"Kylvätska",
-    air_temp:"Insugsluft", fuel_temp:"Bränsle", manifold_press:"Grenrörstryck",
-    ambient_press_1:"Omgivningstryck", maf_raw:"MAF (rå)", rpm_error:"Varvfel",
-    balance_1:"Injektor 1", balance_2:"Injektor 2", balance_3:"Injektor 3",
-    balance_4:"Injektor 4", balance_5:"Injektor 5",
-    height_left_mm:"Höjd vänster", height_right_mm:"Höjd höger",
+    rpm:"RPM", speed:"Speed", battery:"Battery", coolant_temp:"Coolant",
+    air_temp:"Intake air", fuel_temp:"Fuel", manifold_press:"Manifold pressure",
+    ambient_press_1:"Ambient pressure", maf_raw:"MAF (raw)", rpm_error:"RPM error",
+    balance_1:"Injector 1", balance_2:"Injector 2", balance_3:"Injector 3",
+    balance_4:"Injector 4", balance_5:"Injector 5",
+    height_left_mm:"Height left", height_right_mm:"Height right",
   };
   const HERO = ["rpm","speed","coolant_temp","battery"];
 
-  // ---- flikar = välj modul (etablerar session på bilen; K-line har en session åt gången) ----
+  // ---- tabs = pick module (establishes a session on the vehicle; K-line has one session at a time) ----
   function showTab(name) {
     document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === name));
     document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
@@ -353,10 +387,41 @@
     if (name === "karta") { showTab("karta"); loadMap(); }
     else if (name === "dok") { showTab("dok"); loadDocs(); }
     else if (name === "fangst") { showTab("fangst"); startFangst(); }
+    else if (name === "faults") { showTab("faults"); }
     else selectModule(name);
   });
 
-  // ---- Karta: live sniff-integration (tänds när reference tool pollar fältet) ----
+  // ---- Faults (basic mode): read all modules in one sequence ----
+  const _faultIcon = {ok:"✓", faults:"⚠", error:"✕", unimplemented:"·"};
+  async function runFaultScan(){
+    const btn=$("faults-run"), body=$("faults-body"), st=$("faults-status");
+    btn.disabled=true; const label=btn.textContent; btn.textContent="reading…";
+    st.textContent="reading fault codes from all modules — may take a while in live mode…";
+    try{
+      const r=await (await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"read_all_faults"})})).json();
+      if(!r.ok){ st.textContent="Could not read: "+(r.error||"unknown error"); }
+      else{
+        st.textContent="mode: "+(r.mode||"?")+" · "+new Date().toLocaleTimeString();
+        body.innerHTML=(r.report||[]).map(renderFaultCard).join("");
+      }
+    }catch(e){ st.textContent="network error"; }
+    btn.disabled=false; btn.textContent=label;
+  }
+  function renderFaultCard(m){
+    const ic=_faultIcon[m.status]||"·";
+    const note=m.note?` <span class="fnote">(${m.note})</span>`:"";
+    let inner;
+    if(m.status==="faults") inner=`<ul class="flist">`+m.faults.map(f=>`<li>${f}</li>`).join("")+`</ul>`;
+    else if(m.status==="error") inner=`<div class="ferr">${m.error||"could not read"}</div>`;
+    else if(m.status==="unimplemented") inner=`<div class="fmuted">${m.note||"not implemented"}</div>`;
+    else inner=`<div class="fok">no fault codes</div>`;
+    return `<div class="fcard f-${m.status}"><div class="fcard-h"><span class="fstat">${ic}</span>`+
+      `<b>${m.module}</b>${note}</div>${inner}</div>`;
+  }
+  document.getElementById("faults-run").onclick=runFaultScan;
+
+  // ---- Map: live sniff integration (lights up when reference tool polls the field) ----
   let _kSniffTimer=null, _ksniff=null, _kCounts={}, _kActive=new Set(), _kModule=null, _kMeta={}, _kFocus=null, _kBaked=false;
   function stopKartaSniff(){ if(_kSniffTimer){ clearInterval(_kSniffTimer); _kSniffTimer=null; } }
   function startKartaSniff(module){
@@ -369,19 +434,19 @@
         _ksniff=ns;
         const fps=(_kMeta.lines!=null)?Math.max(0, (d.lines||0)-_kMeta.lines):0;
         _kMeta={status:d.status, age:d.age, frames:d.frames||0, lines:d.lines||0, source:d.source, error:d.error, fps, configured:d.status!=null};
-        if(!_kBaked && (d.lids||[]).length){ _kBaked=true; renderKartaLive(); }  // baka in värden en gång när data kommit
+        if(!_kBaked && (d.lids||[]).length){ _kBaked=true; renderKartaLive(); }  // bake in values once when data has arrived
         if(document.getElementById("view-karta").classList.contains("active")) updateKartaLive();
-      }catch(e){ _kMeta={status:"fel", error:"ingen kontakt med servern", configured:true}; }
+      }catch(e){ _kMeta={status:"error", error:"no connection to the server", configured:true}; }
     };
     poll(); _kSniffTimer=setInterval(poll,1000);
   }
   function sniffBadge(m, active){
     m=m||{};
-    if(m.status==null) return '<span class="sniffbad off">○ ingen sniff — starta dashboarden med <code>--sniff PORT</code></span>';
-    if(m.status==="fel") return `<span class="sniffbad err">● sniff-fel: ${m.error||"?"}</span>`;
-    if(m.status==="live" && m.age!=null && m.age<3){ const demo=(m.source||"").startsWith("replay")?" · demo":""; const pol=(active&&active.size)?(" · pollar "+Array.from(active).slice(0,6).join(" ")):""; return `<span class="sniffbad ok">● LIVE · ${m.fps||0} ramar/s · ${m.frames||0} läsningar${pol}${demo}</span>`; }
-    if(m.age!=null) return `<span class="sniffbad stale">● ingen trafik på ${m.age}s — sitter tappen rätt / är reference tool på?</span>`;
-    return `<span class="sniffbad wait">○ väntar på trafik… (${(m.source||"").replace(/^serial:/,"")})</span>`;
+    if(m.status==null) return '<span class="sniffbad off">○ no sniff — start the dashboard with <code>--sniff PORT</code></span>';
+    if(m.status==="error") return `<span class="sniffbad err">● sniff error: ${m.error||"?"}</span>`;
+    if(m.status==="live" && m.age!=null && m.age<3){ const demo=(m.source||"").startsWith("replay")?" · demo":""; const pol=(active&&active.size)?(" · polling "+Array.from(active).slice(0,6).join(" ")):""; return `<span class="sniffbad ok">● LIVE · ${m.fps||0} frames/s · ${m.frames||0} reads${pol}${demo}</span>`; }
+    if(m.age!=null) return `<span class="sniffbad stale">● no traffic for ${m.age}s — is the tap connected / is reference tool on?</span>`;
+    return `<span class="sniffbad wait">○ waiting for traffic… (${(m.source||"").replace(/^serial:/,"")})</span>`;
   }
   function truthKey(cat,name){ return "truth:"+_kModule+"|"+cat+"|"+name; }
   function liveFor(lid,sig){
@@ -407,7 +472,7 @@
     const r=row.querySelector(".mrawv"); if(r) r.textContent=(lv&&lv.raw)||"";
     const d=row.querySelector(".mlive-dot"); if(d) d.classList.toggle("on", !!(lv&&lv.active));
   }
-  // varje sekund: uppdatera badgen + live-VÄRDET på alla rader (lugnt: bara text, ingen animation)
+  // each second: update the badge + the live VALUE on every row (calm: text only, no animation)
   function updateKartaLive(){
     updateBadge();
     document.querySelectorAll("#karta-body .mrow[data-lid]").forEach(row=>{
@@ -418,7 +483,7 @@
     });
   }
 
-  // ---- dokument-flik (vy mot kanoniska markdown-filer, ej bunden till session) ----
+  // ---- docs tab (view of the canonical markdown files, not bound to a session) ----
   let _docsLoaded = false;
   async function loadDocs(force) {
     if (_docsLoaded && !force) return;
@@ -426,12 +491,12 @@
       const d = await (await fetch("/docs")).json();
       renderDocPicker(d.docs || []);
       _docsLoaded = true;
-    } catch (e) { $("dok-picker").innerHTML = '<div class="hint">Kunde inte hämta dokumentlistan.</div>'; }
+    } catch (e) { $("dok-picker").innerHTML = '<div class="hint">Could not fetch the document list.</div>'; }
   }
   function renderDocPicker(docs) {
-    if (!docs.length) { $("dok-picker").innerHTML = '<div class="hint">Inga dokument konfigurerade.</div>'; return; }
+    if (!docs.length) { $("dok-picker").innerHTML = '<div class="hint">No documents configured.</div>'; return; }
     const groups = {};
-    docs.forEach(x => (groups[x.group || "Referens"] = groups[x.group || "Referens"] || []).push(x));
+    docs.forEach(x => (groups[x.group || "Reference"] = groups[x.group || "Reference"] || []).push(x));
     $("dok-picker").innerHTML = Object.keys(groups).map(g =>
       `<div class="dokgrp">${g}</div>` + groups[g].map(x =>
         `<button class="dokitem" data-doc="${x.id}">${x.title}</button>`).join("")).join("");
@@ -439,15 +504,15 @@
   }
   async function openDoc(id, btn) {
     document.querySelectorAll(".dokitem").forEach(x => x.classList.toggle("active", x === btn));
-    $("dok-body").innerHTML = '<div class="hint">Laddar…</div>';
+    $("dok-body").innerHTML = '<div class="hint">Loading…</div>';
     try {
       const html = await (await fetch("/doc?id=" + encodeURIComponent(id))).text();
       $("dok-body").innerHTML = html;
       $("dok-body").scrollIntoView({ behavior:"smooth", block:"start" });
-    } catch (e) { $("dok-body").innerHTML = '<div class="hint">Kunde inte hämta dokumentet.</div>'; }
+    } catch (e) { $("dok-body").innerHTML = '<div class="hint">Could not fetch the document.</div>'; }
   }
 
-  // ---- karta / täckningssida (valfri modul, ej bunden till aktiv session) ----
+  // ---- map / coverage page (any module, not bound to the active session) ----
   const mIcon = s => s === "ok" ? "✅" : (s === "maybe" ? "🟡" : "⬜");
   const pctOf = c => (c && c.total ? Math.round(100 * c.ok / c.total) : 0);
   const bar = c => { const t = c.total || 0, ok = t ? 100*c.ok/t : 0, mb = t ? 100*c.maybe/t : 0;
@@ -460,7 +525,7 @@
       renderPicker(d.modules || [], d.module, d.coverage || {});
       renderKartaLive();
       startKartaSniff(d.module);
-    } catch (e) { $("karta-body").innerHTML = '<div class="hint">Kunde inte hamta kartan.</div>'; }
+    } catch (e) { $("karta-body").innerHTML = '<div class="hint">Could not load the map.</div>'; }
   }
   function renderPicker(modules, active, cov) {
     $("karta-picker").innerHTML = modules.map(m => { const c = cov[m] || {ok:0,maybe:0,total:0};
@@ -473,11 +538,11 @@
   function renderKartaLive(){
     if(!_kmap) return;
     const module=_kmap.module||"?", map=_kmap.map||[], cov=(_kmap.coverage||{})[module];
-    if(!map.length){ $("karta-body").innerHTML=`<div class="hint">Ingen karta för "${module}" än.</div>`; return; }
+    if(!map.length){ $("karta-body").innerHTML=`<div class="hint">No map for "${module}" yet.</div>`; return; }
     let ok=0,mb=0,tot=0;
     map.forEach(g=>g.items.forEach(i=>{tot++;if(i.status==="ok")ok++;else if(i.status==="maybe")mb++;}));
     const c=cov||{ok,maybe:mb,total:tot}, pct=pctOf(c);
-    let html=`<div class="mapsum">Modul <b>${module.toUpperCase()}</b> · täckt <b>${pct}%</b> — bekräftat <b>${ok}/${tot}</b>${mb?` · påbörjat <b>${mb}</b>`:""} · <span class="snlive" id="karta-live"></span></div>`+
+    let html=`<div class="mapsum">Module <b>${module.toUpperCase()}</b> · covered <b>${pct}%</b> — confirmed <b>${ok}/${tot}</b>${mb?` · started <b>${mb}</b>`:""} · <span class="snlive" id="karta-live"></span></div>`+
       `<div class="kbar big"><i class="ok" style="width:${tot?100*ok/tot:0}%"></i><i class="mb" style="width:${tot?100*mb/tot:0}%"></i></div>`;
     html+=map.map(g=>{ let go=0,gt=0; g.items.forEach(i=>{gt++;if(i.status==="ok")go++;});
       return `<h2 style="margin-top:14px">${g.cat} <span class="gcount">${go}/${gt}</span></h2>`+g.items.map(i=>rowHtml(g.cat,i)).join(""); }).join("");
@@ -490,9 +555,9 @@
     const our=(lv&&lv.our!=null)?lv.our:"—", raw=(lv&&lv.raw)||"";
     return `<div class="mrow ${i.status}" data-lid="${i.lid}" data-sig="${i.sig||""}" data-cat="${encodeURIComponent(cat)}" data-name="${encodeURIComponent(i.name)}">`+
       `<div class="mrow-top"><span>${mIcon(i.status)} ${i.name}</span><span class="mref">${i.ref||""}</span></div>`+
-      `<div class="mrow-live"><span class="mlive-dot"></span><span class="mour">vår: <b>${our}</b></span>`+
-        `<input class="mtruth" placeholder="läs av i reference tool (klartext)">`+
-        `<button class="mrec">spara</button></div>`+
+      `<div class="mrow-live"><span class="mlive-dot"></span><span class="mour">ours: <b>${our}</b></span>`+
+        `<input class="mtruth" placeholder="read from reference tool (plaintext)">`+
+        `<button class="mrec">save</button></div>`+
       `<div class="mrow-raw"><code class="mrawv">${raw}</code></div>`+
       `<div class="mauto"></div></div>`;
   }
@@ -504,11 +569,11 @@
       const cat=decodeURIComponent(row.dataset.cat), name=decodeURIComponent(row.dataset.name), rk=readingsKey(cat,name);
       const inp=row.querySelector(".mtruth"), rec=row.querySelector(".mrec");
       const top=row.querySelector(".mrow-top"); if(top) top.onclick=()=>setFocus(row.classList.contains("focus")?null:row);
-      if(_kFocus && name===_kFocus) row.classList.add("focus");  // behåll fokus över omritning
+      if(_kFocus && name===_kFocus) row.classList.add("focus");  // keep focus across re-render
       const save=()=>{
         const text=(inp.value||"").trim(); if(!text){ inp.focus(); return; }
         const raws={}; row.dataset.lid.split(/\s+/).forEach(x=>{ if(_ksniff&&_ksniff[x]) raws[x]=_ksniff[x].raw; });
-        if(!Object.keys(raws).length){ showCmd("Ingen sniff-data för den LID:en ännu — står reference tool på fältet?", false); return; }
+        if(!Object.keys(raws).length){ showCmd("No sniff data for that LID yet — is reference tool on the field?", false); return; }
         const rs=getReadings(rk); rs.push({text, raws}); setReadings(rk,rs); inp.value="";
         autoSolve(row, rk);
       };
@@ -521,31 +586,71 @@
     const rs=getReadings(rk), box=row.querySelector(".mauto");
     const rawname=decodeURIComponent(row.dataset.name);
     const sig=row.dataset.sig||rawname.replace(/^\d+\.\s*/,"").replace(/\s*\([^)]*\)/g,"").trim().replace(/[^a-zA-Z0-9åäöÅÄÖ]+/g,"_").replace(/^_+|_+$/g,"").toLowerCase();
-    const clr=` <button class="mclr">rensa ${rs.length}</button>`;
+    const clr=` <button class="mclr">clear ${rs.length}</button>`;
     try{
       const r=await (await fetch("/automap",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({samples:rs, candidate_lids:row.dataset.lid.split(/\s+/), name:sig, unit:""})})).json();
       const hx=v=>v.toString(16).padStart(2,"0");
       const diffTxt=(r.diff&&r.diff.length)
-        ? `<div class="mdiff">ändrade bytes: ${r.diff.slice(0,8).map(d=>`21 ${d.lid} b${d.byte}: ${d.values.map(hx).join("→")}`).join(" · ")}</div>`
-        : (rs.length>=2 ? `<div class="mdiff none">inga bytes ändrades — fältet ligger inte i denna LID, eller värdet var oförändrat</div>` : "");
+        ? `<div class="mdiff">changed bytes: ${r.diff.slice(0,8).map(d=>`21 ${d.lid} b${d.byte}: ${d.values.map(hx).join("→")}`).join(" · ")}</div>`
+        : (rs.length>=2 ? `<div class="mdiff none">no bytes changed — the field isn't in this LID, or the value was unchanged</div>` : "");
       let main="";
       if(!r.ok) main=`<span class="mautohint">${r.error}</span>`;
-      else if(r.mode==="numeric") main=`<div class="mres">→ <b>21 ${r.lid}@${r.offset} ${r.kind}</b> · R²=${(+r.r2).toFixed(3)}${r.clean?" · ren skala ✓":" · osäker skala"}${r.how==="guess"?" (gissning, 1 avläsning)":""}<code>${r.signal}</code></div>`;
+      else if(r.mode==="numeric") main=`<div class="mres">→ <b>21 ${r.lid}@${r.offset} ${r.kind}</b> · R²=${(+r.r2).toFixed(3)}${r.clean?" · clean scale ✓":" · uncertain scale"}${r.how==="guess"?" (guess, 1 reading)":""}<code>${r.signal}</code></div>`;
       else main=`<div class="mres">→ <b>${r.rule}</b></div>`;
-      box.innerHTML=main+diffTxt+`<span class="mautohint">${rs.length} avläsning(ar)</span>${clr}`;
-    }catch(e){ box.innerHTML=`<span class="mautohint">nätverksfel</span>${clr}`; }
+      const saveBtn=(r.ok&&_kModule)?` <button class="mstore" title="write to signals/${_kModule}.json">✓ save to store</button>`:"";
+      box.innerHTML=main+diffTxt+`<span class="mautohint">${rs.length} reading(s)</span>${saveBtn}${clr}`;
+      const sb=box.querySelector(".mstore");
+      if(sb) sb.onclick=()=>saveSignalToStore(_kModule, r, sig, sb);
+    }catch(e){ box.innerHTML=`<span class="mautohint">network error</span>${clr}`; }
     const cb=box.querySelector(".mclr"); if(cb) cb.onclick=()=>{ setReadings(rk,[]); box.innerHTML=""; };
   }
+  // Build a store record from an automap result and write it via POST /signal.
+  function recordFromSolve(r, name, unit){
+    const rec={name, lid:r.lid, offset:r.offset, unit:unit||"", confidence:"kandidat",
+               source:"Map mapping (differential/plaintext)"};
+    if(r.mode==="state"||r.mapping){
+      const states={}; Object.keys(r.mapping).forEach(k=>{ states[r.mapping[k]]=k; });
+      if(r.bit!=null){ rec.kind="bit"; rec.bit=r.bit; rec.states=states; }
+      else { rec.kind="u8"; rec.states=states; }
+    } else { rec.kind=r.kind; rec.scale=r.scale; rec.bias=r.bias||0; }
+    return rec;
+  }
+  async function saveSignalToStore(module, r, name, btn){
+    btn.disabled=true; btn.textContent="saving…";
+    try{
+      const res=await (await fetch("/signal",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({module, record:recordFromSolve(r, name, "")})})).json();
+      if(res.ok){ btn.textContent="✓ saved (candidate)"; showCmd(`${name} → signals/${module}.json`, true); }
+      else { btn.disabled=false; btn.textContent="✓ save to store"; showCmd(res.error||"could not save", false); }
+    }catch(e){ btn.disabled=false; btn.textContent="✓ save to store"; showCmd("network error", false); }
+  }
 
+  function renderMode(d){
+    const el=$("modesw"); if(!el) return;
+    const modes=d.modes||[], cur=d.mode;
+    if(modes.length<2){ el.innerHTML=""; return; }   // nothing to choose between
+    el.innerHTML=modes.map(m=>`<button class="modeb${m===cur?" active":""}" data-mode="${m}">`+
+      `${m==="live"?"● Live":m==="mock"?"Mock":m}</button>`).join("");
+    el.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>setMode(b.dataset.mode, b));
+  }
+  async function setMode(mode, btn){
+    if(btn){ btn.textContent="…"; }
+    try{
+      const r=await (await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"set_mode",params:{mode}})})).json();
+      showCmd(r.ok?`mode: ${mode}`:(r.error||"could not switch mode"), !!r.ok);
+    }catch(e){ showCmd("network error", false); }
+  }
   function render(d) {
     const st = d.status || "connecting";
     $("dot").className = "dot " + st;
-    $("status").textContent = ({connected:"ansluten",connecting:"ansluter…",error:"fel"}[st] || st) + (d.source ? " · " + d.source : "");
+    $("status").textContent = ({connected:"connected",connecting:"connecting…",error:"error"}[st] || st) + (d.source ? " · " + d.source : "");
     $("error").textContent = d.error || "";
+    renderMode(d);
     const sig = d.signals || {}, faults = d.faults || [];
     const mod = d.module || ((d.source || "").indexOf("slabs") >= 0 ? "slabs" : "motor");
-    // synka fliken till serverns aktiva modul EN gång vid start (sedan styr klick)
+    // sync the tab to the server's active module ONCE at start (clicks steer after that)
     if (!render._init) { render._init = true; showTab(mod); }
     if (mod === "slabs") renderSlabs(sig, faults); else renderMotor(sig, faults);
   }
@@ -573,12 +678,12 @@
     setT("c_h_l", sig.height_left ? fmt(sig.height_left.v) : "–");
     setT("c_h_r", sig.height_right ? fmt(sig.height_right.v) : "–");
     const cur = faults.filter(f => /current/i.test(f)).length;
-    setT("c_abs", faults.length ? (cur ? cur+" aktiva" : faults.length+" loggade") : "OK");
+    setT("c_abs", faults.length ? (cur ? cur+" active" : faults.length+" logged") : "OK");
     $("s_faults").innerHTML = faultHtml(faults);
   }
 
   function faultHtml(faults) {
-    if (!faults.length) return '<span class="none">Inga felkoder</span>';
+    if (!faults.length) return '<span class="none">No fault codes</span>';
     return faults.map(f => { const cur = /current/i.test(f);
       const tag = f.match(/\(([^)]+)\)\s*$/), name = f.replace(/\s*\([^)]+\)\s*$/, "");
       return `<div class="fault ${cur?'current':'logged'}">${name}<span class="tag">${tag?tag[1]:""}</span></div>`; }).join("");
@@ -588,18 +693,18 @@
     setTimeout(() => { el.textContent = ""; el.className = "cmd"; }, 5000); }
 
   document.querySelectorAll("[data-cmd]").forEach(btn => btn.onclick = async () => {
-    if (btn.dataset.confirm && !confirm(btn.dataset.confirm + "\n(Stillastående, tändning på.)")) return;
+    if (btn.dataset.confirm && !confirm(btn.dataset.confirm + "\n(Stationary, ignition on.)")) return;
     btn.disabled = true;
     try {
       const r = await fetch("/command", { method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ action: btn.dataset.cmd }) });
       const d = await r.json();
-      showCmd(d.ok ? (d.message || "Klart") : ("Fel: " + (d.error || "okänt")), !!d.ok);
-    } catch (e) { showCmd("Nätverksfel: " + e, false); }
+      showCmd(d.ok ? (d.message || "Done") : ("Error: " + (d.error || "unknown")), !!d.ok);
+    } catch (e) { showCmd("Network error: " + e, false); }
     btn.disabled = false;
   });
 
-  // ---- Fångst: batch-insamling (tryck "Ny insamling" → läs i reference tool → beskriv) ----
+  // ---- Capture: batch collection (press "New capture" → read in reference tool → describe) ----
   let _fTimer=null, _fBase={}, _fBatch=[], _fBatchRaw={}, _fBatchCount={}, _fArmed=false, _fArmStart=0, _fLastData=0,
       _fSnap={}, _fMeta={}, _fStatus="idle", _fSig="";
   function stopFangst(){ if(_fTimer){ clearInterval(_fTimer); _fTimer=null; } }
@@ -630,16 +735,16 @@
     };
     poll(); _fTimer=setInterval(poll,500);
   }
-  function fDecodeText(l){ return (l&&l.decode&&l.decode.length)? l.decode.map(s=>s.name+"="+s.value+(s.unit||"")).join(", ") : "(ingen mappning än)"; }
+  function fDecodeText(l){ return (l&&l.decode&&l.decode.length)? l.decode.map(s=>s.name+"="+s.value+(s.unit||"")).join(", ") : "(no mapping yet)"; }
   function renderFangst(){
     const b=document.getElementById("fangst-badge"); if(b) b.innerHTML=sniffBadge(_fMeta, null);
     const st=document.getElementById("fangst-status");
     if(st){
       if(_fStatus==="armed"){ const left=Math.max(0,4-Math.round((Date.now()-(_fLastData||_fArmStart))/1000));
-        st.innerHTML='<span class="sniffbad stale">● väntar på läsning… tryck LÄS i reference tool ('+left+'s)</span>'; }
-      else if(_fStatus==="done") st.innerHTML='<span class="sniffbad ok">● '+_fBatch.length+' koder fångade — beskriv och spara</span>';
-      else if(_fStatus==="timeout") st.innerHTML='<span class="sniffbad err">ingen data kom in — tryck LÄS i reference tool och försök igen</span>';
-      else st.innerHTML='<span class="sniffbad off">tryck "Ny insamling", läs i reference tool, beskriv koderna</span>';
+        st.innerHTML='<span class="sniffbad stale">● waiting for a read… press READ in reference tool ('+left+'s)</span>'; }
+      else if(_fStatus==="done") st.innerHTML='<span class="sniffbad ok">● '+_fBatch.length+' codes captured — describe and save</span>';
+      else if(_fStatus==="timeout") st.innerHTML='<span class="sniffbad err">no data arrived — press READ in reference tool and try again</span>';
+      else st.innerHTML='<span class="sniffbad off">press "New capture", read in reference tool, describe the codes</span>';
     }
     const sig=_fStatus+"|"+_fBatch.join(",");
     if(sig!==_fSig){ _fSig=sig; buildBatchCards(); }
@@ -652,33 +757,33 @@
   function buildBatchCards(){
     const box=document.getElementById("fangst-active"); if(!box) return;
     if(!_fBatch.length){ box.innerHTML=""; return; }
-    box.innerHTML=_fBatch.map(lid=>{ const l=_fSnap[lid]||{decode:[]}; const raw=l.raw||"";  // LIVE råbytes (uppdateras)
+    box.innerHTML=_fBatch.map(lid=>{ const l=_fSnap[lid]||{decode:[]}; const raw=l.raw||"";  // LIVE raw bytes (updated)
       return '<div class="fcard" data-lid="'+lid+'"><div class="fcard-h"><b>21 '+lid+'</b><span class="fdot fcnt">×'+(_fBatchCount[lid]||1)+'</span></div>'+
         '<div class="fraw">'+raw+'</div>'+
-        '<div class="fmap">vår mappning: <span class="four">'+fDecodeText(l)+'</span></div>'+
-        '<div class="frow"><input class="ftext" placeholder="vad visar reference tool? (värden i visad ordning)"></div></div>'; }).join("")+
-      '<button class="btn ok wide" id="fangst-savebatch">Spara batch</button>';
+        '<div class="fmap">our mapping: <span class="four">'+fDecodeText(l)+'</span></div>'+
+        '<div class="frow"><input class="ftext" placeholder="what does reference tool show? (values in displayed order)"></div></div>'; }).join("")+
+      '<button class="btn ok wide" id="fangst-savebatch">Save batch</button>';
     const sb=document.getElementById("fangst-savebatch"); if(sb) sb.onclick=saveBatch;
   }
   async function saveBatch(){
     let n=0;
     for(const card of [...document.querySelectorAll('#fangst-active .fcard')]){
       const lid=card.dataset.lid, text=(card.querySelector('.ftext').value||"").trim(); if(!text) continue;
-      const raw=((_fSnap[lid]||{}).raw)||"";  // fångar aktuell live-råbytes vid spara
+      const raw=((_fSnap[lid]||{}).raw)||"";  // capture current live raw bytes on save
       try{ await fetch("/capture",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({module:_fMeta.module,lid:lid,raw:raw,text:text})}); }catch(_){}
       addFangstLog({lid:lid,raw:raw,text:text}); n++;
     }
-    _fBatch=[]; _fBatchRaw={}; _fStatus="idle"; _fSig=""; renderFangst(); showCmd(n+" fångster sparade", true);
+    _fBatch=[]; _fBatchRaw={}; _fStatus="idle"; _fSig=""; renderFangst(); showCmd(n+" captures saved", true);
   }
   function fLogKey(){ return "fangstlog:"+(_fMeta.module||"?"); }
   function getFangstLog(){ try{ return JSON.parse(localStorage.getItem(fLogKey())||"[]"); }catch(_){ return []; } }
   function addFangstLog(rec){ const l=getFangstLog(); l.unshift({lid:rec.lid, raw:rec.raw, text:rec.text, t:new Date().toLocaleTimeString()}); localStorage.setItem(fLogKey(), JSON.stringify(l.slice(0,200))); renderFangstLog(); }
   function renderFangstLog(){ const box=document.getElementById("fangst-log"); if(!box) return; const l=getFangstLog();
-    box.innerHTML=l.length? l.map(r=>'<div class="flog"><span class="flid">21 '+r.lid+'</span> <code>'+(r.raw||"")+'</code> → '+r.text+' <span class="none">'+(r.t||"")+'</span></div>').join("") : '<div class="hint" style="padding:14px">Inga sparade än.</div>'; }
+    box.innerHTML=l.length? l.map(r=>'<div class="flog"><span class="flid">21 '+r.lid+'</span> <code>'+(r.raw||"")+'</code> → '+r.text+' <span class="none">'+(r.t||"")+'</span></div>').join("") : '<div class="hint" style="padding:14px">None saved yet.</div>'; }
 
   (function connect() {
     const es = new EventSource("/events");
     es.onmessage = e => { try { render(JSON.parse(e.data)); } catch(_){} };
-    es.onerror = () => { $("dot").className = "dot connecting"; $("status").textContent = "återansluter…"; };
+    es.onerror = () => { $("dot").className = "dot connecting"; $("status").textContent = "reconnecting…"; };
   })();
 </script>

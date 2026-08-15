@@ -50,13 +50,18 @@ class NegativeResponse(KWP2000Error):
 
 
 class KWP2000:
-    def __init__(self, kline: KLine, max_pending: int = 6, tolerant: bool = False) -> None:
+    def __init__(self, kline: KLine, max_pending: int = 6, tolerant: bool = False,
+                 addressed: bool = False) -> None:
         self._k = kline
         self._max_pending = max_pending
         # tolerant=True: läs hela svarsbursten och SÖK efter positiv/negativ SID
         # istället för att kräva en checksum-giltig ram. För billiga, brusiga
         # KKL-kablar där turnaround-glitch shreddar enstaka ramar.
         self._tolerant = tolerant
+        # addressed=True: skicka ADRESSERADE ramar (fmt/target/source) på VARJE
+        # meddelande, inte bara fast init. Airbag (TRW SPS, 0x5B) kör så — till
+        # skillnad från Td5/SLABS som växlar till oadresserade sessionsramar.
+        self._addressed = addressed
 
     # ---- livscykel (delegeras nedåt) ---------------------------------- #
     def open(self) -> None:
@@ -83,7 +88,8 @@ class KWP2000:
         if self._tolerant:
             resp = self._request_tolerant(service, payload)
         else:
-            resp = self._resolve_pending(self._k.request(bytes([service]) + payload))
+            resp = self._resolve_pending(
+                self._k.request(bytes([service]) + payload, addressed=self._addressed))
         if not resp:
             raise KWP2000Error(f"tomt svar på tjänst 0x{service:02X}")
         if resp[0] == NEGATIVE_RESPONSE:
@@ -101,7 +107,7 @@ class KWP2000:
         Returnerar bytes från och med den funna SID:en (positiv eller negativ),
         så att den gemensamma tolkningen i :meth:`request` fungerar oförändrad.
         """
-        raw = self._k.converse(bytes([service]) + payload)
+        raw = self._k.converse(bytes([service]) + payload, addressed=self._addressed)
         return self._extract_response(raw, service, payload)
 
     @staticmethod

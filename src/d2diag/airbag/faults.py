@@ -18,7 +18,7 @@ FAULT_LID_ALT = 0x01      # 21 01 → tomt i capturen (annan fault-klass?)
 _CLEAR = 0x14             # 14 → 54
 
 # Preliminär status-tolkning (behöver fler captures för att bekräfta bit-betydelser).
-STATUS = {0x90: "open circuit intermittent (kandidat)"}
+STATUS = {0x90: "open circuit intermittent (candidate)"}
 
 
 def decode_faults(data: bytes) -> "list[dict]":
@@ -34,6 +34,6 @@ def decode_faults(data: bytes) -> "list[dict]":
         out.append({
             "number": num,
             "status": status,
-            "status_text": STATUS.get(status, f"okänd status 0x{status:02x}"),
+            "status_text": STATUS.get(status, f"unknown status 0x{status:02x}"),
         })
     return out

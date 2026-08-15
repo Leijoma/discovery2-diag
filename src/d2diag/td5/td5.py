@@ -9,8 +9,7 @@ from __future__ import annotations
 import time
 from typing import Callable
 
-from ..kline.kline import KLineError
-from ..kwp2000.kwp2000 import KWP2000, KWP2000Error
+from ..session import EcuSession
 from .identifiers import BY_NAME, LIDS, decode_lid
 from .keygen import key_bytes_from_seed
 
@@ -47,23 +46,10 @@ _DEFAULT_IDLE = 5.0
 _DEFAULT_ATTEMPTS = 6
 
 
-class Td5:
-    def __init__(self, kwp: KWP2000) -> None:
-        self._kwp = kwp
+class Td5(EcuSession):
+    name = "Td5"
 
-    # livscykel delegeras hela vägen ner till transporten
-    def open(self) -> None:
-        self._kwp.open()
-
-    def close(self) -> None:
-        self._kwp.close()
-
-    def __enter__(self) -> "Td5":
-        self.open()
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        self.close()
+    # livscykel (open/close/context) + read_block/tester_present ärvs från EcuSession
 
     def start_session(self) -> bytes:
         """StartDiagnosticSession i Td5:ans diagnostikläge (0xA0)."""
@@ -93,35 +79,17 @@ class Td5:
         sleep: Callable[[float], None] = time.sleep,
     ) -> bytes:
         """Full uppkoppling: bus-idle → tolerant fast init (sök C1) → session →
-        unlock. Retryar hela sekvensen vid brus och returnerar C1-datafältet.
+        unlock (via :meth:`connect`). Retryar hela sekvensen vid brus och
+        returnerar C1-datafältet.
 
         Bäst mot en färsk ECU (tändningscykel precis innan). ``sleep`` injiceras
         för testbarhet. Höjer :class:`KWP2000Error` om det inte går efter
-        ``attempts`` försök.
-
-        En halvöppen session från ett tidigare försök svarar ``7F`` på
-        StartCommunication; därför en längre paus mellan försök så den hinner
-        timeouta innan nästa init.
-        """
-        sleep(idle)  # låt linjen vara tyst så ev. öppen session dör
-        last: "Exception | None" = None
-        for _ in range(attempts):
-            try:
-                c1 = self._kwp.start_communication(tolerant=True)
-            except KLineError as exc:
-                # Ingen ren C1. Vanligast: ECU:n svarar 7F (generalReject) för att
-                # sessionen REDAN är öppen från ett tidigare försök — då är
-                # kommunikationen uppe och vi kan gå direkt på session+unlock.
-                # Prova det innan vi init:ar om (en omsändning bara håller låset).
-                last = exc
-                c1 = b""
-            try:
-                self.connect()
-                return c1
-            except (KWP2000Error, KLineError, ValueError) as exc:
-                last = exc
-                sleep(8.0)  # lät connect misslyckas → låt sessionen dö före nästa init
-        raise KWP2000Error(f"kunde inte etablera Td5-session efter {attempts} försök: {last}")
+        ``attempts`` försök. En halvöppen session svarar ``7F`` på
+        StartCommunication men går ändå att låsa upp — därför tolereras tom C1
+        (se :meth:`EcuSession._establish`)."""
+        return self._establish(
+            after=self.connect, idle=idle, attempts=attempts, retry_sleep=8.0, sleep=sleep
+        )
 
     # ---- avläsning av livedata --------------------------------------- #
     def read_lid(self, lid: int) -> "dict[str, float]":

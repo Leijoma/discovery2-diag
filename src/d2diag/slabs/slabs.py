@@ -17,8 +17,7 @@ from __future__ import annotations
 import time
 from typing import Callable
 
-from ..kline.kline import KLineError
-from ..kwp2000.kwp2000 import KWP2000, KWP2000Error
+from ..session import EcuSession
 from .faults import FAULT_BLOCK_LEN, decode_fault_block
 
 SLABS_ADDRESS = 0x29
@@ -55,25 +54,13 @@ _DEFAULT_IDLE = 0.3
 _DEFAULT_ATTEMPTS = 3
 
 
-class Slabs:
-    """Wabco SLABS via fast init 0x29. Läs + rensa + ställdon."""
+class Slabs(EcuSession):
+    """Wabco SLABS via fast init 0x29. Läs + rensa + ställdon.
 
-    def __init__(self, kwp: KWP2000) -> None:
-        self._kwp = kwp
+    Livscykel (open/close/context), :meth:`read_block` och :meth:`tester_present`
+    ärvs från :class:`EcuSession`."""
 
-    # ---- livscykel ---------------------------------------------------- #
-    def open(self) -> None:
-        self._kwp.open()
-
-    def close(self) -> None:
-        self._kwp.close()
-
-    def __enter__(self) -> "Slabs":
-        self.open()
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        self.close()
+    name = "SLABS"
 
     def establish(
         self,
@@ -83,21 +70,12 @@ class Slabs:
         sleep: Callable[[float], None] = time.sleep,
     ) -> bytes:
         """Bus-idle → tolerant fast init mot 0x29 (sök C1). Returnerar C1-datafältet
-        (`57 8F`). Ingen session/unlock behövs. Höjer KWP2000Error efter ``attempts``.
+        (`57 8F`). Ingen session/unlock behövs (``after=None``). Höjer
+        :class:`KWP2000Error` efter ``attempts`` försök.
         """
-        sleep(idle)
-        last: "Exception | None" = None
-        for _ in range(attempts):
-            try:
-                return self._kwp.start_communication(tolerant=True)
-            except (KLineError, KWP2000Error) as exc:
-                last = exc
-                sleep(5.0)  # låt ev. halvöppen session dö före ny init
-        raise KWP2000Error(f"kunde inte etablera SLABS-session efter {attempts} försök: {last}")
-
-    def tester_present(self) -> None:
-        """Keepalive (3E) — håll sessionen vid liv mellan förfrågningar."""
-        self._kwp.tester_present()
+        return self._establish(
+            after=None, idle=idle, attempts=attempts, retry_sleep=5.0, sleep=sleep
+        )
 
     # ---- ECU-identitet (1A xx) --------------------------------------- #
     def read_ecu_id(self, option: int) -> bytes:

@@ -201,6 +201,32 @@ def block_diff(parsed, candidate_lids):
     return out
 
 
+def stable_diff(baselines, after, candidate_lids):
+    """Bytes som var STABILA över baslinjeläsningarna men ÄNDRADES i ``after``.
+
+    Brushärdning för aktiv differential-mappning: en byte som redan flackade
+    mellan baslinjeläsningarna är brus, inte fältet vi provocerade. Kräver ≥1
+    baslinje.
+
+    ``baselines``: ``[{'raws': {lid_hex: bytes}}]``; ``after``: ``{'raws': …}``.
+    → ``[{'lid', 'byte', 'baseline', 'after'}]`` (tom = inget stabilt rörde sig).
+    """
+    out = []
+    for lid in candidate_lids:
+        bases = [b["raws"].get(lid) for b in baselines]
+        aft = after["raws"].get(lid)
+        if aft is None or not bases or any(r is None for r in bases):
+            continue
+        n = min([len(aft)] + [len(r) for r in bases])
+        for off in range(n):
+            base_vals = {r[off] for r in bases}
+            if len(base_vals) == 1:                    # stabil i baslinjen …
+                b0 = next(iter(base_vals))
+                if aft[off] != b0:                     # … och ändrad efteråt
+                    out.append({"lid": lid, "byte": off, "baseline": b0, "after": aft[off]})
+    return out
+
+
 def solve(samples, candidate_lids, name="signal", unit=""):
     """Auto-detektera numeriskt vs tillstånd och returnera bästa mappning.
 

@@ -25,35 +25,38 @@ from d2diag.web.server import DiagServer  # noqa: E402
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Discovery 2 realtidsdashboard")
-    ap.add_argument("--serial", help="serieport för riktig Td5 (utelämna → mock)")
-    ap.add_argument("--mock", action="store_true", help="tvinga mock-data")
+    ap = argparse.ArgumentParser(description="Discovery 2 realtime dashboard")
+    ap.add_argument("--serial", help="serial port for a real Td5 (omit → mock)")
+    ap.add_argument("--mock", action="store_true", help="force mock data")
     ap.add_argument("--slabs", action="store_true",
-                    help="SLABS-källa istället för Td5 (fast init 0x29; kräver sändande kabel)")
+                    help="SLABS source instead of Td5 (fast init 0x29; requires a transmitting cable)")
     ap.add_argument("--host", default="0.0.0.0")
-    ap.add_argument("--port", type=int, default=8080, help="HTTP-port (default 8080)")
-    ap.add_argument("--interval", type=float, default=0.5, help="poll-/strömintervall (s)")
-    ap.add_argument("--log-file", help="logga data till denna JSONL-fil")
-    ap.add_argument("--log-dir", help="logga till DIR/session-<tid>.jsonl (auto-namn)")
+    ap.add_argument("--port", type=int, default=8080, help="HTTP port (default 8080)")
+    ap.add_argument("--interval", type=float, default=0.5, help="poll/stream interval (s)")
+    ap.add_argument("--log-file", help="log data to this JSONL file")
+    ap.add_argument("--log-dir", help="log to DIR/session-<time>.jsonl (auto-named)")
     ap.add_argument("--log-interval", type=float, default=2.0,
-                    help="min sekunder mellan loggrader (feländring loggas alltid)")
+                    help="min seconds between log rows (a fault change is always logged)")
     ap.add_argument("--dict", dest="dict_path",
-                    help="sökväg till felkodsordboken (default: syskon-repot 'Discovery 2/')")
+                    help="path to the fault-code dictionary (default: sibling repo 'Discovery 2/')")
     ap.add_argument("--docs", action="append", default=[],
-                    help="extra katalog med .md att visa i Dokument-fliken (kan upprepas)")
+                    help="extra directory of .md files to show in the Docs tab (repeatable)")
     ap.add_argument("--sniff", metavar="PORT",
-                    help="ESP32-sniffport för Mappning-fliken (passiv RX-only; Nanacom pollar)")
+                    help="ESP32 sniff port for the Map tab (passive RX-only; reference tool polls)")
     ap.add_argument("--replay", metavar="FIL",
-                    help="spela upp en sniff-logg i Mappning-fliken (för test utan bil)")
+                    help="replay a sniff log in the Map tab (for testing without a vehicle)")
     args = ap.parse_args()
 
-    live = args.serial and not args.mock
-    # Multi-modul: både motor och SLABS finns, men bara EN är aktiv (K-line = delad
-    # buss). Flikvalet i UI:t byter aktiv modul (etablerar session vid val).
-    if live:
-        modules = {"motor": Td5DataSource(args.serial), "slabs": SlabsDataSource(args.serial)}
-    else:
-        modules = {"motor": MockDataSource(), "slabs": MockSlabsDataSource()}
+    # Både mock- och live-varianter byggs för varje modul; läget (mock/live) väljs
+    # i UI:t och kan bytas i drift. Live-källor autodetekterar porten (``auto``) om
+    # ingen anges → felar mjukt vid poll om kabeln saknas. Flaggorna sätter bara
+    # STARTläget. Multi-modul: bara EN modul aktiv åt gången (K-line = delad buss).
+    port = args.serial or "auto"
+    variants = {
+        "motor": {"mock": MockDataSource(), "live": Td5DataSource(port)},
+        "slabs": {"mock": MockSlabsDataSource(), "live": SlabsDataSource(port)},
+    }
+    mode = "live" if (args.serial and not args.mock) else "mock"
     active = "slabs" if args.slabs else "motor"
 
     logger = None
@@ -86,28 +89,30 @@ def main() -> int:
     if args.sniff:
         from d2diag.web.sniffer import SnifferFeed
         sniffer = SnifferFeed.from_serial(args.sniff)
-        print(f"Sniff (live): {args.sniff} → Mappning-fliken")
+        print(f"Sniff (live): {args.sniff} → Map tab")
     elif args.replay:
         from d2diag.web.sniffer import SnifferFeed
         # loopande uppspelning så färskhets-badgen visar "LIVE" i förhandsvisningen
         sniffer = SnifferFeed.from_file(args.replay, delay=0.008, loop=True)
-        print(f"Sniff (replay): {args.replay} → Karta-fliken (färskhets-demo)")
+        print(f"Sniff (replay): {args.replay} → Map tab (freshness demo)")
 
     # Märkta live-fångster (Fångst-fliken) → durabelt JSONL-dataset.
     captures_path = os.path.join(repo_root, "logs", "labeled_captures.jsonl")
     os.makedirs(os.path.dirname(captures_path), exist_ok=True)
 
     srv = DiagServer(
-        modules, host=args.host, port=args.port,
+        host=args.host, port=args.port,
         poll_interval=args.interval, stream_interval=args.interval, logger=logger,
         active=active, menus=MENUS, docs=docs, sniffer=sniffer, captures_path=captures_path,
+        variants=variants, mode=mode, scan_port=port,
     )
-    print(f"Dokument: {len(docs.index())} st i Dokument-fliken")
-    print(f"Fångster → {captures_path}")
-    print(f"Dashboard: http://localhost:{args.port}   (moduler: {', '.join(modules)} · aktiv: {active})")
+    print(f"Docs: {len(docs.index())} in the Docs tab")
+    print(f"Captures → {captures_path}")
+    print(f"Dashboard: http://localhost:{args.port}   (modules: {', '.join(variants)} · active: {active} · mode: {mode})")
+    print(f"Live port: {port}  (switch mock/live in the UI)")
     if log_path:
-        print(f"Loggar data → {log_path}")
-    print("Ctrl-C för att avsluta.")
+        print(f"Logging data → {log_path}")
+    print("Ctrl-C to quit.")
     try:
         srv.serve()
     except KeyboardInterrupt:

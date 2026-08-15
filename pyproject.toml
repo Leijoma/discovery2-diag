@@ -19,6 +19,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "d2diag.web" = ["dashboard.html"]
+"d2diag.signals" = ["*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]

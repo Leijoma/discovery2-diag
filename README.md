@@ -61,6 +61,23 @@ pytest -q
 
 Testerna kör utan hårdvara via pyserials `loop://`-ekoport.
 
+### Serieport på macOS (KKL-kabeln)
+
+`resolve_serial_port("auto")` hittar kabeln automatiskt (`/dev/cu.usbserial-*`,
+`/dev/cu.wchusbserial*`, `/dev/cu.SLAB_USBtoUART*`), eller ange porten explicit.
+
+- Använd **`/dev/cu.*`**, aldrig `/dev/tty.*` — `tty` blockar och väntar på
+  carrier (DCD); `cu` (call-out) är rätt för en KKL-kabel.
+- **Drivare:** FTDI och CH34x är inbyggda i moderna macOS. CH340-kloner kan kräva
+  WCH VCP-drivaren; CP210x kan kräva Silicon Labs VCP.
+- Ingen `dialout`-grupp/root behövs för `/dev/cu.*` på macOS.
+- FTDI:s standard-latency-timer (16 ms) kan jittra K-line fast-init, men den
+  toleranta `converse()`/`establish()`-retryn kompenserar — behåll `tolerant=True`.
+
+```bash
+PYTHONPATH=src python3 tools/verify_ecu.py td5 /dev/cu.usbserial-XXXX   # read-only
+```
+
 ## Status
 
 - [x] Transport (SerialTransport, LoggingTransport, tester)

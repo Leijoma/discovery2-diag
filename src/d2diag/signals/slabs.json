@@ -1,0 +1,88 @@
+[
+  {
+    "name": "height_left",
+    "lid": "54",
+    "offset": 0,
+    "kind": "u8",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "belagt",
+    "limits": null,
+    "source": "21 54 byte0 = vänster höjd; belagt via varians session.log 2026-08-08"
+  },
+  {
+    "name": "height_right",
+    "lid": "54",
+    "offset": 1,
+    "kind": "u8",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "belagt",
+    "limits": null,
+    "source": "21 54 byte1 = höger höjd; belagt via varians session.log 2026-08-08"
+  },
+  {
+    "name": "any_door",
+    "lid": "56",
+    "offset": 0,
+    "kind": "bit",
+    "bit": 0,
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "belagt",
+    "limits": null,
+    "states": {"0": "stängd", "1": "öppen"},
+    "source": "21 56 byte0 bit0 = any-door; BELAGT via differential 2026-08-08 (00 stängd/01 öppen)"
+  },
+  {
+    "name": "wheel_speed_fr",
+    "lid": "43",
+    "offset": 0,
+    "kind": "u16",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": null,
+    "source": "21 43 = 4x hjulhastighet (2 byte/hjul); stillastående 7c00-baslinje. Skala EJ bekräftad."
+  },
+  {
+    "name": "abs_sensor_fr",
+    "lid": "50",
+    "offset": 0,
+    "kind": "u8",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": null,
+    "source": "21 50 = 4x ABS-sensorspänning (1 byte/hjul); FR byte0 ~0x72. Skala ~x0.019 V EJ bekräftad."
+  },
+  {
+    "name": "battery",
+    "lid": "44",
+    "offset": 12,
+    "kind": "u8",
+    "scale": 0.0625,
+    "bias": 0.0,
+    "unit": "V",
+    "confidence": "kandidat",
+    "limits": null,
+    "source": "21 44 byte12 = batteri (~0xb3 -> x1/16 ~11.3 V); varierar & matchar men skala EJ bekräftad"
+  },
+  {
+    "name": "ecu_supply",
+    "lid": "44",
+    "offset": 13,
+    "kind": "u8",
+    "scale": 0.0625,
+    "bias": 0.0,
+    "unit": "V",
+    "confidence": "kandidat",
+    "limits": null,
+    "source": "21 44 byte13 = ECU-supply (~0xb1 -> x1/16 ~11.5 V); varierar & matchar men skala EJ bekräftad"
+  }
+]
