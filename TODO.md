@@ -14,6 +14,10 @@ Kör stillastående där det står. Verktyg körs `python3 tools/<x>.py ...`.
 - [ ] **SLABS slow-init-skanning** (stillastående, motorn dormant, 0x13 orörd):
       `python3 tools/probe_slow.py /dev/cu.usbserial-12345678 01 3F` → hitta SLABS-adress.
 - [ ] **Motor-ECU:ns SLABS-länkkoder** — läs redan nu (P1590-serien/HDC-länk syns via Td5).
+- [ ] **Hitta TD5 fuel quantity/demand-LID (torque-proxy).** Insprutad bränslemängd
+      (mg/slag) = ECU:ns torque-kommando och loggas i SAMMA TD5-session som rpm/temp/
+      gaspedal (till skillnad från SLABS CAN-torque som kräver egen session). Sikta på
+      fuelling-LID:er vi ännu inte mappat; bekräfta mot bilen och lägg i signalstoren.
 - [ ] *Om lånat verktyg finns:* **sniffa** SLABS via OBD-splitter (pin 7 måste gå igenom):
       `python3 tools/sniff.py /dev/cu.usbserial-XXXX 7 sniff_slabs.log` medan verktyget läser SLABS
       → ger adress/init/tjänster/felstruktur. Knäcker BCU/SRS/ACE/HEVAC på köpet.
