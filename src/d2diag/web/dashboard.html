@@ -202,6 +202,11 @@
            padding:3px 10px; border-radius:7px; cursor:pointer; }
   .modeb.active { background:var(--accent); color:#04121f; }
   .modeb.active[data-mode="live"] { background:var(--ok); }
+  .csvbar { display:flex; align-items:center; gap:10px; margin:2px 0 6px; }
+  .csvbtn { border:1px solid var(--line); background:var(--card); color:var(--fg);
+            font-size:13px; font-weight:600; padding:7px 12px; border-radius:9px; cursor:pointer; }
+  .csvbtn.rec { border-color:var(--err); color:var(--err); }
+  .csvinfo { color:var(--muted); font-size:12px; font-family:ui-monospace,Menlo,monospace; }
 </style>
 
 <header>
@@ -220,6 +225,10 @@
 </div>
 
 <main>
+  <div class="csvbar">
+    <button class="csvbtn" id="csvbtn">⏺ Log to CSV</button>
+    <span class="csvinfo" id="csvinfo"></span>
+  </div>
   <!-- ===================== ENGINE ===================== -->
   <div class="view active" id="view-motor">
     <div id="motor-hint" class="hint">Waiting for engine data… (run the dashboard against the Td5)</div>
@@ -642,12 +651,28 @@
       showCmd(r.ok?`mode: ${mode}`:(r.error||"could not switch mode"), !!r.ok);
     }catch(e){ showCmd("network error", false); }
   }
+  // ---- CSV live-data logging (start/stop; logs whichever module is active) ----
+  function renderCsv(d){
+    const info = d.logging || {recording:false}, btn = $("csvbtn"), inf = $("csvinfo");
+    if(!btn) return;
+    if(info.recording){ btn.textContent = `⏹ Stop (${info.rows||0} rows)`; btn.classList.add("rec");
+      if(inf) inf.textContent = "→ "+(info.file||""); }
+    else { btn.textContent = "⏺ Log to CSV"; btn.classList.remove("rec"); if(inf) inf.textContent = ""; }
+  }
+  async function toggleCsv(){
+    const rec = ($("csvbtn").textContent||"").startsWith("⏹");
+    try{
+      const r = await (await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action: rec?"stop_csv":"start_csv"})})).json();
+      showCmd(r.ok ? `${r.message||"ok"}${r.file?(" · "+r.file):""}${r.rows!=null&&rec?(" · "+r.rows+" rows"):""}` : (r.error||"error"), !!r.ok);
+    }catch(e){ showCmd("network error", false); }
+  }
   function render(d) {
     const st = d.status || "connecting";
     $("dot").className = "dot " + st;
     $("status").textContent = ({connected:"connected",connecting:"connecting…",error:"error"}[st] || st) + (d.source ? " · " + d.source : "");
     $("error").textContent = d.error || "";
-    renderMode(d);
+    renderMode(d); renderCsv(d);
     const sig = d.signals || {}, faults = d.faults || [];
     const mod = d.module || ((d.source || "").indexOf("slabs") >= 0 ? "slabs" : "motor");
     // sync the tab to the server's active module ONCE at start (clicks steer after that)
@@ -780,6 +805,8 @@
   function addFangstLog(rec){ const l=getFangstLog(); l.unshift({lid:rec.lid, raw:rec.raw, text:rec.text, t:new Date().toLocaleTimeString()}); localStorage.setItem(fLogKey(), JSON.stringify(l.slice(0,200))); renderFangstLog(); }
   function renderFangstLog(){ const box=document.getElementById("fangst-log"); if(!box) return; const l=getFangstLog();
     box.innerHTML=l.length? l.map(r=>'<div class="flog"><span class="flid">21 '+r.lid+'</span> <code>'+(r.raw||"")+'</code> → '+r.text+' <span class="none">'+(r.t||"")+'</span></div>').join("") : '<div class="hint" style="padding:14px">None saved yet.</div>'; }
+
+  $("csvbtn").onclick = toggleCsv;
 
   (function connect() {
     const es = new EventSource("/events");

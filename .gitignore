@@ -7,4 +7,5 @@ dist/
 build/
 .pytest_cache/
 *.log
+logs/*.csv
 .DS_Store

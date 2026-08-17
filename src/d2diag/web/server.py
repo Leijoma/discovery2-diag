@@ -7,6 +7,7 @@ kommandon (ej implementerad än).
 from __future__ import annotations
 
 import json
+import os
 import queue
 import threading
 import time
@@ -253,9 +254,12 @@ class DiagServer(ThreadingHTTPServer):
         variants: "dict | None" = None,
         mode: "str | None" = None,
         scan_port: str = "auto",
+        csv_dir: str = "logs",
     ) -> None:
         super().__init__((host, port), _Handler)
         self._scan_port = scan_port  # port för "läs alla felkoder" (basic mode)
+        self._csv_dir = csv_dir  # var CSV-live-loggar hamnar (start/stop i UI:t)
+        self._csv = None  # aktiv CsvLogger eller None
         self._menus = menus or {}  # modul → meny-lista (Karta-fliken)
         self.docs = docs or DocLibrary()  # markdown-vy (Dokument-fliken)
         self.sniffer = sniffer  # passiv sniff-feed (Mappning-fliken), valfri
@@ -288,7 +292,7 @@ class DiagServer(ThreadingHTTPServer):
         self.latest: "dict" = {
             "status": "connecting", "source": self.source.name,
             "module": self._active, "mode": self._mode, "modes": self._modes,
-            "signals": {}, "faults": [],
+            "signals": {}, "faults": [], "logging": {"recording": False},
         }
         self._stop = threading.Event()
         self._commands: "queue.Queue" = queue.Queue()
@@ -382,6 +386,26 @@ class DiagServer(ThreadingHTTPServer):
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
         return {"ok": True, "mode": self._mode or "mock", "report": report}
 
+    def start_csv(self, path: "str | None" = None) -> "dict":
+        """Börja logga live-data till en CSV-fil (för användaren — följa temp m.m.).
+        Loggar den AKTIVA modulens signaler, en rad per poll. Idempotent."""
+        from .logger import CsvLogger
+        if self._csv is not None:
+            return {"ok": True, "file": os.path.basename(self._csv.path),
+                    "message": "already recording"}
+        if path is None:
+            path = os.path.join(self._csv_dir, f"livedata-{time.strftime('%Y%m%d-%H%M%S')}.csv")
+        self._csv = CsvLogger(path)
+        return {"ok": True, "file": os.path.basename(path), "path": path, "message": "recording"}
+
+    def stop_csv(self) -> "dict":
+        """Stoppa CSV-loggningen. Returnerar filnamn + antal rader."""
+        if self._csv is None:
+            return {"ok": True, "message": "not recording", "rows": 0}
+        rows, fname = self._csv.rows, os.path.basename(self._csv.path)
+        self._csv = None
+        return {"ok": True, "file": fname, "rows": rows, "message": "stopped"}
+
     def _drain_commands(self) -> None:
         while True:
             try:
@@ -398,6 +422,10 @@ class DiagServer(ThreadingHTTPServer):
                     holder["result"] = self._set_mode(params.get("mode") or cmd.get("mode"))
                 elif action == "read_all_faults":
                     holder["result"] = self._read_all_faults()
+                elif action == "start_csv":
+                    holder["result"] = self.start_csv()
+                elif action == "stop_csv":
+                    holder["result"] = self.stop_csv()
                 else:
                     holder["result"] = self.source.command(action, cmd.get("params"))
             except Exception as exc:  # noqa: BLE001
@@ -418,11 +446,17 @@ class DiagServer(ThreadingHTTPServer):
             snap["module"] = active  # vilken flik datan hör till
             snap["mode"] = self._mode  # aktivt datakällsläge (mock/live)
             snap["modes"] = self._modes  # valbara lägen (för UI-toggeln)
+            snap["logging"] = self._csv.status() if self._csv is not None else {"recording": False}
             self.latest = snap
             if self.logger is not None:
                 try:
                     self.logger.log(self.latest)
                 except Exception:  # noqa: BLE001 — loggfel får aldrig fälla poll-loopen
+                    pass
+            if self._csv is not None:
+                try:
+                    self._csv.log(self.latest)
+                except Exception:  # noqa: BLE001 — CSV-fel får aldrig fälla poll-loopen
                     pass
             self._stop.wait(self.poll_interval)
 

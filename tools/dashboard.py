@@ -37,6 +37,8 @@ def main() -> int:
     ap.add_argument("--log-dir", help="log to DIR/session-<time>.jsonl (auto-named)")
     ap.add_argument("--log-interval", type=float, default=2.0,
                     help="min seconds between log rows (a fault change is always logged)")
+    ap.add_argument("--csv", action="store_true",
+                    help="start CSV live-data logging immediately (logs/livedata-<time>.csv)")
     ap.add_argument("--dict", dest="dict_path",
                     help="path to the fault-code dictionary (default: sibling repo 'Discovery 2/')")
     ap.add_argument("--docs", action="append", default=[],
@@ -100,11 +102,12 @@ def main() -> int:
     captures_path = os.path.join(repo_root, "logs", "labeled_captures.jsonl")
     os.makedirs(os.path.dirname(captures_path), exist_ok=True)
 
+    csv_dir = os.path.join(repo_root, "logs")
     srv = DiagServer(
         host=args.host, port=args.port,
         poll_interval=args.interval, stream_interval=args.interval, logger=logger,
         active=active, menus=MENUS, docs=docs, sniffer=sniffer, captures_path=captures_path,
-        variants=variants, mode=mode, scan_port=port,
+        variants=variants, mode=mode, scan_port=port, csv_dir=csv_dir,
     )
     print(f"Docs: {len(docs.index())} in the Docs tab")
     print(f"Captures → {captures_path}")
@@ -112,6 +115,8 @@ def main() -> int:
     print(f"Live port: {port}  (switch mock/live in the UI)")
     if log_path:
         print(f"Logging data → {log_path}")
+    if args.csv:
+        print(f"CSV live log → {srv.start_csv().get('path')}")
     print("Ctrl-C to quit.")
     try:
         srv.serve()
