@@ -154,3 +154,16 @@ def test_establish_progress_reports_the_burst_on_each_failed_try():
     tries = [m for m in msgs if m.startswith("no response yet")]
     assert len(tries) == 2                  # attempts=2 i _Dummy
     assert all("bursten" in m for m in tries)
+
+
+def test_stale_link_is_cleared_once_not_between_tries():
+    # Pausen mellan försöken måste vara TYST. Skickar vi 82 före varje försök
+    # nollställs modulens väntan och den släpper aldrig sin länk (mätt i sniffen:
+    # varje lyckad SLABS-init kom efter 25–28 s utan trafik mot modulen).
+    ecu, s = _dummy({})                      # inget svar → alla försök misslyckas
+    with pytest.raises(KWP2000Error):
+        with s:
+            s.establish()
+    stops = [f for f in ecu.sent if f == _sess(b"\x82")]
+    assert len(stops) == 1                   # exakt en rensning, före tystnaden
+    assert ecu.sent[0] == _sess(b"\x82")     # och den kom först av allt

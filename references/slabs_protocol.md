@@ -22,14 +22,36 @@ block-pollning. Vår drivare måste göra likadant:
   höjder (`21 54`) per cykel; felkoder högst var 10:e poll (~5 s). En tidigare
   store-driven block-läsning av 5 LID:er + felkoder i **varje** 0.5 s-cykel
   (~7× busstrafiken) kopplade upp men **dödade sessionen efter ~15 s**.
-- **`establish`: `idle=0.3 s`, `attempts=8`, `retry_sleep=1.5 s`.** Längre idle
-  hjälper inte. Init är inneboende trögt — bilen 2026-08-18 krävde ~2 min envisa
-  försök innan `C1` kom, och satt sedan **stabilt i 2,5 min med data** (4 signaler,
-  ingen reconnect). Det som avgör är alltså antalet försök per minut. Den gamla
-  pausen på 5 s fanns för att låta en öppen länk dö av sig själv; den river vi
-  numera explicit med `82`, så väntan fyllde ingen funktion.
+### ⚠️ Init kräver en TYST PERIOD — inte fler försök (mätt 2026-08-18)
+Alla reference tool-sniffar mättes om (`slabs_session_20260807`,
+`td5_slabs_session_20260808`, `faultread-20260809-4`). Tiden utan trafik mot
+modulen före varje initförsök:
+
+| tyst innan | resultat |
+|---|---|
+| (sessionsstart) | inget svar |
+| 24.9 s · 26.5 s · 27.8 s · 28.0 s · 41.0 s · 51.5 s | **C1 varje gång** |
+| 59.0 s | inget svar (undantag) |
+
+**Verktyget gjorde ALDRIG ett snabbt omförsök** — varje lyckad init kom på
+*första* försöket efter tiotals sekunders tystnad. Modulen behöver alltså den
+tysta perioden för att släppa sin länk, och varje init vi skickar under den
+nollställer väntan. Att hamra är aktivt skadligt: det var precis det som höll oss
+ute i ~2 min 2026-08-18 (och tolkningen "flera försök är normalt" i den här filen
+var en feltolkning av samma sniff).
+
+- **`establish`: `idle=0.3 s`, `attempts=3`, `retry_sleep=28 s`** — och pausen är
+  strikt tyst: `82` skickas EN gång före tystnaden, aldrig mellan försöken.
+- Bilen 2026-08-18 bekräftade den andra halvan: väl uppkopplad satt SLABS
+  **stabilt i 2 min 25 s** med data (4 signaler, ingen reconnect). Den lätta
+  pollen håller — problemet var bara att komma in.
 - **Delad K-line-buss:** ett `7F 81 10` (generalReject) på StartCommunication =
-  en session är redan öppen. Vanlig orsak: en kvarlämnad **TD5-session**
+  en session är redan öppen — **och den kommer från en ANNAN modul**. Belagt i
+  sniffen 2026-08-08 (`td5_slabs_session`, t=403982): TD5:s keepalive `02 3e 01 41`
+  2,9 s tidigare, sedan svarar SLABS `C1 57 8F` **och** TD5 `03 7f 81 10 13` på
+  samma init — båda i samma burst. Reference tool struntade i rejecten och använde C1.
+  Vår toleranta init gör likadant (söker C1 i bursten), så en reject i sig är inte
+  fatal; problemet är när SLABS inte svarar alls. Vanlig orsak: en kvarlämnad **TD5-session**
   (StartDiagnosticSession + SecurityAccess) efter modulbyte.
   **Åtgärdat i kod:** `EcuSession.release()` = StopDiagnosticSession (`20` → `60`)
   + close, och den anropas vid modulbyte (`Td5DataSource.disconnect`,

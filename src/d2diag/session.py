@@ -132,6 +132,12 @@ class EcuSession:
 
         Retryar hela sekvensen ``attempts`` gånger vid brus. Returnerar C1-datafältet.
 
+        ⚠️ ``retry_sleep`` är en **tyst period**, inte en artighetspaus. Mätt över
+        alla reference tool-sniffar (2026-08-07/08/09): varje lyckad SLABS-init kom
+        på FÖRSTA försöket efter 25–28 s utan trafik mot modulen, och verktyget
+        gjorde aldrig ett snabbt omförsök. Att skicka något alls under pausen —
+        inklusive ett ``82`` — nollställer väntan.
+
         ``after`` kör en modul-specifik uppföljning efter lyckad init (Td5:
         session + unlock). Är den satt tolereras en misslyckad init (C1 = tom) —
         en halvöppen session från ett tidigare försök svarar ``7F`` på
@@ -145,17 +151,16 @@ class EcuSession:
             if progress is not None:
                 progress(msg)
 
+        # Riv en ev. kvarlämnad länk EN gång, innan tystnaden — inte mellan försöken.
+        # En modul som fortfarande har en öppen session svarar 7F 81 10 på en annan
+        # moduls init (belagt i sniffen 2026-08-08: TD5:s keepalive 2,9 s före ett
+        # SLABS-init, och TD5 barkar generalReject medan SLABS svarar C1).
+        _say("clearing any stale link")
+        self._stop_communication()
         _say("waiting for the bus to settle")
         sleep(idle)  # låt linjen vara tyst så en ev. öppen session hinner dö
         last: "Exception | None" = None
         for i in range(attempts):
-            # Riv en ev. KVARLÄMNAD länk först (tidigare process, kraschad session,
-            # eller vårt eget föregående försök). Utan detta svarar modulen
-            # 7F 81 10 på varje init tills dess egen timeout löper ut — och vår
-            # retry-loop hinner trigga om den innan dess. Kostar ~1 s när inget
-            # finns att riva; ECU:n ignorerar ett 82 utan öppen länk.
-            _say("clearing any stale link")
-            self._stop_communication()
             _say(f"sending init (try {i + 1}/{attempts})")
             try:
                 c1 = self._kwp.start_communication(tolerant=True)
@@ -164,7 +169,12 @@ class EcuSession:
                 if after is None:
                     # Ta med bursten i loggen — annars syns den bara på SISTA
                     # försöket och man ser inte om rejecten fanns redan från start.
-                    _say(f"no response yet ({exc}), retrying (try {i + 1}/{attempts})")
+                    _say(f"no response yet ({exc})")
+                    if i + 1 < attempts:
+                        # TYST paus — inte "vänta lite och försök igen fort". Modulen
+                        # behöver en tyst period för att släppa sin länk; varje byte
+                        # vi skickar under den nollställer väntan. Se _establish-docen.
+                        _say(f"quiet period: {retry_sleep:.0f}s before next try")
                     sleep(retry_sleep)
                     continue
                 c1 = b""  # sessionen kan redan vara öppen — prova after ändå

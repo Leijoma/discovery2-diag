@@ -51,13 +51,14 @@ ABS_SUB_REAR_RIGHT = 0x12
 ABS_SUB_REAR_LEFT = 0x13
 
 _DEFAULT_IDLE = 0.3    # bevisat stabilt värde (sniff 2026-08-07)
-# SLABS-init är inneboende trögt (reference tool behövde också flera försök). Det som
-# avgör hur snabbt vi kommer in är ANTALET försök per minut, inte längden på pauserna:
-# bilen 2026-08-18 tog ~2 min av envisa försök innan C1 kom — och satt sedan stabilt
-# i 2,5 min. Den gamla pausen på 5 s fanns för att låta en öppen länk dö av sig själv;
-# den river vi numera explicit med 82 före varje försök, så väntan fyller ingen funktion.
-_DEFAULT_ATTEMPTS = 8
-_DEFAULT_RETRY_SLEEP = 1.5
+# MÄTT ur reference tool-sniffarna (2026-08-07/08/09, se slabs_protocol.md): VARJE
+# lyckad SLABS-init kom på första försöket efter 25–28 s utan trafik mot modulen —
+# 24.9, 26.5, 27.8, 28.0, 41.0, 51.5 s. Verktyget gjorde ALDRIG ett snabbt omförsök.
+# Modulen behöver alltså en tyst period för att släppa sin länk, och varje init vi
+# skickar under den nollställer väntan. Att hamra är därför aktivt skadligt: det är
+# vad som höll oss ute i ~2 min 2026-08-18.
+_DEFAULT_ATTEMPTS = 3
+_DEFAULT_RETRY_SLEEP = 28.0
 
 
 class Slabs(EcuSession):
