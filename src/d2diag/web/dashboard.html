@@ -240,6 +240,14 @@
   .exp { color:var(--warn); font-size:9px; text-transform:uppercase; letter-spacing:.4px; margin-left:5px; }
   .homebtn { border:1px solid var(--line); background:var(--card); color:var(--fg);
              font-size:13px; font-weight:600; padding:6px 11px; border-radius:9px; cursor:pointer; }
+  .ctl-label { color:var(--muted); font-size:12px; font-weight:600; }
+  .info { position:relative; color:var(--muted); cursor:help; font-size:14px; margin-left:7px; user-select:none; }
+  .info .tip { display:none; position:absolute; left:0; top:24px; z-index:30; width:250px;
+               background:var(--card2); border:1px solid var(--line); border-radius:10px;
+               padding:10px 12px; font-size:12px; line-height:1.55; color:var(--fg);
+               box-shadow:0 6px 18px rgba(0,0,0,.45); white-space:normal; font-weight:400; }
+  .info .tip b { color:var(--fg); }
+  .info:hover .tip, .info.show .tip { display:block; }
   /* connection / onboarding banner (home) */
   .conn { border-radius:11px; padding:12px 14px; font-size:14px; line-height:1.5;
           margin:2px 0 12px; border:1px solid var(--line); }
@@ -277,7 +285,13 @@
 <main>
   <div class="csvbar">
     <button class="homebtn" id="homebtn">← Home</button>
+    <span class="ctl-label">Show</span>
     <span class="trust" id="trust"></span>
+    <span class="info" id="trustinfo">ⓘ<span class="tip">
+      <b>Verified</b> shows only data confirmed against real cars — safe to trust.<br>
+      <b>Experimental</b> also shows reverse-engineered values we're not sure of yet,
+      marked <span class="exp">exp</span>. Turn it on to help verify them by sharing readings.
+    </span></span>
     <span style="flex:1"></span>
     <button class="csvbtn" id="csvbtn">⏺ Log to CSV</button>
     <span class="csvinfo" id="csvinfo"></span>
@@ -289,7 +303,6 @@
     <section>
       <h2>Modules</h2>
       <div class="modgrid" id="modgrid"></div>
-      <div class="hint" id="home-hint" style="padding:14px 4px;text-align:left"></div>
     </section>
     <div class="disclaimer">
       <b>Use at your own risk.</b> This is a free community hobby tool, provided as-is
@@ -817,9 +830,6 @@
       const t=c.dataset.go;
       if(t==="faults") showTab("faults"); else selectModule(t);   // selectModule shows tab + establishes
     });
-    const h=$("home-hint"); if(h) h.innerHTML = _trust==="experimental"
-      ? "Experimental mode: experimental modules and unverified values are shown, marked <span class='exp'>exp</span>. Help verify them by sharing readings."
-      : "Verified mode shows only what's confirmed against real cars. Switch to Experimental to see experimental modules and values.";
   }
   // Connection / onboarding banner — tells a first-time user to plug in the cable.
   function renderConn(d){
@@ -1001,6 +1011,8 @@
 
   $("csvbtn").onclick = toggleCsv;
   $("homebtn").onclick = ()=>{ showTab("home"); renderHome(); };
+  $("trustinfo").onclick = (e)=>{ e.stopPropagation(); $("trustinfo").classList.toggle("show"); };  // tap for touch
+  document.addEventListener("click", ()=>$("trustinfo").classList.remove("show"));
 
   // ---- Community sharing (opt-in): first-run consent + footer status ----
   let _community = null;
