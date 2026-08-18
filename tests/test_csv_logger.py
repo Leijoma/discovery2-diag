@@ -71,3 +71,26 @@ def test_server_start_stop_csv_commands(tmp_path):
         assert srv.stop_csv()["rows"] == 0
     finally:
         srv.server_close()
+
+
+def test_csv_commands_do_not_queue_behind_the_poller(tmp_path):
+    # CSV-start/stopp rör inte K-line och ska svara direkt. Köades de i pollertråden
+    # fick de vänta ut en pågående etablering (SLABS ≈ 20 s) och timeoutade på 8 s
+    # i UI:t — trots att de sedan lyckades. Här körs INGEN pollertråd: hade
+    # kommandot köats hade det timeoutat, nu svarar det inline.
+    import time as _time
+
+    from d2diag.web import MockDataSource
+    from d2diag.web.server import DiagServer
+
+    srv = DiagServer(MockDataSource(), host="127.0.0.1", port=0, csv_dir=str(tmp_path))
+    try:
+        t0 = _time.monotonic()
+        r = srv.enqueue_command({"action": "start_csv"})
+        elapsed = _time.monotonic() - t0
+        assert r["ok"] and srv._csv is not None
+        assert elapsed < 1.0                      # inte 8 s timeout
+        assert srv._commands.empty()              # gick aldrig via kön
+        assert srv.enqueue_command({"action": "stop_csv"})["ok"] and srv._csv is None
+    finally:
+        srv.server_close()

@@ -72,6 +72,12 @@ Key seams to understand before changing things:
   sources are interchangeable and switchable at runtime from the header. Adding a
   module to the dashboard means adding a source pair (mock + live), not touching
   the server.
+- **Two command paths in `web/server.py`.** `enqueue_command` runs anything in
+  `_INLINE_COMMANDS` (CSV start/stop, fault-watch — server state only) straight on
+  the HTTP thread, and queues everything that touches K-line for the poll thread so
+  bus access stays serialized. Put a new command on the queue only if it talks to
+  the ECU: queued commands wait out the current poll, which during a reconnect can
+  be ~20 s and blows the 8 s HTTP timeout.
 - **`faultscan.py`** reads every module sequentially — K-line is a shared bus, so
   it is strictly establish → read → close, one module at a time.
 - **`web/docs.py`** serves the canonical markdown files fresh on every request

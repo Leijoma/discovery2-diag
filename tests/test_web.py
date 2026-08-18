@@ -431,3 +431,35 @@ def test_module_switch_disconnects_previous_source():
         assert srv.source is slabs and srv.latest["status"] == "connecting"
     finally:
         srv.server_close()
+
+
+def test_fault_watch_command_runs_inline():
+    # set_fault_watch skriver bara attribut på källorna → ska inte köas bakom en
+    # pågående anslutning i pollertråden (ingen poller körs i testet).
+    from d2diag.web.server import DiagServer
+    from d2diag.web.sources import MockDataSource
+
+    srv = DiagServer(MockDataSource(), host="127.0.0.1", port=0)
+    try:
+        r = srv.enqueue_command({"action": "set_fault_watch", "params": {"on": True}})
+        assert r["ok"] and r["fault_watch"] is True
+        assert srv._commands.empty()
+        assert srv.enqueue_command({"action": "set_fault_watch",
+                                    "params": {"on": False}})["fault_watch"] is False
+    finally:
+        srv.server_close()
+
+
+def test_ecu_commands_still_go_through_the_poll_queue():
+    # Motsatsen: allt som rör K-line MÅSTE serialiseras med pollen. Utan poller
+    # dräneras kön aldrig → kommandot timeoutar (kort timeout här).
+    from d2diag.web.server import DiagServer
+    from d2diag.web.sources import MockDataSource
+
+    srv = DiagServer(MockDataSource(), host="127.0.0.1", port=0)
+    try:
+        r = srv.enqueue_command({"action": "clear_faults"}, timeout=0.2)
+        assert r["ok"] is False and "timeout" in r["error"]
+        assert not srv._commands.empty()          # ligger kvar i kön till pollern
+    finally:
+        srv.server_close()

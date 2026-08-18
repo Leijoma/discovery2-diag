@@ -804,20 +804,29 @@
     }catch(e){ showCmd("network error", false); }
   }
   // ---- CSV live-data logging (start/stop; logs whichever module is active) ----
+  let _csvRec = false, _csvBusy = false;   // state från snapshot, inte från knapptexten
   function renderCsv(d){
     const info = d.logging || {recording:false}, btn = $("csvbtn"), inf = $("csvinfo");
     if(!btn) return;
-    if(info.recording){ btn.textContent = `⏹ Stop (${info.rows||0} rows)`; btn.classList.add("rec");
-      if(inf) inf.textContent = "→ "+(info.file||""); }
+    _csvRec = !!info.recording;
+    if(_csvBusy) return;                    // rör inte knappen medan ett anrop är i luften
+    if(_csvRec){ btn.textContent = `⏹ Stop (${info.rows||0} rows)`; btn.classList.add("rec");
+      // Loggern låser kolumnerna vid FÖRSTA snapshoten med signaler → 0 rader
+      // betyder att vi väntar på data (t.ex. under anslutning), inte att inget händer.
+      if(inf) inf.textContent = info.rows ? ("→ "+(info.file||"")) : "waiting for data…"; }
     else { btn.textContent = "⏺ Log to CSV"; btn.classList.remove("rec"); if(inf) inf.textContent = ""; }
   }
   async function toggleCsv(){
-    const rec = ($("csvbtn").textContent||"").startsWith("⏹");
+    const btn = $("csvbtn"); if(_csvBusy) return;
+    const rec = _csvRec;
+    _csvBusy = true; btn.disabled = true; btn.textContent = rec ? "⏹ stopping…" : "⏺ starting…";
     try{
       const r = await (await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({action: rec?"stop_csv":"start_csv"})})).json();
+      if(r.ok) _csvRec = !rec;
       showCmd(r.ok ? `${r.message||"ok"}${r.file?(" · "+r.file):""}${r.rows!=null&&rec?(" · "+r.rows+" rows"):""}` : (r.error||"error"), !!r.ok);
     }catch(e){ showCmd("network error", false); }
+    finally{ _csvBusy = false; btn.disabled = false; renderCsv(_last || {logging:{recording:_csvRec}}); }
   }
   // ---- Trust (Verified / Experimental) + Home module grid ----
   let _trust = localStorage.getItem("trust")==="experimental" ? "experimental" : "verified";

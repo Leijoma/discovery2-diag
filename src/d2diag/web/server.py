@@ -265,6 +265,14 @@ class _Handler(BaseHTTPRequestHandler):
             pass  # klienten stängde
 
 
+# Kommandon som INTE rör K-line och därför får köras direkt på HTTP-tråden.
+# Att köa dem bakom pollertråden betyder att de får vänta ut en pågående
+# etablering (SLABS: bus-idle + 3 försök × 5 s retry ≈ 20 s) och sedan timeouta
+# på 8 s i UI:t — trots att de sedan lyckas när kön väl dräneras. De rör bara
+# serverns eget tillstånd (CsvLogger-objekt, fault_every-attribut).
+_INLINE_COMMANDS = frozenset({"start_csv", "stop_csv", "set_fault_watch"})
+
+
 class DiagServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -295,6 +303,7 @@ class DiagServer(ThreadingHTTPServer):
         self._scan_port = scan_port  # port för "läs alla felkoder" (basic mode)
         self._csv_dir = csv_dir  # var CSV-live-loggar hamnar (start/stop i UI:t)
         self._csv = None  # aktiv CsvLogger eller None
+        self._csv_lock = threading.Lock()  # start/stop sker på HTTP-tråden, log() i pollern
         self.community = community  # opt-in bidrags-klient (Community) eller None
         self._public = public  # publikt läge: enklare UI (döljer Karta/Fångst/Dok + ställdon)
         self._menus = menus or {}  # modul → meny-lista (Karta-fliken)
@@ -392,10 +401,27 @@ class DiagServer(ThreadingHTTPServer):
         self._apply_fault_watch()
         return {"ok": True, "fault_watch": self._fault_watch}
 
+    def _run_inline(self, action: str, params: "dict") -> "dict":
+        """Kör ett kommando som inte rör K-line (se :data:`_INLINE_COMMANDS`)."""
+        if action == "start_csv":
+            return self.start_csv()
+        if action == "stop_csv":
+            return self.stop_csv()
+        if action == "set_fault_watch":
+            return self.set_fault_watch(params.get("on"))
+        return {"ok": False, "error": f"unknown command: {action}"}
+
     def enqueue_command(self, cmd: "dict", timeout: float = 8.0) -> "dict":
         """Köa ett skrivkommando till pollertråden och vänta på resultatet.
 
         Serialiseras med pollningen så K-line-åtkomsten aldrig krockar."""
+        action = cmd.get("action", "")
+        if action in _INLINE_COMMANDS:
+            # Direkt svar — får inte fastna bakom en pågående anslutning i pollern.
+            try:
+                return self._run_inline(action, cmd.get("params") or {})
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
         holder = {"result": None, "event": threading.Event()}
         self._commands.put((cmd, holder))
         if holder["event"].wait(timeout):
@@ -485,20 +511,23 @@ class DiagServer(ThreadingHTTPServer):
         """Börja logga live-data till en CSV-fil (för användaren — följa temp m.m.).
         Loggar den AKTIVA modulens signaler, en rad per poll. Idempotent."""
         from .logger import CsvLogger
-        if self._csv is not None:
-            return {"ok": True, "file": os.path.basename(self._csv.path),
-                    "message": "already recording"}
-        if path is None:
-            path = os.path.join(self._csv_dir, f"livedata-{time.strftime('%Y%m%d-%H%M%S')}.csv")
-        self._csv = CsvLogger(path)
+        with self._csv_lock:  # start/stop på HTTP-tråden, log() i pollern
+            if self._csv is not None:
+                return {"ok": True, "file": os.path.basename(self._csv.path),
+                        "message": "already recording"}
+            if path is None:
+                path = os.path.join(self._csv_dir,
+                                    f"livedata-{time.strftime('%Y%m%d-%H%M%S')}.csv")
+            self._csv = CsvLogger(path)
         return {"ok": True, "file": os.path.basename(path), "path": path, "message": "recording"}
 
     def stop_csv(self) -> "dict":
         """Stoppa CSV-loggningen. Returnerar filnamn + antal rader."""
-        if self._csv is None:
-            return {"ok": True, "message": "not recording", "rows": 0}
-        rows, fname = self._csv.rows, os.path.basename(self._csv.path)
-        self._csv = None
+        with self._csv_lock:
+            if self._csv is None:
+                return {"ok": True, "message": "not recording", "rows": 0}
+            rows, fname = self._csv.rows, os.path.basename(self._csv.path)
+            self._csv = None
         return {"ok": True, "file": fname, "rows": rows, "message": "stopped"}
 
     def _drain_commands(self) -> None:
@@ -517,12 +546,8 @@ class DiagServer(ThreadingHTTPServer):
                     holder["result"] = self._set_mode(params.get("mode") or cmd.get("mode"))
                 elif action == "read_all_faults":
                     holder["result"] = self._read_all_faults()
-                elif action == "start_csv":
-                    holder["result"] = self.start_csv()
-                elif action == "stop_csv":
-                    holder["result"] = self.stop_csv()
-                elif action == "set_fault_watch":
-                    holder["result"] = self.set_fault_watch((cmd.get("params") or {}).get("on"))
+                elif action in _INLINE_COMMANDS:
+                    holder["result"] = self._run_inline(action, cmd.get("params") or {})
                 else:
                     holder["result"] = self.source.command(action, cmd.get("params"))
             except Exception as exc:  # noqa: BLE001
@@ -571,9 +596,10 @@ class DiagServer(ThreadingHTTPServer):
                     self.logger.log(self.latest)
                 except Exception:  # noqa: BLE001 — loggfel får aldrig fälla poll-loopen
                     pass
-            if self._csv is not None:
+            csv_log = self._csv  # lokal ref: stop_csv kan nolla den mitt i loggningen
+            if csv_log is not None:
                 try:
-                    self._csv.log(self.latest)
+                    csv_log.log(self.latest)
                 except Exception:  # noqa: BLE001 — CSV-fel får aldrig fälla poll-loopen
                     pass
             self._stop.wait(self.poll_interval)
