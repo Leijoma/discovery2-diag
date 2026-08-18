@@ -268,7 +268,7 @@ class Td5DataSource(DataSource):
         except Exception as exc:  # noqa: BLE001 — tappa sessionen och återanslut nästa poll
             try:
                 if self._td5 is not None:
-                    self._td5.close()
+                    self._td5.release()  # riv länken (82) — annars 7F 81 10 vid reconnect
             except Exception:  # noqa: BLE001
                 pass
             self._td5 = None
@@ -489,7 +489,7 @@ class SlabsDataSource(DataSource):
         except Exception as exc:  # noqa: BLE001
             try:
                 if self._slabs is not None:
-                    self._slabs.close()
+                    self._slabs.release()  # riv länken (82) — annars 7F 81 10 vid reconnect
             except Exception:  # noqa: BLE001
                 pass
             self._slabs = None

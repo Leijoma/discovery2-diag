@@ -84,19 +84,35 @@ class EcuSession:
         ``20`` (redan död session, tyst buss) är därför inte ett fel: vi stänger
         ändå. Moduler utan session (``_has_session = False``) gör ingenting.
         """
-        if not self._has_session:
-            return
+        if self._has_session:
+            try:
+                self._kwp.stop_diagnostic_session()
+            except Exception:  # noqa: BLE001 — sessionen kan redan vara borta
+                pass
+        self._stop_communication()
+
+    def _stop_communication(self) -> None:
+        """StopCommunication (``82``) — best-effort, gäller ALLA moduler.
+
+        Fast init upprättar en kommunikationslänk även för moduler utan
+        diagnostiksession. Stänger vi bara serieporten lever länken kvar i ECU:n
+        och nästa StartCommunication möts av ``7F 81 10`` — även från en HELT NY
+        process (belagt i bilen 2026-08-18: färsk process, SLABS som första modul,
+        generalReject på första försöket).
+        """
         try:
-            self._kwp.stop_diagnostic_session()
-        except Exception:  # noqa: BLE001 — sessionen kan redan vara borta
+            self._kwp.stop_communication()
+        except Exception:  # noqa: BLE001 — ingen länk öppen är det normala
             pass
 
     def release(self) -> None:
-        """:meth:`end_session` + :meth:`close` — använd vid MODULBYTE på delad buss.
+        """:meth:`end_session` + :meth:`close` — vid modulbyte OCH på felvägar.
 
-        Felvägar (tappad kabel, död session) ska istället gå direkt på
-        :meth:`close`: där finns ingen session att avsluta och ett ``20`` mot en
-        tyst buss kostar bara timeout.
+        Även när sessionen verkar död måste länken rivas: en tappad läsning
+        betyder inte att ECU:n glömt oss. Loggen 2026-08-18 visar mönstret — tre
+        tomma pollar → close() utan ``82`` → varje följande init möts av
+        ``7F 81 10`` i ~90 s. Kostar ~0,5 s mot en tyst buss (kort burst,
+        ingen omsändning), vilket är en bråkdel av en misslyckad reconnect.
         """
         self.end_session()
         self.close()
@@ -133,13 +149,22 @@ class EcuSession:
         sleep(idle)  # låt linjen vara tyst så en ev. öppen session hinner dö
         last: "Exception | None" = None
         for i in range(attempts):
+            # Riv en ev. KVARLÄMNAD länk först (tidigare process, kraschad session,
+            # eller vårt eget föregående försök). Utan detta svarar modulen
+            # 7F 81 10 på varje init tills dess egen timeout löper ut — och vår
+            # retry-loop hinner trigga om den innan dess. Kostar ~1 s när inget
+            # finns att riva; ECU:n ignorerar ett 82 utan öppen länk.
+            _say("clearing any stale link")
+            self._stop_communication()
             _say(f"sending init (try {i + 1}/{attempts})")
             try:
                 c1 = self._kwp.start_communication(tolerant=True)
             except (KLineError, KWP2000Error) as exc:
                 last = exc
                 if after is None:
-                    _say(f"no response yet, retrying (try {i + 1}/{attempts})")
+                    # Ta med bursten i loggen — annars syns den bara på SISTA
+                    # försöket och man ser inte om rejecten fanns redan från start.
+                    _say(f"no response yet ({exc}), retrying (try {i + 1}/{attempts})")
                     sleep(retry_sleep)
                     continue
                 c1 = b""  # sessionen kan redan vara öppen — prova after ändå

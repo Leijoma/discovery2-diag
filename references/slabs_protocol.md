@@ -33,8 +33,18 @@ block-pollning. Vår drivare måste göra likadant:
   `close()` räcker inte — ECU:n håller sessionen tills den timeoutar av sig själv.
   Moduler utan session (SLABS, Airbag) har `_has_session = False` → no-op.
   Kör ändå inte fault-watch som växlar moduler snabbt.
-  ⚠️ Kvarstår: en session som lämnats öppen av en **tidigare process** (kraschad
-  eller dödad dashboard) städas inte av oss — där hjälper bara bus-idle/timeout.
+- **StopCommunication `82` → `C2` (belagt i bilen 2026-08-18).** Det räckte INTE
+  att stänga TD5-sessionen. Två teardowns finns och de är olika saker:
+  `20` avslutar en *diagnostiksession* (bara Td5), `82` river den
+  *kommunikationslänk* som fast init upprättade — och den har varje modul.
+  Bevis: en **helt ny process** med `--slabs` (ingen TD5 inblandad, SLABS som
+  första modul någonsin i processen) fick `7F 81 10` på allra första
+  initförsöket: `81 29 f7 81 22 03 7f 81 10 13`. Länken överlever alltså att
+  vår process dör. Åtgärd i kod: `EcuSession.release()` skickar `20` (om modulen
+  har session) + **alltid `82`**, och `_establish` skickar ett best-effort `82`
+  före *varje* initförsök för att riva en kvarlämnad länk.
+  Felvägar (tom läsning, tappad kabel) går nu också via `release()` — loggen
+  visade att just de lämnade länken öppen och gav ~90 s reconnect-loop.
 
 ## ReadEcuIdentification — `1A xx`
 | Req | Svar | Innehåll |

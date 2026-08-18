@@ -95,12 +95,15 @@ Violating these produces bugs that only show up against the real car:
   dashboard's `SlabsDataSource.poll` reads only heights (`21 54`) per cycle and
   faults at most every 10th poll. Block-reading many LIDs each 0.5 s cycle killed
   the session after ~15 s. Details in `references/slabs_protocol.md`.
-- **A `7F 81 10` (generalReject) on StartCommunication means a session is already
-  open** on the shared bus — usually a leftover Td5 session. Use
-  `EcuSession.release()` (StopDiagnosticSession + close), not bare `close()`, when
-  switching modules; don't try to fix it with longer idle. On error paths (dead
-  session, lost cable) call `close()` directly — there is no session to end and a
-  `20` into a silent bus only costs a timeout.
+- **A `7F 81 10` (generalReject) on StartCommunication means a link is still open**
+  on the shared bus. Two different teardowns exist and both matter: `20`
+  StopDiagnosticSession ends a *diagnostic session* (Td5 only), `82`
+  StopCommunication ends the *communication link* that fast init created (every
+  module). Always end a module with `EcuSession.release()` — module switch **and**
+  error paths — never bare `close()`. The link outlives the process: a fresh run
+  that only ever talks to SLABS still gets rejected if the previous run died with
+  the link open (proven in the car 2026-08-18), which is why `_establish` sends a
+  best-effort `82` before every init attempt. Don't try to fix this with longer idle.
 - **Keep `tolerant=True`** on KWP2000 for cheap KKL cables: it searches the read
   burst for a positive/negative SID instead of demanding a checksum-clean frame,
   which compensates for FTDI latency jitter during fast init.

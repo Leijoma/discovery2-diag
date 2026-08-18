@@ -32,8 +32,9 @@ class _Dummy(EcuSession):
 
 
 def _dummy(responses):
+    # kort ram-timeout: testerna ska inte betala 1 s per uteblivet svar
     ecu = FakeKLineEcu(responses)
-    return ecu, _Dummy(KWP2000(KLine(ecu)))
+    return ecu, _Dummy(KWP2000(KLine(ecu, timeout=0.05)))
 
 
 def test_context_manager_opens_and_closes():
@@ -103,20 +104,23 @@ class _WithSession(_Dummy):
 def test_release_sends_stop_diagnostic_session_then_closes():
     # Td5-fallet: release() ska skicka StopDiagnosticSession (20 → 60) INNAN porten
     # stängs, annars ligger sessionen kvar och nästa moduls init får 7F 81 10.
-    ecu = FakeKLineEcu({_sess(b"\x20"): _sess(b"\x60")})
+    ecu = FakeKLineEcu({_sess(b"\x20"): _sess(b"\x60"), _sess(b"\x82"): _sess(b"\xc2")})
     s = _WithSession(KWP2000(KLine(ecu)))
     with s:
         s.release()
-    assert _sess(b"\x20") in ecu.sent
+    # Td5 har BÅDA: en diagnostiksession (20) ovanpå kommunikationslänken (82).
+    assert ecu.sent == [_sess(b"\x20"), _sess(b"\x82")]
     assert ecu._is_open is False
 
 
-def test_release_without_session_sends_nothing():
-    # SLABS-fallet: ingen session att avsluta → ingen extra busstrafik vid modulbyte.
-    ecu, s = _dummy({})
+def test_release_without_session_still_stops_communication():
+    # SLABS-fallet: ingen diagnostiksession att avsluta — men fast init upprättade
+    # en LÄNK, och den måste rivas med 82. Annars svarar modulen 7F 81 10 på nästa
+    # StartCommunication tills dess egen timeout löper ut (belagt i bilen 2026-08-18).
+    ecu, s = _dummy({_sess(b"\x82"): _sess(b"\xc2")})
     with s:
         s.release()
-    assert ecu.sent == []
+    assert ecu.sent == [_sess(b"\x82")]     # 82, men inget 20 (ingen session)
     assert ecu._is_open is False
 
 
@@ -127,3 +131,26 @@ def test_release_closes_even_when_stop_fails():
     with s:
         s.release()
     assert ecu._is_open is False
+
+
+def test_establish_clears_stale_link_before_init():
+    # En länk som lämnats öppen (kraschad process, tidigare körning) får modulen att
+    # svara 7F 81 10 på StartCommunication. Vi river den med 82 FÖRE varje försök.
+    ecu, s = _dummy({_init_req(): _sess(b"\xc1\x57\x8f"), _sess(b"\x82"): _sess(b"\xc2")})
+    with s:
+        assert s.establish().startswith(b"\xc1\x57\x8f")  # burst från C1 (+ checksumma)
+    assert ecu.sent[0] == _sess(b"\x82")    # rensning först …
+    assert ecu.sent[1] == _init_req()       # … sedan init
+
+
+def test_establish_progress_reports_the_burst_on_each_failed_try():
+    # Bursten (t.ex. "03 7f 81 10 13") ska synas i anslutningsloggen för VARJE
+    # misslyckat försök — annars går det inte att se om rejecten fanns från start.
+    ecu, s = _dummy({})                     # inget svar på vare sig 82 eller init
+    msgs: "list[str]" = []
+    with s:
+        with pytest.raises(KWP2000Error):
+            s.establish(progress=msgs.append)
+    tries = [m for m in msgs if m.startswith("no response yet")]
+    assert len(tries) == 2                  # attempts=2 i _Dummy
+    assert all("bursten" in m for m in tries)

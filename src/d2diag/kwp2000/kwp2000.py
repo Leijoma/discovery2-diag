@@ -11,6 +11,7 @@ from ..kline.kline import KLine
 # Tjänste-ID:n
 START_DIAGNOSTIC_SESSION = 0x10
 STOP_DIAGNOSTIC_SESSION = 0x20
+STOP_COMMUNICATION = 0x82  # ISO 14230-2: avslutar KOMMUNIKATIONSLÄNKEN (81 → C1)
 TESTER_PRESENT = 0x3E
 SECURITY_ACCESS = 0x27
 READ_DATA_BY_LOCAL_ID = 0x21
@@ -78,7 +79,8 @@ class KWP2000:
         self.close()
 
     # ---- generisk tjänsteförfrågan ------------------------------------ #
-    def request(self, service: int, payload: bytes = b"") -> bytes:
+    def request(self, service: int, payload: bytes = b"", overall: "float | None" = None,
+                retries: "int | None" = None) -> bytes:
         """Skicka en tjänst, returnera svarets datafält (utan positiv SID).
 
         Hanterar responsePending (0x78) genom att vänta in nästa svar utan att
@@ -86,10 +88,11 @@ class KWP2000:
         """
         payload = bytes(payload)
         if self._tolerant:
-            resp = self._request_tolerant(service, payload)
+            resp = self._request_tolerant(service, payload, overall)
         else:
+            kw = {} if retries is None else {"retries": retries}
             resp = self._resolve_pending(
-                self._k.request(bytes([service]) + payload, addressed=self._addressed))
+                self._k.request(bytes([service]) + payload, addressed=self._addressed, **kw))
         if not resp:
             raise KWP2000Error(f"tomt svar på tjänst 0x{service:02X}")
         if resp[0] == NEGATIVE_RESPONSE:
@@ -101,13 +104,15 @@ class KWP2000:
             )
         return resp[1:]
 
-    def _request_tolerant(self, service: int, payload: bytes) -> bytes:
+    def _request_tolerant(self, service: int, payload: bytes,
+                          overall: "float | None" = None) -> bytes:
         """Skicka via burst-läsning; plocka svaret ur bursten utan checksum.
 
         Returnerar bytes från och med den funna SID:en (positiv eller negativ),
         så att den gemensamma tolkningen i :meth:`request` fungerar oförändrad.
         """
-        raw = self._k.converse(bytes([service]) + payload, addressed=self._addressed)
+        kw = {} if overall is None else {"overall": overall}
+        raw = self._k.converse(bytes([service]) + payload, addressed=self._addressed, **kw)
         return self._extract_response(raw, service, payload)
 
     @staticmethod
@@ -159,6 +164,22 @@ class KWP2000:
 
     def stop_diagnostic_session(self) -> bytes:
         return self.request(STOP_DIAGNOSTIC_SESSION)
+
+    def stop_communication(self) -> bytes:
+        """StopCommunication (``82`` → ``C2``) — avslutar länken från StartCommunication.
+
+        Skilt från StopDiagnosticSession: ``20`` avslutar en *diagnostiksession*
+        (Td5), ``82`` river den *kommunikationslänk* som fast init upprättade.
+        SLABS har bara det senare — den kör tjänsterna direkt efter `81`/`C1`.
+        Utan `82` vet ECU:n inte att vi gått, och nästa StartCommunication möts av
+        ``7F 81 10`` (generalReject) tills modulens egen timeout löper ut.
+        """
+        # Kort burst: finns en länk kommer C2 (eller ett negativt svar) på tiotals
+        # ms. Kommer inget inom 0,5 s fanns ingen länk — vänta inte ut full timeout,
+        # det här ligger i anslutningsvägen och körs före varje initförsök.
+        # ``retries=0``: en teardown skickas EN gång — att skicka om den mot en tyst
+        # buss kostar bara timeout, och vi bryr oss inte om svaret.
+        return self.request(STOP_COMMUNICATION, overall=0.5, retries=0)
 
     def tester_present(self, sub: "int | None" = 0x01) -> bytes:
         """TesterPresent-keepalive. ``sub=None`` skickar bar ``3E`` utan sub-byte
