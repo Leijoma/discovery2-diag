@@ -79,6 +79,7 @@ class EcuSession:
         attempts: int,
         retry_sleep: float,
         sleep: Callable[[float], None] = time.sleep,
+        progress: "Callable[[str], None] | None" = None,
     ) -> bytes:
         """Bus-idle → tolerant fast init (sök C1) → valfri efter-fas (``after``).
 
@@ -93,24 +94,35 @@ class EcuSession:
         ``sleep`` injiceras för testbarhet. Höjer :class:`KWP2000Error` efter
         ``attempts`` misslyckade försök.
         """
+        def _say(msg: str) -> None:
+            if progress is not None:
+                progress(msg)
+
+        _say("waiting for the bus to settle")
         sleep(idle)  # låt linjen vara tyst så en ev. öppen session hinner dö
         last: "Exception | None" = None
-        for _ in range(attempts):
+        for i in range(attempts):
+            _say(f"sending init (try {i + 1}/{attempts})")
             try:
                 c1 = self._kwp.start_communication(tolerant=True)
             except (KLineError, KWP2000Error) as exc:
                 last = exc
                 if after is None:
+                    _say(f"no response yet, retrying (try {i + 1}/{attempts})")
                     sleep(retry_sleep)
                     continue
                 c1 = b""  # sessionen kan redan vara öppen — prova after ändå
             if after is None:
+                _say("session established")
                 return c1
             try:
+                _say("response received, unlocking")
                 after()
+                _say("session established")
                 return c1
             except (KWP2000Error, KLineError, ValueError) as exc:
                 last = exc
+                _say(f"unlock failed, retrying (try {i + 1}/{attempts})")
                 sleep(retry_sleep)  # låt sessionen dö före nästa init
         raise KWP2000Error(
             f"kunde inte etablera {self.name}-session efter {attempts} försök: {last}"

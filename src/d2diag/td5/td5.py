@@ -77,6 +77,7 @@ class Td5(EcuSession):
         idle: float = _DEFAULT_IDLE,
         attempts: int = _DEFAULT_ATTEMPTS,
         sleep: Callable[[float], None] = time.sleep,
+        progress: "Callable[[str], None] | None" = None,
     ) -> bytes:
         """Full uppkoppling: bus-idle → tolerant fast init (sök C1) → session →
         unlock (via :meth:`connect`). Retryar hela sekvensen vid brus och
@@ -88,7 +89,8 @@ class Td5(EcuSession):
         StartCommunication men går ändå att låsa upp — därför tolereras tom C1
         (se :meth:`EcuSession._establish`)."""
         return self._establish(
-            after=self.connect, idle=idle, attempts=attempts, retry_sleep=8.0, sleep=sleep
+            after=self.connect, idle=idle, attempts=attempts, retry_sleep=8.0,
+            sleep=sleep, progress=progress,
         )
 
     # ---- avläsning av livedata --------------------------------------- #

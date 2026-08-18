@@ -85,6 +85,11 @@ class DataSource(abc.ABC):
     """Kontrakt: ``poll()`` returnerar en färsk snapshot-dict."""
 
     name: str = "source"
+    on_progress = None  # callback(str): live-status under blockande etablering (bas: ingen)
+
+    def is_connected(self) -> bool:
+        """Har källan en levande session? Bas: nej (mock rapporterar alltid connected via poll)."""
+        return False
 
     @abc.abstractmethod
     def poll(self) -> "dict":
@@ -205,6 +210,10 @@ class Td5DataSource(DataSource):
         self._faults: "list[str]" = []
         self._fault_tick = 0
         self.fault_every = 10  # läs felkoder var N:e poll (1 = "fault watch", varje cykel)
+        self.on_progress = None  # callback(str): live-status under blockande etablering
+
+    def is_connected(self) -> bool:
+        return self._td5 is not None
 
     def _connect(self):
         from ..kline import KLine
@@ -212,10 +221,12 @@ class Td5DataSource(DataSource):
         from ..td5 import Td5
         from ..transport import SerialTransport
 
+        if self.on_progress:
+            self.on_progress("opening the cable")
         port = resolve_serial_port(self._port)  # autodetektera vid varje försök
         td5 = Td5(KWP2000(KLine(SerialTransport(port, timeout=1.0)), tolerant=True))
         td5.open()
-        td5.establish()
+        td5.establish(progress=self.on_progress)
         return td5
 
     def disconnect(self) -> None:
@@ -391,6 +402,10 @@ class SlabsDataSource(DataSource):
         self._faults: "list[str]" = []
         self._tick = 0
         self.fault_every = 10  # läs felkoder var N:e poll (1 = "fault watch", varje cykel)
+        self.on_progress = None  # callback(str): live-status under blockande etablering
+
+    def is_connected(self) -> bool:
+        return self._slabs is not None
 
     def _connect(self):
         from ..kline import KLine
@@ -398,11 +413,13 @@ class SlabsDataSource(DataSource):
         from ..slabs import SLABS_ADDRESS, Slabs
         from ..transport import SerialTransport
 
+        if self.on_progress:
+            self.on_progress("opening the cable")
         port = resolve_serial_port(self._port)
         slabs = Slabs(KWP2000(KLine(SerialTransport(port, timeout=1.0), target=SLABS_ADDRESS),
                               tolerant=True))
         slabs.open()
-        slabs.establish()
+        slabs.establish(progress=self.on_progress)
         return slabs
 
     def disconnect(self) -> None:

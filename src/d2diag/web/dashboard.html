@@ -258,6 +258,10 @@
   .conn.wait { border-color:var(--warn); }
   .conn.err { border-color:var(--err); }
   .conn b { color:var(--fg); }
+  .spin { display:inline-block; width:12px; height:12px; vertical-align:-1px;
+          border:2px solid var(--warn); border-top-color:transparent; border-radius:50%;
+          animation:spin .7s linear infinite; margin-right:4px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
   .disclaimer { color:var(--muted); font-size:12px; line-height:1.55; margin-top:18px;
                 padding:12px 14px; border:1px solid var(--line); border-radius:11px; background:var(--card); }
   .disclaimer b { color:var(--warn); }
@@ -488,11 +492,13 @@
   const HERO = ["rpm","speed","coolant_temp","battery"];
 
   // ---- tabs = pick module (establishes a session on the vehicle; K-line has one session at a time) ----
+  let _userNav = false;  // sätts när användaren själv navigerar → init får aldrig överrida
   function showTab(name) {
     document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === name));
     document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
   }
   async function selectModule(name) {
+    _userNav = true;  // användaren valde modul → lås navigeringen mot init-race
     showTab(name);
     try {
       await fetch("/command", { method:"POST", headers:{"Content-Type":"application/json"},
@@ -501,6 +507,7 @@
   }
   document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
     const name = t.dataset.tab;
+    _userNav = true;
     stopKartaSniff(); stopFangst();
     if (name === "home") { showTab("home"); renderHome(); }
     else if (name === "karta") { showTab("karta"); loadMap(); }
@@ -847,6 +854,7 @@
     }).join("");
     g.querySelectorAll("[data-go]").forEach(c=>c.onclick=()=>{
       const t=c.dataset.go;
+      _userNav = true;
       if(t==="faults") showTab("faults"); else selectModule(t);   // selectModule shows tab + establishes
     });
   }
@@ -854,6 +862,7 @@
   function renderConn(d){
     const el=$("home-conn"); if(!el) return;
     const st=(d&&d.status)||"connecting", err=(d&&d.error)||"", mod=(d&&d.module)||"";
+    const phase=(d&&d.connect_phase)||"";
     const noCable=/USB serial|not connected|KKL|no adapter|FileNotFound|No such file|could not open|serial/i.test(err);
     if(st==="connected"){
       el.className="conn ok"; el.innerHTML=`✓ Connected to the vehicle — reading <b>${mod.toUpperCase()}</b>.`;
@@ -865,7 +874,13 @@
       el.className="conn err"; el.innerHTML=`⚠ <b>Can't talk to the vehicle.</b> ${err||""}<br>`+
         "Check the cable is seated, the ignition is on, and the engine is off/stationary.";
     } else {
-      el.className="conn wait"; el.innerHTML="Connecting to the vehicle…";
+      // Live etableringsfas från servern (opening the cable / sending init (try N) /
+      // response received / session established) medan poll blockerar.
+      const label = mod ? mod.toUpperCase() : "the vehicle";
+      el.className="conn wait";
+      el.innerHTML = phase
+        ? `<span class="spin"></span> Connecting to <b>${label}</b> — ${phase}…`
+        : `<span class="spin"></span> Connecting to <b>${label}</b>…`;
     }
   }
 
@@ -873,14 +888,16 @@
     _last = d;
     const st = d.status || "connecting";
     $("dot").className = "dot " + st;
-    $("status").textContent = ({connected:"connected",connecting:"connecting…",error:"error"}[st] || st) + (d.source ? " · " + d.source : "");
+    const stTxt = (st==="connecting" && d.connect_phase) ? d.connect_phase+"…"
+                : ({connected:"connected",connecting:"connecting…",error:"error"}[st] || st);
+    $("status").textContent = stTxt + (d.source ? " · " + d.source : "");
     $("error").textContent = d.error || "";
     renderMode(d); renderCsv(d); renderConn(d); renderFw(d);
     document.body.classList.toggle("public", !!d.public);
     const sig = d.signals || {}, faults = d.faults || [];
     const mod = d.module || ((d.source || "").indexOf("slabs") >= 0 ? "slabs" : "motor");
     // first load: build trust toggle + home; land on Home in public, else the active module
-    if (!render._init) { render._init = true; renderTrust(); renderHome(); showTab(d.public ? "home" : mod); }
+    if (!render._init) { render._init = true; renderTrust(); renderHome(); if (!_userNav) showTab(d.public ? "home" : mod); }
     if (mod === "slabs") renderSlabs(sig, faults); else renderMotor(sig, faults);
   }
 

@@ -333,9 +333,45 @@ class DiagServer(ThreadingHTTPServer):
             "public": self._public, "fault_watch": self._fault_watch,
         }
         self._apply_fault_watch()  # sätt fel-pollnings-kadensen på alla källor
+        for s in self._all_sources():  # live-feedback under blockande etablering
+            s.on_progress = self._connect_progress
+        # Anslutningslogg: hela etableringsförloppet + fel skrivs hit (och till stderr)
+        # så man kan felsöka en session som "dör" strax efter uppkoppling.
+        self._conn_log_path = os.path.join(self._csv_dir, "connection.log")
+        self._last_conn_status: "str | None" = None
+        self._last_conn_error: "str | None" = None
         self._stop = threading.Event()
         self._commands: "queue.Queue" = queue.Queue()
         self._poller = threading.Thread(target=self._poll_loop, daemon=True)
+
+    def _conn_log(self, msg: str) -> None:
+        """Skriv en tidsstämplad rad till anslutningsloggen och stderr. Får aldrig
+        fälla poll-loopen — sväljer alla fel."""
+        line = f"{time.strftime('%Y-%m-%d %H:%M:%S')} [{self._active}/{self._mode}] {msg}"
+        try:
+            print(line, flush=True)  # → task/stderr-loggen
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            os.makedirs(os.path.dirname(self._conn_log_path), exist_ok=True)
+            with open(self._conn_log_path, "a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _connect_progress(self, phase: str) -> None:
+        """Källorna ropar hit under den blockande etableringen (i pollertråden).
+        Vi uppdaterar ``self.latest`` direkt så SSE-tråden pushar fasen live till
+        webläsaren medan poll fortfarande blockerar. Bara meningsfullt medan vi
+        faktiskt försöker koppla upp — poll skriver över med färsk snapshot sen."""
+        self._conn_log(f"establish: {phase}")
+        self.latest = {
+            **self.latest,
+            "status": "connecting",
+            "module": self._active,
+            "source": self.source.name,
+            "connect_phase": phase,
+        }
 
     def _all_sources(self) -> list:
         if self._variants:
@@ -405,9 +441,10 @@ class DiagServer(ThreadingHTTPServer):
                 pass
             self._active = name
             self.source = self._modules[name]
-            self.latest = {"status": "connecting", "source": self.source.name,
-                           "module": name, "mode": self._mode, "modes": self._modes,
-                           "signals": {}, "faults": []}
+            # bevara public/fault_watch/logging/modes — annars tappar UI:t public-läget
+            self.latest = {**self.latest, "status": "connecting", "source": self.source.name,
+                           "module": name, "signals": {}, "faults": [], "connect_phase": None,
+                           "error": ""}
         return {"ok": True, "message": f"module: {name}", "module": name}
 
     def _set_mode(self, mode: "str | None") -> "dict":
@@ -424,9 +461,9 @@ class DiagServer(ThreadingHTTPServer):
             self._modules = {n: (v.get(mode) or next(iter(v.values())))
                              for n, v in self._variants.items()}
             self.source = self._modules[self._active]
-            self.latest = {"status": "connecting", "source": self.source.name,
-                           "module": self._active, "mode": mode, "modes": self._modes,
-                           "signals": {}, "faults": []}
+            self.latest = {**self.latest, "status": "connecting", "source": self.source.name,
+                           "module": self._active, "mode": mode, "signals": {}, "faults": [],
+                           "connect_phase": None, "error": ""}
         return {"ok": True, "message": f"mode: {mode}", "mode": mode}
 
     def _read_all_faults(self) -> "dict":
@@ -492,6 +529,24 @@ class DiagServer(ThreadingHTTPServer):
                 holder["result"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
             holder["event"].set()
 
+    def _log_conn_transition(self, snap: "dict") -> None:
+        """Logga bara när status faktiskt ändras (connected↔error) eller när
+        feltexten ändras — annars skulle en tappad kabel spamma varje ~0,5 s.
+        Mock-källor (alltid connected utan riktig session) loggas inte."""
+        status = snap.get("status")
+        if self._mode == "mock" or type(self.source).__name__.startswith("Mock"):
+            return  # mock är alltid "connected" utan riktig session → inget att logga
+        err = snap.get("error") or ""
+        if status == self._last_conn_status and err == self._last_conn_error:
+            return
+        if status == "connected":
+            n = len(snap.get("signals") or {})
+            self._conn_log(f"CONNECTED — {n} signaler, {len(snap.get('faults') or [])} felkoder")
+        elif status == "error":
+            self._conn_log(f"ERROR — {err}")
+        self._last_conn_status = status
+        self._last_conn_error = err
+
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
             self._drain_commands()  # skrivningar först, serialiserat med poll
@@ -509,6 +564,7 @@ class DiagServer(ThreadingHTTPServer):
             snap["logging"] = self._csv.status() if self._csv is not None else {"recording": False}
             snap["public"] = self._public  # UI förenklas i publikt läge
             snap["fault_watch"] = self._fault_watch  # snabb fel-pollning på/av
+            self._log_conn_transition(snap)  # logga connected/error-övergångar
             self.latest = snap
             if self.logger is not None:
                 try:

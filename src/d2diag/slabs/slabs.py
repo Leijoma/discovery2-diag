@@ -69,13 +69,15 @@ class Slabs(EcuSession):
         idle: float = _DEFAULT_IDLE,
         attempts: int = _DEFAULT_ATTEMPTS,
         sleep: Callable[[float], None] = time.sleep,
+        progress: "Callable[[str], None] | None" = None,
     ) -> bytes:
         """Bus-idle → tolerant fast init mot 0x29 (sök C1). Returnerar C1-datafältet
         (`57 8F`). Ingen session/unlock behövs (``after=None``). Höjer
         :class:`KWP2000Error` efter ``attempts`` försök.
         """
         return self._establish(
-            after=None, idle=idle, attempts=attempts, retry_sleep=5.0, sleep=sleep
+            after=None, idle=idle, attempts=attempts, retry_sleep=5.0,
+            sleep=sleep, progress=progress,
         )
 
     # ---- ECU-identitet (1A xx) --------------------------------------- #
