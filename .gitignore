@@ -8,4 +8,7 @@ build/
 .pytest_cache/
 *.log
 logs/*.csv
+*.sqlite
+*.sqlite3
+data/
 .DS_Store
