@@ -22,8 +22,12 @@ block-pollning. Vår drivare måste göra likadant:
   höjder (`21 54`) per cykel; felkoder högst var 10:e poll (~5 s). En tidigare
   store-driven block-läsning av 5 LID:er + felkoder i **varje** 0.5 s-cykel
   (~7× busstrafiken) kopplade upp men **dödade sessionen efter ~15 s**.
-- **`establish`: `idle=0.3 s`, `attempts=3`** (originalvärdena). Längre idle
-  hjälpte inte och gjorde bara reconnect trögt.
+- **`establish`: `idle=0.3 s`, `attempts=8`, `retry_sleep=1.5 s`.** Längre idle
+  hjälper inte. Init är inneboende trögt — bilen 2026-08-18 krävde ~2 min envisa
+  försök innan `C1` kom, och satt sedan **stabilt i 2,5 min med data** (4 signaler,
+  ingen reconnect). Det som avgör är alltså antalet försök per minut. Den gamla
+  pausen på 5 s fanns för att låta en öppen länk dö av sig själv; den river vi
+  numera explicit med `82`, så väntan fyllde ingen funktion.
 - **Delad K-line-buss:** ett `7F 81 10` (generalReject) på StartCommunication =
   en session är redan öppen. Vanlig orsak: en kvarlämnad **TD5-session**
   (StartDiagnosticSession + SecurityAccess) efter modulbyte.

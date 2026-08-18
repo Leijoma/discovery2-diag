@@ -50,8 +50,14 @@ ABS_SUB_FRONT_LEFT = 0x11
 ABS_SUB_REAR_RIGHT = 0x12
 ABS_SUB_REAR_LEFT = 0x13
 
-_DEFAULT_IDLE = 0.3   # bevisat stabilt värde (sniff 2026-08-07); TD5-interferens löses
-_DEFAULT_ATTEMPTS = 3  # separat (rensa TD5-sessionen vid modulbyte), inte via lång idle
+_DEFAULT_IDLE = 0.3    # bevisat stabilt värde (sniff 2026-08-07)
+# SLABS-init är inneboende trögt (reference tool behövde också flera försök). Det som
+# avgör hur snabbt vi kommer in är ANTALET försök per minut, inte längden på pauserna:
+# bilen 2026-08-18 tog ~2 min av envisa försök innan C1 kom — och satt sedan stabilt
+# i 2,5 min. Den gamla pausen på 5 s fanns för att låta en öppen länk dö av sig själv;
+# den river vi numera explicit med 82 före varje försök, så väntan fyller ingen funktion.
+_DEFAULT_ATTEMPTS = 8
+_DEFAULT_RETRY_SLEEP = 1.5
 
 
 class Slabs(EcuSession):
@@ -76,7 +82,7 @@ class Slabs(EcuSession):
         :class:`KWP2000Error` efter ``attempts`` försök.
         """
         return self._establish(
-            after=None, idle=idle, attempts=attempts, retry_sleep=5.0,
+            after=None, idle=idle, attempts=attempts, retry_sleep=_DEFAULT_RETRY_SLEEP,
             sleep=sleep, progress=progress,
         )
 
