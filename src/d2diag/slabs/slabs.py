@@ -50,8 +50,8 @@ ABS_SUB_FRONT_LEFT = 0x11
 ABS_SUB_REAR_RIGHT = 0x12
 ABS_SUB_REAR_LEFT = 0x13
 
-_DEFAULT_IDLE = 3.0   # låt bussen/en ev. tidigare session (t.ex. TD5) lägga sig först
-_DEFAULT_ATTEMPTS = 4
+_DEFAULT_IDLE = 0.3   # bevisat stabilt värde (sniff 2026-08-07); TD5-interferens löses
+_DEFAULT_ATTEMPTS = 3  # separat (rensa TD5-sessionen vid modulbyte), inte via lång idle
 
 
 class Slabs(EcuSession):

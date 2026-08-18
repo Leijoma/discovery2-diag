@@ -7,10 +7,27 @@ verklig trafik**, inte gissat.
 
 ## Grundläggande
 - **Adress `0x29`, FAST init:** `81 29 F7 81 22` → svar `C1 57 8F` (KWP2000, KW2=8F).
+  Init är **trögt** — i sniffen fick reference tools *första* försök inget svar,
+  andra lyckades ~25 s senare. Flera försök innan C1 är normalt, inte en bugg.
 - **Session:** oadresserade, längd-prefixade ramar `<len> <SID> <data…> <cs>`
   (checksumma = byte-summa & 0xFF), samma stil som Td5-sessionen.
-- **Keepalive:** `01 3E` → `7E` (TesterPresent), ~1 s.
+- **Keepalive:** `01 3E` → `7E` (TesterPresent), ~1 s. **OBS: bar `3E` utan
+  sub-byte** (ram `01 3e 3f`). `3E 01` får inget svar och river sessionen.
 - Kräver **tändning PÅ** (tändningsmatad modul). Comms dör >8–20 km/h.
+
+### ⚠️ SLABS måste pollas LÄTT (bevisat 2026-08-07)
+Reference tool körde ~**1 Hz keepalive + enstaka läsningar** — inte kontinuerlig
+block-pollning. Vår drivare måste göra likadant:
+- **Läs få LID:er, sällan.** Dashboardens `SlabsDataSource.poll` läser bara
+  höjder (`21 54`) per cykel; felkoder högst var 10:e poll (~5 s). En tidigare
+  store-driven block-läsning av 5 LID:er + felkoder i **varje** 0.5 s-cykel
+  (~7× busstrafiken) kopplade upp men **dödade sessionen efter ~15 s**.
+- **`establish`: `idle=0.3 s`, `attempts=3`** (originalvärdena). Längre idle
+  hjälpte inte och gjorde bara reconnect trögt.
+- **Delad K-line-buss:** ett `7F 81 10` (generalReject) på StartCommunication =
+  en session är redan öppen. Vanlig orsak: en kvarlämnad **TD5-session**
+  (StartDiagnosticSession + SecurityAccess) efter modulbyte. Släpp TD5-sessionen
+  rent innan SLABS-init; kör inte fault-watch som växlar moduler snabbt.
 
 ## ReadEcuIdentification — `1A xx`
 | Req | Svar | Innehåll |

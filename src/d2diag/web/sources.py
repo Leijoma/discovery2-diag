@@ -444,16 +444,19 @@ class SlabsDataSource(DataSource):
                 self._slabs.tester_present()  # keepalive — bästa försök, inte livstecken
             except Exception:  # noqa: BLE001 — ett tappat 3E ska inte riva sessionen
                 pass
-            # Läs alla LID:er storen bryr sig om + dashboardens (SVG) i ETT svep.
-            store = load_signals("slabs")
-            lids = {s.lid for s in store} | {0x54, 0x43, 0x50}
-            raws = self._slabs.read_block(lids)  # {lid_hex: bytes}, felande hoppas över
-            if not raws:
-                # Ingen enda LID svarade. En full reconnect kostar ~20 s, så vi river
-                # inte sessionen direkt: SLABS tystnar ofta en cykel (bussglitch, eller
-                # bilen började rulla). Behåll sessionen i ett par pollar och visa
-                # senaste kända värden märkta "stale"; först efter flera tomma i rad
-                # ger vi upp och kopplar om.
+            # LÄTT poll — bevisat stabilt (sniff 2026-08-07): bara höjder (21 54).
+            # SLABS tål inte att block-pollas med många LID:er i varje 0.5 s-cykel;
+            # reference tool körde ~1 Hz keepalive + enstaka läsningar. Store-driven
+            # block-läsning fanns här men destabiliserade sessionen (~7× busstrafik).
+            try:
+                raw = self._slabs.read_data(0x54)  # byte0=vänster höjd, byte1=höger
+            except Exception:  # noqa: BLE001 — en enstaka tappad läsning
+                raw = b""
+            if not raw:
+                # En full reconnect kostar ~20 s, så vi river inte sessionen direkt:
+                # SLABS tystnar ofta en cykel (bussglitch, eller bilen började rulla).
+                # Behåll sessionen ett par pollar och visa senaste kända värden
+                # ("stale"); först efter flera tomma i rad ger vi upp och kopplar om.
                 self._empty_streak += 1
                 if self._empty_streak < _SLABS_EMPTY_GRACE:
                     return {"status": "connected", "source": self.name, "stale": True,
@@ -461,28 +464,17 @@ class SlabsDataSource(DataSource):
                 raise RuntimeError(
                     f"inget SLABS-svar på {self._empty_streak} pollar — tappad session")
             self._empty_streak = 0
-            # Store-drivna signaler → nya bekräftade mappningar syns automatiskt.
-            vals: "dict[str, float]" = {}
-            for s in store:
-                raw = raws.get(f"{s.lid:02x}")
-                if raw is not None and s.fits(raw) and s.decode_named(raw) is None:
-                    vals[s.name] = round(s.decode(raw), 3)
-            # Dashboard-specifika härledda fält (den handritade SVG-bilen).
-            h = raws.get("54", b"")
-            hl = h[0] if len(h) > 0 else 0
-            hr = h[1] if len(h) > 1 else 0
-            vals.update({"height_left": hl, "height_right": hr,
-                         "height_left_mm": hl * 1.4, "height_right_mm": hr * 1.4})
-            sp = raws.get("43", b"")
-            vo = raws.get("50", b"")
-            for i, w in enumerate(("fl", "fr", "rl", "rr")):  # ordning preliminär
-                if len(sp) > i * 2:
-                    vals[f"speed_{w}"] = sp[i * 2]
-                if len(vo) > i:
-                    vals[f"volt_{w}"] = round(vo[i] * 0.02, 2)
-            signals = _slabs_sig(vals)
+            hl = raw[0] if len(raw) > 0 else 0
+            hr = raw[1] if len(raw) > 1 else 0
+            signals = _slabs_sig({
+                "height_left": hl, "height_right": hr,
+                "height_left_mm": hl * 1.4, "height_right_mm": hr * 1.4,
+            })
             self._last_signals = signals  # spara för nåd-perioden vid en tom cykel
-            if self._read_faults and self._tick % self.fault_every == 0:
+            # Felkoder på LÄTT kadens: aldrig oftare än var 10:e poll (~5 s) även när
+            # global fault-watch är på — SLABS-bussen tål inte snabb fel-pollning.
+            every = max(self.fault_every, 10)
+            if self._read_faults and self._tick % every == 0:
                 try:
                     self._faults = _slabs_faults_flat(self._slabs.read_faults())
                 except Exception:  # noqa: BLE001

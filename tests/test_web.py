@@ -189,10 +189,10 @@ def test_read_block_command_not_connected():
 
 
 class _FakeSlabs:
-    """Minimal SLABS-stub som styr vad read_block returnerar (tomt = tyst buss)."""
-    def __init__(self, raws): self._raws = raws
+    """Minimal SLABS-stub som styr vad read_data(0x54) returnerar (tomt = tyst buss)."""
+    def __init__(self, height=b""): self._height = height
     def tester_present(self): pass
-    def read_block(self, lids): return self._raws
+    def read_data(self, lid): return self._height
     def read_faults(self): return {"loggade": [], "aktuella": []}
     def close(self): pass
 
@@ -203,7 +203,7 @@ def test_slabs_empty_read_grace_keeps_session_then_reconnects(monkeypatch):
     # först efter _SLABS_EMPTY_GRACE tomma i rad ges den upp.
     from d2diag.web.sources import SlabsDataSource, _SLABS_EMPTY_GRACE
     src = SlabsDataSource(port="x", read_faults=False)
-    src._slabs = _FakeSlabs({})            # bussen svarar aldrig
+    src._slabs = _FakeSlabs(b"")           # bussen svarar aldrig (21 54 → tomt)
     src._last_signals = {"height_left": {"v": 42, "u": "", "s": "ok", "c": "belagt"}}
 
     for _ in range(_SLABS_EMPTY_GRACE - 1):  # nåd-pollar: connected+stale, session kvar
@@ -222,12 +222,13 @@ def test_slabs_empty_read_grace_keeps_session_then_reconnects(monkeypatch):
 def test_slabs_successful_read_resets_empty_streak():
     from d2diag.web.sources import SlabsDataSource
     src = SlabsDataSource(port="x", read_faults=False)
-    src._slabs = _FakeSlabs({})
-    src.poll(); assert src._empty_streak == 1        # en tom cykel
-    src._slabs = _FakeSlabs({"54": b"\x91\x9c"})     # bussen svarar igen
+    src._slabs = _FakeSlabs(b"")                # tyst buss
+    src.poll(); assert src._empty_streak == 1   # en tom cykel
+    src._slabs = _FakeSlabs(b"\x91\x9c")        # bussen svarar igen (höjder)
     d = src.poll()
     assert d["status"] == "connected" and not d.get("stale")
-    assert src._empty_streak == 0                    # nollställd av lyckad läsning
+    assert d["signals"]["height_left"]["v"] == 0x91
+    assert src._empty_streak == 0               # nollställd av lyckad läsning
 
 
 def test_mode_toggle_switches_variant():
@@ -297,8 +298,10 @@ def test_single_source_has_no_mode_toggle():
         srv.server_close()
 
 
-def test_slabs_source_decodes_live_via_store():
-    # Binder ihop read_block (EcuSession) + signalstoren i SlabsDataSource.poll.
+def test_slabs_source_light_poll_reads_heights_only():
+    # LÄTT baslinje-poll (sniff 2026-08-07): SLABS-pollen läser BARA höjder (21 54).
+    # Store-driven block-läsning av många LID:er destabiliserade sessionen (~7×
+    # busstrafik) och är medvetet borttagen — se slabs_protocol.md.
     from d2diag.kline import KLine, encode
     from d2diag.kwp2000 import KWP2000
     from d2diag.slabs import Slabs
@@ -309,12 +312,8 @@ def test_slabs_source_decodes_live_via_store():
         return encode(d, addressed=False)
 
     resp = {
-        _f(b"\x3e\x01"): _f(b"\x7e\x01"),                       # tester_present
-        _f(b"\x21\x54"): _f(b"\x61\x54\x91\x9c\x0f\x0f"),        # höjder 145/156
-        _f(b"\x21\x56"): _f(b"\x61\x56\x01\x0f\x0f\x0f"),        # any_door bit0=1 (öppen)
-        _f(b"\x21\x43"): _f(b"\x61\x43\x7c\x00\x7c\x00\x7c\x00\x7c\x00"),
-        _f(b"\x21\x50"): _f(b"\x61\x50\x72\x73\x73\x72"),
-        _f(b"\x21\x44"): _f(b"\x61\x44" + bytes(14)),            # batteri/ecu_supply = 0
+        _f(b"\x3e"): _f(b"\x7e"),                          # bar 3E-keepalive (utan sub)
+        _f(b"\x21\x54"): _f(b"\x61\x54\x91\x9c\x0f\x0f"),   # höjder 145/156
     }
     src = SlabsDataSource(port="x", read_faults=False)
     src._slabs = Slabs(KWP2000(KLine(FakeKLineEcu(resp))))
@@ -323,9 +322,9 @@ def test_slabs_source_decodes_live_via_store():
 
     assert out["status"] == "connected"
     sig = out["signals"]
-    assert sig["height_left"]["v"] == 145 and sig["height_right"]["v"] == 156   # SVG-fält
-    assert "battery" in sig and "ecu_supply" in sig                            # store-drivna
-    assert "any_door" not in sig    # state-fält → visas i Karta (decode_known), ej som numerisk gauge
+    assert sig["height_left"]["v"] == 145 and sig["height_right"]["v"] == 156
+    # Inga tunga store-drivna fält längre — bara de fyra höjd-fälten hålls lätta.
+    assert set(sig) == {"height_left", "height_right", "height_left_mm", "height_right_mm"}
 
 
 def test_mock_clear_faults_command():
