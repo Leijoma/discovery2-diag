@@ -19,9 +19,16 @@ verklig trafik**, inte gissat.
 Reference tool körde ~**1 Hz keepalive + enstaka läsningar** — inte kontinuerlig
 block-pollning. Vår drivare måste göra likadant:
 - **Läs få LID:er, sällan.** Dashboardens `SlabsDataSource.poll` läser bara
-  höjder (`21 54`) per cykel; felkoder högst var 10:e poll (~5 s). En tidigare
-  store-driven block-läsning av 5 LID:er + felkoder i **varje** 0.5 s-cykel
-  (~7× busstrafiken) kopplade upp men **dödade sessionen efter ~15 s**.
+  höjder (`21 54`). En tidigare store-driven block-läsning av 5 LID:er + felkoder i
+  **varje** 0.5 s-cykel (~7× busstrafiken) kopplade upp men **dödade sessionen
+  efter ~15 s**.
+- **TAKTEN är lika viktig som antalet LID:er (bilen 2026-08-18).** Att bara läsa
+  `21 54` räckte inte: med serverns 0,5 s-cykel blev det `3E` + `21 54` = **4
+  ramar/s**, medan reference tool körde ~1 Hz (keepalive `01 3e 3f` var ~1048:e ms
+  i sniffen). Sessionen dog efter 21 s (uppkopplad 20:54:28, död 20:54:49).
+  Trafiken är därför strypt på **klockan, inte pollcykeln**: `_SLABS_BUS_PERIOD =
+  1.0 s` och felkoder på egen kadens `_SLABS_FAULT_PERIOD = 30 s`. Extra pollar
+  returnerar cachade värden utan att röra bussen.
 ### ⚠️ Init kräver en TYST PERIOD — inte fler försök (mätt 2026-08-18)
 Alla reference tool-sniffar mättes om (`slabs_session_20260807`,
 `td5_slabs_session_20260808`, `faultread-20260809-4`). Tiden utan trafik mot

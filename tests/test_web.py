@@ -209,6 +209,7 @@ def test_slabs_empty_read_grace_keeps_session_then_reconnects(monkeypatch):
     src._last_signals = {"height_left": {"v": 42, "u": "", "s": "ok", "c": "belagt"}}
 
     for _ in range(_SLABS_EMPTY_GRACE - 1):  # nåd-pollar: connected+stale, session kvar
+        src._last_bus = 0.0                  # öppna 1 Hz-strypningen: vi vill nå bussen
         d = src.poll()
         assert d["status"] == "connected" and d.get("stale") is True
         assert d["signals"] == src._last_signals
@@ -216,6 +217,7 @@ def test_slabs_empty_read_grace_keeps_session_then_reconnects(monkeypatch):
 
     # Blockera reconnect (ingen hårdvara) så vi ser att sessionen faktiskt revs.
     monkeypatch.setattr(src, "_connect", lambda: (_ for _ in ()).throw(RuntimeError("no cable")))
+    src._last_bus = 0.0
     d = src.poll()                          # nåd slut → riv + försök koppla om (misslyckas)
     assert d["status"] == "error"
     assert src._slabs is None
@@ -225,8 +227,10 @@ def test_slabs_successful_read_resets_empty_streak():
     from d2diag.web.sources import SlabsDataSource
     src = SlabsDataSource(port="x", read_faults=False)
     src._slabs = _FakeSlabs(b"")                # tyst buss
+    src._last_bus = 0.0
     src.poll(); assert src._empty_streak == 1   # en tom cykel
     src._slabs = _FakeSlabs(b"\x91\x9c")        # bussen svarar igen (höjder)
+    src._last_bus = 0.0
     d = src.poll()
     assert d["status"] == "connected" and not d.get("stale")
     assert d["signals"]["height_left"]["v"] == 0x91
@@ -493,3 +497,62 @@ def test_sources_get_the_interruptible_sleep_hook():
         assert src.on_sleep == srv._connect_sleep
     finally:
         srv.server_close()
+
+
+class _CountingSlabs(_FakeSlabs):
+    """Räknar bussanrop så strypningen kan mätas."""
+    def __init__(self, height=b"\x91\x9c"):
+        super().__init__(height)
+        self.calls = 0
+    def tester_present(self): self.calls += 1
+    def read_data(self, lid):
+        self.calls += 1
+        return self._height
+
+
+def test_slabs_poll_is_throttled_to_one_hz():
+    # Servern pollar 2 Hz men SLABS tål inte det: reference tool körde ~1 Hz
+    # (keepalive var ~1048:e ms). Extra pollar ska returnera cachade värden UTAN
+    # att röra bussen — annars skickar vi 4 ramar/s och sessionen dör (~21 s i bilen).
+    from d2diag.web.sources import SlabsDataSource, _SLABS_BUS_PERIOD
+    src = SlabsDataSource(port="x", read_faults=False)
+    sess = _CountingSlabs()
+    src._slabs = sess
+
+    first = src.poll()                       # första pollen når bussen
+    assert sess.calls == 2                   # 3E + 21 54
+    assert first["signals"]["height_left"]["v"] == 0x91
+
+    cached = src.poll()                      # direkt igen → ingen trafik
+    assert sess.calls == 2
+    assert cached["status"] == "connected"
+    assert cached["signals"] == first["signals"]
+
+    src._last_bus -= _SLABS_BUS_PERIOD       # låtsas att en sekund gått
+    src.poll()
+    assert sess.calls == 4                   # bussen nås igen
+
+
+def test_slabs_faults_are_read_on_a_slow_clock():
+    # Felkoder kostar två extra ramar → egen kadens i sekunder, oberoende av
+    # fault_watch (som annars sätter fault_every=1 på alla källor).
+    from d2diag.web.sources import SlabsDataSource, _SLABS_FAULT_PERIOD
+    src = SlabsDataSource(port="x", read_faults=True)
+    reads = []
+
+    class _S(_CountingSlabs):
+        def read_faults(self):
+            reads.append(1)
+            return {"loggade": [], "aktuella": []}
+
+    src._slabs = _S()
+    src.fault_every = 1                      # fault watch på → ska INTE påverka SLABS
+    src.poll()
+    assert len(reads) == 1                   # första pollen läser en gång
+    src._last_bus = 0.0
+    src.poll()
+    assert len(reads) == 1                   # men inte igen direkt
+    src._last_bus = 0.0
+    src._last_fault -= _SLABS_FAULT_PERIOD   # låtsas att 30 s gått
+    src.poll()
+    assert len(reads) == 2

@@ -10,6 +10,7 @@ import abc
 import glob
 import math
 import random
+import time
 
 from ..signals import load_signals
 from ..td5.identifiers import BY_NAME, signal_status
@@ -397,7 +398,15 @@ class MockSlabsDataSource(DataSource):
         return SLABS_MENU
 
 
-_SLABS_EMPTY_GRACE = 3  # tomma pollar i rad som tolereras innan reconnect (~1,5 s)
+_SLABS_EMPTY_GRACE = 3  # tomma bussanrop i rad som tolereras innan reconnect
+
+# ⚠️ SLABS-trafiken ska ligga på ~1 Hz — reference tools takt i sniffen (keepalive
+# `01 3e 3f` var ~1048:e ms, läsningar bara vid skärmuppdatering). Dashboardens
+# pollertråd går på 0,5 s och skickade 3E + 21 54 i VARJE cykel = 4 ramar/s, alltså
+# ~4× referensen. Bilen 2026-08-18: uppkopplad 20:54:28, död 20:54:49 (21 s).
+# Takten frikopplas därför från serverns pollintervall och styrs av klockan här.
+_SLABS_BUS_PERIOD = 1.0    # sekunder mellan bussanrop
+_SLABS_FAULT_PERIOD = 30.0  # sekunder mellan felkodsläsningar (2 extra ramar)
 
 
 class SlabsDataSource(DataSource):
@@ -418,6 +427,8 @@ class SlabsDataSource(DataSource):
         self.on_progress = None  # callback(str): live-status under blockande etablering
         self._empty_streak = 0  # antal pollar i rad utan svar (nåd innan reconnect)
         self._last_signals: "dict" = {}  # senaste avkodade signaler (visas under nåd-perioden)
+        self._last_bus = 0.0    # monotonic-tid för senaste bussanrop (1 Hz-strypningen)
+        self._last_fault = 0.0  # monotonic-tid för senaste felkodsläsning
 
     def is_connected(self) -> bool:
         return self._slabs is not None
@@ -452,6 +463,14 @@ class SlabsDataSource(DataSource):
             if self._slabs is None:
                 self._slabs = self._connect()
                 self._empty_streak = 0  # färsk session → full nåd innan nästa reconnect
+            now = time.monotonic()
+            if now - self._last_bus < _SLABS_BUS_PERIOD:
+                # För tidigt för mer trafik — servern pollar snabbare än SLABS tål.
+                # Returnera senast lästa värden orört (de är högst 1 s gamla, vilket
+                # är precis den upplösning modulen ger ändå). INGA bussanrop här.
+                return {"status": "connected", "source": self.name,
+                        "signals": self._last_signals, "faults": self._faults}
+            self._last_bus = now
             try:
                 self._slabs.tester_present()  # keepalive — bästa försök, inte livstecken
             except Exception:  # noqa: BLE001 — ett tappat 3E ska inte riva sessionen
@@ -483,10 +502,10 @@ class SlabsDataSource(DataSource):
                 "height_left_mm": hl * 1.4, "height_right_mm": hr * 1.4,
             })
             self._last_signals = signals  # spara för nåd-perioden vid en tom cykel
-            # Felkoder på LÄTT kadens: aldrig oftare än var 10:e poll (~5 s) även när
-            # global fault-watch är på — SLABS-bussen tål inte snabb fel-pollning.
-            every = max(self.fault_every, 10)
-            if self._read_faults and self._tick % every == 0:
+            # Felkoder kostar två extra ramar (21 11 + 21 47) → egen, mycket långsam
+            # kadens i SEKUNDER. Global fault-watch får inte snabba upp SLABS.
+            if self._read_faults and (now - self._last_fault) >= _SLABS_FAULT_PERIOD:
+                self._last_fault = now
                 try:
                     self._faults = _slabs_faults_flat(self._slabs.read_faults())
                 except Exception:  # noqa: BLE001
