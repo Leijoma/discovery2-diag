@@ -39,6 +39,9 @@ def main() -> int:
                     help="min seconds between log rows (a fault change is always logged)")
     ap.add_argument("--csv", action="store_true",
                     help="start CSV live-data logging immediately (logs/livedata-<time>.csv)")
+    ap.add_argument("--public", action="store_true",
+                    help="public/simple UI: home page + TD5/SLABS/Faults only "
+                         "(hide Map/Capture/Docs + actuators)")
     ap.add_argument("--dict", dest="dict_path",
                     help="path to the fault-code dictionary (default: sibling repo 'Discovery 2/')")
     ap.add_argument("--docs", action="append", default=[],
@@ -58,7 +61,14 @@ def main() -> int:
         "motor": {"mock": MockDataSource(), "live": Td5DataSource(port)},
         "slabs": {"mock": MockSlabsDataSource(), "live": SlabsDataSource(port)},
     }
-    mode = "live" if (args.serial and not args.mock) else "mock"
+    # Public build is LIVE-only (a real user plugs in the cable). --mock forces mock
+    # (dev/preview). Otherwise --serial or --public → live, else mock.
+    if args.mock:
+        mode = "mock"
+    elif args.serial or args.public:
+        mode = "live"
+    else:
+        mode = "mock"
     active = "slabs" if args.slabs else "motor"
 
     logger = None
@@ -110,6 +120,7 @@ def main() -> int:
         poll_interval=args.interval, stream_interval=args.interval, logger=logger,
         active=active, menus=MENUS, docs=docs, sniffer=sniffer, captures_path=captures_path,
         variants=variants, mode=mode, scan_port=port, csv_dir=csv_dir, community=community,
+        public=args.public,
     )
     print(f"Docs: {len(docs.index())} in the Docs tab")
     print(f"Captures → {captures_path}")

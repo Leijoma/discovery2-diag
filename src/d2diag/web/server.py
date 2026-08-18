@@ -106,6 +106,17 @@ def _signals_list(module: str) -> "dict":
     return {"module": module, "signals": load_records(module)}
 
 
+def _fields_list(module: str) -> "dict":
+    """Förväntade fält för en modul (namn/enhet/confidence) — så UI:t kan visa
+    layouten med tomma platshållare även UTAN kabel/live-data."""
+    from ..signals import load_signals
+
+    store_mod = {"motor": "td5"}.get(module, module)  # UI-modulnamn → store-modul
+    fields = [{"name": s.name, "unit": s.unit, "c": s.confidence}
+              for s in load_signals(store_mod)]
+    return {"module": module, "fields": fields}
+
+
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *args) -> None:  # tyst logg
         pass
@@ -141,6 +152,10 @@ class _Handler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(self.path).query)
             self._json(_signals_list((q.get("module", ["td5"])[0]) or "td5"))
+        elif self.path.split("?")[0] == "/fields":
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            self._json(_fields_list((q.get("module", ["motor"])[0]) or "motor"))
         elif self.path == "/community":
             c = self.server.community
             self._json(c.state() if c is not None else {"consent": None, "endpoint": None})
@@ -272,12 +287,14 @@ class DiagServer(ThreadingHTTPServer):
         scan_port: str = "auto",
         csv_dir: str = "logs",
         community=None,
+        public: bool = False,
     ) -> None:
         super().__init__((host, port), _Handler)
         self._scan_port = scan_port  # port för "läs alla felkoder" (basic mode)
         self._csv_dir = csv_dir  # var CSV-live-loggar hamnar (start/stop i UI:t)
         self._csv = None  # aktiv CsvLogger eller None
         self.community = community  # opt-in bidrags-klient (Community) eller None
+        self._public = public  # publikt läge: enklare UI (döljer Karta/Fångst/Dok + ställdon)
         self._menus = menus or {}  # modul → meny-lista (Karta-fliken)
         self.docs = docs or DocLibrary()  # markdown-vy (Dokument-fliken)
         self.sniffer = sniffer  # passiv sniff-feed (Mappning-fliken), valfri
@@ -311,6 +328,7 @@ class DiagServer(ThreadingHTTPServer):
             "status": "connecting", "source": self.source.name,
             "module": self._active, "mode": self._mode, "modes": self._modes,
             "signals": {}, "faults": [], "logging": {"recording": False},
+            "public": self._public,
         }
         self._stop = threading.Event()
         self._commands: "queue.Queue" = queue.Queue()
@@ -465,6 +483,7 @@ class DiagServer(ThreadingHTTPServer):
             snap["mode"] = self._mode  # aktivt datakällsläge (mock/live)
             snap["modes"] = self._modes  # valbara lägen (för UI-toggeln)
             snap["logging"] = self._csv.status() if self._csv is not None else {"recording": False}
+            snap["public"] = self._public  # UI förenklas i publikt läge
             self.latest = snap
             if self.logger is not None:
                 try:

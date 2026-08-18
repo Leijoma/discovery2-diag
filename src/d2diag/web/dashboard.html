@@ -220,6 +220,42 @@
   .vehrow input { flex:1; min-width:0; background:var(--card2); border:1px solid var(--line);
                   color:var(--fg); border-radius:8px; padding:8px; font-size:13px; }
   .commlink { color:var(--muted); cursor:pointer; text-decoration:underline dotted; }
+  /* trust toggle (Verified / Experimental) */
+  .trust { display:inline-flex; gap:2px; padding:2px; border-radius:9px; background:var(--card2); border:1px solid var(--line); }
+  .trustb { border:0; background:none; color:var(--muted); font-size:12px; font-weight:600;
+            padding:3px 10px; border-radius:7px; cursor:pointer; }
+  .trustb.active { background:var(--accent); color:#04121f; }
+  .trustb.active[data-trust="experimental"] { background:var(--warn); }
+  /* home module grid */
+  .modgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .modcard { text-align:left; background:var(--card); border:1px solid var(--line); border-left:3px solid var(--ok);
+    border-radius:12px; padding:13px 14px; cursor:pointer; color:var(--fg); }
+  .modcard .mname { font-weight:650; font-size:15px; }
+  .modcard .mdesc { color:var(--muted); font-size:12px; margin-top:3px; }
+  .modcard .mtag { font-size:10px; text-transform:uppercase; letter-spacing:.5px; margin-top:7px; display:inline-block; }
+  .modcard.verified .mtag { color:var(--ok); }
+  .modcard.experimental { border-left-color:var(--warn); } .modcard.experimental .mtag { color:var(--warn); }
+  .modcard.dead, .modcard.locked { border-left-color:var(--line); opacity:.5; cursor:default; }
+  .modcard.dead .mtag, .modcard.locked .mtag { color:var(--muted); }
+  .exp { color:var(--warn); font-size:9px; text-transform:uppercase; letter-spacing:.4px; margin-left:5px; }
+  .homebtn { border:1px solid var(--line); background:var(--card); color:var(--fg);
+             font-size:13px; font-weight:600; padding:6px 11px; border-radius:9px; cursor:pointer; }
+  /* connection / onboarding banner (home) */
+  .conn { border-radius:11px; padding:12px 14px; font-size:14px; line-height:1.5;
+          margin:2px 0 12px; border:1px solid var(--line); }
+  .conn.ok { border-color:var(--ok); color:var(--ok); }
+  .conn.wait { border-color:var(--warn); }
+  .conn.err { border-color:var(--err); }
+  .conn b { color:var(--fg); }
+  .disclaimer { color:var(--muted); font-size:12px; line-height:1.55; margin-top:18px;
+                padding:12px 14px; border:1px solid var(--line); border-radius:11px; background:var(--card); }
+  .disclaimer b { color:var(--warn); }
+  /* public mode: no tab bar, no mock/live toggle, no advanced surfaces */
+  body.public .tabs { display:none; }
+  body.public .modesw { display:none; }
+  body.public .adv-actuators { display:none; }
+  /* dev mode keeps the tab bar → the Home button is only for public */
+  body:not(.public) .homebtn { display:none; }
 </style>
 
 <header>
@@ -229,21 +265,42 @@
 </header>
 
 <div class="tabs">
-  <div class="tab active" data-tab="motor">Engine</div>
+  <div class="tab active" data-tab="home">Home</div>
+  <div class="tab" data-tab="motor">Engine</div>
   <div class="tab" data-tab="slabs">SLABS</div>
   <div class="tab" data-tab="faults">Faults</div>
-  <div class="tab" data-tab="fangst">Capture</div>
-  <div class="tab" data-tab="karta">Map</div>
-  <div class="tab" data-tab="dok">Docs</div>
+  <div class="tab adv" data-tab="fangst">Capture</div>
+  <div class="tab adv" data-tab="karta">Map</div>
+  <div class="tab adv" data-tab="dok">Docs</div>
 </div>
 
 <main>
   <div class="csvbar">
+    <button class="homebtn" id="homebtn">← Home</button>
+    <span class="trust" id="trust"></span>
+    <span style="flex:1"></span>
     <button class="csvbtn" id="csvbtn">⏺ Log to CSV</button>
     <span class="csvinfo" id="csvinfo"></span>
   </div>
+
+  <!-- ===================== HOME ===================== -->
+  <div class="view active" id="view-home">
+    <div class="conn" id="home-conn">Connecting…</div>
+    <section>
+      <h2>Modules</h2>
+      <div class="modgrid" id="modgrid"></div>
+      <div class="hint" id="home-hint" style="padding:14px 4px;text-align:left"></div>
+    </section>
+    <div class="disclaimer">
+      <b>Use at your own risk.</b> This is a free community hobby tool, provided as-is
+      with no warranty. The authors accept no responsibility for any damage to your
+      vehicle or data. Reading fault codes and live data is safe; clearing fault codes
+      changes the ECU state. Do vehicle tests stationary with the engine off.
+    </div>
+  </div>
+
   <!-- ===================== ENGINE ===================== -->
-  <div class="view active" id="view-motor">
+  <div class="view" id="view-motor">
     <div id="motor-hint" class="hint">Waiting for engine data… (run the dashboard against the Td5)</div>
     <div id="motor-body" style="display:none">
       <div class="hero" id="hero"></div>
@@ -290,7 +347,7 @@
         </div>
       </section>
 
-      <section>
+      <section class="adv-actuators">
         <h2>ABS block</h2>
         <div class="btns">
           <button class="btn warn" data-cmd="pump_on" data-confirm="Activate the ABS pump?">Pump on</button>
@@ -305,7 +362,7 @@
         </div>
       </section>
 
-      <section>
+      <section class="adv-actuators">
         <h2>Air suspension ⚠️</h2>
         <div class="btns">
           <button class="btn warn" data-cmd="raise_left" data-confirm="Raise left?">Raise L</button>
@@ -398,7 +455,7 @@
   </div>
 </div>
 
-<footer>Realtime via SSE · discovery2-diag · <span class="commlink" id="commstatus"></span></footer>
+<footer>Use at your own risk · discovery2-diag · <span class="commlink" id="commstatus"></span></footer>
 
 <script>
   const $ = id => document.getElementById(id);
@@ -428,7 +485,8 @@
   document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
     const name = t.dataset.tab;
     stopKartaSniff(); stopFangst();
-    if (name === "karta") { showTab("karta"); loadMap(); }
+    if (name === "home") { showTab("home"); renderHome(); }
+    else if (name === "karta") { showTab("karta"); loadMap(); }
     else if (name === "dok") { showTab("dok"); loadDocs(); }
     else if (name === "fangst") { showTab("fangst"); startFangst(); }
     else if (name === "faults") { showTab("faults"); }
@@ -671,7 +729,9 @@
         let msg=`${name} → signals/${module}.json`;
         if(_community && _community.consent===true){       // opt-in → share with community
           const sh=await shareContribution(module, r, rec);
-          if(sh) msg+=" · shared ✓";
+          if(sh && sh.ok) msg+=" · shared ✓";
+          else if(sh && sh.queued) msg+=" · queued (offline)";
+          loadCommunity();                                 // refresh pending count
         }
         showCmd(msg, true);
       }
@@ -683,10 +743,9 @@
       const payload={module, lid:r.lid, offset:r.offset, kind:r.kind, name:rec.name,
         our_value:(r.mode==="numeric"?null:null), confidence:rec.confidence,
         answer:{type:"map", value:(r.signal||r.rule||"")}};
-      const res=await (await fetch("/community/contribute",{method:"POST",
+      return await (await fetch("/community/contribute",{method:"POST",
         headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)})).json();
-      return !!res.ok;
-    }catch(e){ return false; }
+    }catch(e){ return {ok:false}; }
   }
 
   function renderMode(d){
@@ -721,43 +780,123 @@
       showCmd(r.ok ? `${r.message||"ok"}${r.file?(" · "+r.file):""}${r.rows!=null&&rec?(" · "+r.rows+" rows"):""}` : (r.error||"error"), !!r.ok);
     }catch(e){ showCmd("network error", false); }
   }
+  // ---- Trust (Verified / Experimental) + Home module grid ----
+  let _trust = localStorage.getItem("trust")==="experimental" ? "experimental" : "verified";
+  let _last = null;
+  function shown(s){ if(!s) return false; return _trust==="experimental" || s.c!=="kandidat"; }
+  function renderTrust(){
+    const el=$("trust"); if(!el) return;
+    el.innerHTML = ["verified","experimental"].map(t=>
+      `<button class="trustb${t===_trust?" active":""}" data-trust="${t}">${t==="verified"?"Verified":"Experimental"}</button>`).join("");
+    el.querySelectorAll("[data-trust]").forEach(b=>b.onclick=()=>setTrust(b.dataset.trust));
+  }
+  function setTrust(t){
+    _trust = (t==="experimental") ? "experimental" : "verified"; localStorage.setItem("trust",_trust);
+    renderTrust(); renderHome(); if(_last) render(_last);   // re-filter current view now
+  }
+  const MODULES = [
+    {name:"TD5 Engine", desc:"Live data + fault codes", state:"verified", tab:"motor"},
+    {name:"SLABS", desc:"ABS + self-levelling suspension", state:"verified", tab:"slabs"},
+    {name:"Fault codes", desc:"Read faults from all modules", state:"verified", tab:"faults"},
+    {name:"Airbag / SRS", desc:"Read-only fault codes", state:"experimental", tab:"faults"},
+    {name:"ACE", desc:"Active suspension — not mapped yet", state:"dead"},
+    {name:"Auto gearbox", desc:"EAT — not mapped yet", state:"dead"},
+    {name:"BCU", desc:"Body control — not mapped yet", state:"dead"},
+  ];
+  function renderHome(){
+    const g=$("modgrid"); if(!g) return;
+    g.innerHTML = MODULES.map(m=>{
+      let cls=m.state, tag=m.state, go="";
+      if(m.state==="experimental" && _trust!=="experimental"){ cls="locked"; tag="experimental — enable Experimental"; }
+      else if(m.state==="dead"){ tag="not mapped yet"; }
+      else { go=`data-go="${m.tab}"`; }   // verified always, experimental in Experimental
+      return `<div class="modcard ${cls}" ${go}><div class="mname">${m.name}</div>`+
+        `<div class="mdesc">${m.desc}</div><span class="mtag">${tag}</span></div>`;
+    }).join("");
+    g.querySelectorAll("[data-go]").forEach(c=>c.onclick=()=>{
+      const t=c.dataset.go;
+      if(t==="faults") showTab("faults"); else selectModule(t);   // selectModule shows tab + establishes
+    });
+    const h=$("home-hint"); if(h) h.innerHTML = _trust==="experimental"
+      ? "Experimental mode: experimental modules and unverified values are shown, marked <span class='exp'>exp</span>. Help verify them by sharing readings."
+      : "Verified mode shows only what's confirmed against real cars. Switch to Experimental to see experimental modules and values.";
+  }
+  // Connection / onboarding banner — tells a first-time user to plug in the cable.
+  function renderConn(d){
+    const el=$("home-conn"); if(!el) return;
+    const st=(d&&d.status)||"connecting", err=(d&&d.error)||"", mod=(d&&d.module)||"";
+    const noCable=/USB serial|not connected|KKL|no adapter|FileNotFound|No such file|could not open|serial/i.test(err);
+    if(st==="connected"){
+      el.className="conn ok"; el.innerHTML=`✓ Connected to the vehicle — reading <b>${mod.toUpperCase()}</b>.`;
+    } else if(noCable){
+      el.className="conn wait";
+      el.innerHTML="🔌 <b>No adapter found.</b> Plug the OBD-to-USB cable into the diagnostic port "+
+        "(under the steering column), turn the ignition on, then it connects automatically.";
+    } else if(st==="error"){
+      el.className="conn err"; el.innerHTML=`⚠ <b>Can't talk to the vehicle.</b> ${err||""}<br>`+
+        "Check the cable is seated, the ignition is on, and the engine is off/stationary.";
+    } else {
+      el.className="conn wait"; el.innerHTML="Connecting to the vehicle…";
+    }
+  }
+
   function render(d) {
+    _last = d;
     const st = d.status || "connecting";
     $("dot").className = "dot " + st;
     $("status").textContent = ({connected:"connected",connecting:"connecting…",error:"error"}[st] || st) + (d.source ? " · " + d.source : "");
     $("error").textContent = d.error || "";
-    renderMode(d); renderCsv(d);
+    renderMode(d); renderCsv(d); renderConn(d);
+    document.body.classList.toggle("public", !!d.public);
     const sig = d.signals || {}, faults = d.faults || [];
     const mod = d.module || ((d.source || "").indexOf("slabs") >= 0 ? "slabs" : "motor");
-    // sync the tab to the server's active module ONCE at start (clicks steer after that)
-    if (!render._init) { render._init = true; showTab(mod); }
+    // first load: build trust toggle + home; land on Home in public, else the active module
+    if (!render._init) { render._init = true; renderTrust(); renderHome(); showTab(d.public ? "home" : mod); }
     if (mod === "slabs") renderSlabs(sig, faults); else renderMotor(sig, faults);
   }
 
+  // Field list per module (name→{u,c}) so the layout shows even WITHOUT a cable.
+  let _fields = {};
+  async function loadFields(module){
+    try{
+      const d = await (await fetch("/fields?module="+module)).json();
+      const m = {}; (d.fields||[]).forEach(f=>{ m[f.name] = {u:f.unit, c:f.c}; });
+      _fields[module] = m;
+      if(_last) render(_last);   // fill placeholders now that we know the fields
+    }catch(e){}
+  }
   function renderMotor(sig, faults) {
-    $("motor-hint").style.display = Object.keys(sig).length ? "none" : "";
-    $("motor-body").style.display = Object.keys(sig).length ? "" : "none";
-    $("hero").innerHTML = HERO.map(k => { const s = sig[k]; if (!s) return "";
-      return `<div class="card"><div class="k">${LABELS[k]||k}</div><div class="v">${fmt(s.v)}<span class="u"> ${s.u||""}</span></div></div>`; }).join("");
-    $("signals").innerHTML = Object.keys(sig).sort().map(k => { const s = sig[k];
-      const cls = (s.s==="low"||s.s==="high") ? " s-"+s.s : "";
-      return `<div class="row"><span class="n">${LABELS[k]||k}</span><span class="val${cls}">${fmt(s.v)} <span class="u">${s.u||""}</span></span></div>`; }).join("") || '<span class="none">—</span>';
+    $("motor-hint").style.display = "none";           // always show the layout
+    $("motor-body").style.display = "";
+    $("hero").innerHTML = HERO.map(k => { const s = sig[k];
+      return `<div class="card"><div class="k">${LABELS[k]||k}</div><div class="v">${s?fmt(s.v):"–"}<span class="u"> ${s&&s.u?s.u:""}</span></div></div>`; }).join("");
+    const fmap = _fields.motor || {};
+    const names = Object.keys(sig).length ? Object.keys(sig) : Object.keys(fmap);
+    $("signals").innerHTML = names.sort().filter(n => shown(sig[n] || fmap[n])).map(n => {
+      const s = sig[n], f = fmap[n] || {};
+      const c = s ? s.c : f.c;
+      const cls = (s && (s.s==="low"||s.s==="high")) ? " s-"+s.s : "";
+      const badge = (c==="kandidat") ? ' <span class="exp">exp</span>' : "";
+      const val = s ? fmt(s.v) : "–", unit = s ? (s.u||"") : (f.u||"");
+      return `<div class="row"><span class="n">${LABELS[n]||n}${badge}</span><span class="val${cls}">${val} <span class="u">${unit}</span></span></div>`;
+    }).join("") || '<span class="none">—</span>';
     $("m_faults").innerHTML = faultHtml(faults);
   }
 
   function setT(id, v) { const e = $(id); if (e) e.textContent = v; }
   function renderSlabs(sig, faults) {
-    $("slabs-hint").style.display = Object.keys(sig).length ? "none" : "";
-    $("slabs-body").style.display = Object.keys(sig).length ? "" : "none";
+    $("slabs-hint").style.display = "none";            // always show the layout (SVG shows "–")
+    $("slabs-body").style.display = "";
+    const has = Object.keys(sig).length;
     for (const w of ["fl","fr","rl","rr"]) {
-      const s = sig["speed_"+w], v = sig["volt_"+w];
-      setT("c_"+w+"_s", s ? fmt(s.v)+"" : "–");
-      setT("c_"+w+"_v", v ? v.v.toFixed(2)+"V" : "–");
+      const s = sig["speed_"+w], v = sig["volt_"+w];   // kandidat → hidden in Verified
+      setT("c_"+w+"_s", (s && shown(s)) ? fmt(s.v)+"" : "–");
+      setT("c_"+w+"_v", (v && shown(v)) ? v.v.toFixed(2)+"V" : "–");
     }
     setT("c_h_l", sig.height_left ? fmt(sig.height_left.v) : "–");
     setT("c_h_r", sig.height_right ? fmt(sig.height_right.v) : "–");
     const cur = faults.filter(f => /current/i.test(f)).length;
-    setT("c_abs", faults.length ? (cur ? cur+" active" : faults.length+" logged") : "OK");
+    setT("c_abs", !has ? "–" : (faults.length ? (cur ? cur+" active" : faults.length+" logged") : "OK"));
     $("s_faults").innerHTML = faultHtml(faults);
   }
 
@@ -861,6 +1000,7 @@
     box.innerHTML=l.length? l.map(r=>'<div class="flog"><span class="flid">21 '+r.lid+'</span> <code>'+(r.raw||"")+'</code> → '+r.text+' <span class="none">'+(r.t||"")+'</span></div>').join("") : '<div class="hint" style="padding:14px">None saved yet.</div>'; }
 
   $("csvbtn").onclick = toggleCsv;
+  $("homebtn").onclick = ()=>{ showTab("home"); renderHome(); };
 
   // ---- Community sharing (opt-in): first-run consent + footer status ----
   let _community = null;
@@ -873,8 +1013,8 @@
   function renderCommunityStatus(){
     const el=$("commstatus"); if(!el) return;
     if(!_community || !_community.endpoint){ el.textContent=""; return; }
-    const on=_community.consent===true;
-    el.textContent = on ? "community sharing: on" : "community sharing: off";
+    const on=_community.consent===true, pend=_community.pending||0;
+    el.textContent = on ? ("community sharing: on" + (pend?` (${pend} queued)`:"")) : "community sharing: off";
     el.onclick = openConsent;
   }
   function openConsent(){
@@ -901,6 +1041,7 @@
   $("consent-save").onclick = ()=>saveConsent($("consent-cb").checked);
   $("consent-skip").onclick = closeConsent;
   loadCommunity();
+  loadFields("motor");   // so the Engine layout shows even before a cable is connected
 
   (function connect() {
     const es = new EventSource("/events");

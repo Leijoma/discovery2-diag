@@ -78,3 +78,51 @@ def test_consent_persists_across_reloads(tmp_path):
     # already opted in → contribute works on the reloaded instance
     c2.contribute({"module": "td5"})
     assert poster2.calls[-1][0].endswith("/contribute")
+
+
+class _Toggle:
+    """Poster that is offline until ``online`` is set — for testing the outbox."""
+    def __init__(self):
+        self.online = False
+        self.calls = []
+
+    def __call__(self, url, payload, timeout=8.0):
+        self.calls.append((url, payload))
+        return {"ok": True} if self.online else {"ok": False, "error": "offline"}
+
+
+def test_offline_outbox_queues_then_flushes(tmp_path):
+    p = _Toggle()
+    c = Community(config_path=str(tmp_path / "c.json"), endpoint="https://x.test/d2diag", poster=p)
+    c.set_consent(True, {"model": "D2"})                 # opt in while offline
+    assert c.consent is True and c.state()["registered"] is False
+
+    r1 = c.contribute({"module": "td5", "name": "a"})
+    r2 = c.contribute({"module": "td5", "name": "b"})
+    assert r1["ok"] is False and r1["queued"] is True    # queued, never lost
+    assert c.state()["pending"] == 2
+
+    p.online = True                                      # back online
+    r3 = c.contribute({"module": "slabs", "name": "c"})
+    assert r3["ok"] is True and r3["flushed"] == 2       # current sent + 2 queued drained
+    assert c.state()["pending"] == 0 and c.state()["registered"] is True
+
+    # queue survives a reload while offline
+    p.online = False
+    c.contribute({"module": "td5", "name": "d"})
+    c2 = Community(config_path=str(tmp_path / "c.json"), endpoint="https://x.test/d2diag", poster=p)
+    assert c2.state()["pending"] == 1
+
+
+def test_offline_is_graceful(tmp_path):
+    # REAL _post against an unreachable endpoint → never raises; the app keeps working
+    # and consent is saved locally regardless of the network.
+    cfg = str(tmp_path / "c.json")
+    c = Community(config_path=cfg, endpoint="http://127.0.0.1:59999/x")
+    r = c.set_consent(True, {"model": "Discovery 2"})
+    assert r["ok"] is True and r["consent"] is True and r["registered"] is False
+    assert c.consent is True                       # consent saved despite being offline
+    assert c.contribute({"module": "td5"})["ok"] is False   # graceful, no exception
+    # reload from disk → choice persisted, no network involved
+    c2 = Community(config_path=cfg, endpoint="http://127.0.0.1:59999/x")
+    assert c2.consent is True and len(c2.state()["install"]) == 8

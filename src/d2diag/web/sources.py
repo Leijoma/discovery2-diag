@@ -52,12 +52,32 @@ def resolve_serial_port(spec: "str | None") -> str:
 UNITS = {name: sig.unit for name, sig in BY_NAME.items()}
 
 
-def _sig(values: "dict[str, float]") -> "dict[str, dict]":
-    """Paketera {namn: värde} → {namn: {"v", "u", "s"}} där s = ok/low/high/None."""
+def _conf_map(module: str) -> "dict[str, str]":
+    """{signalnamn → confidence} ur signalstoren (belagt/kandidat)."""
+    return {s.name: s.confidence for s in load_signals(module)}
+
+
+def _conf_of(module: str, name: str, conf: "dict[str, str]") -> str:
+    """Confidence för en signal — ur storen, annars heuristik för härledda fält.
+    Trust-vyn (Verified/Explorer) filtrerar på detta."""
+    if name in conf:
+        return conf[name]
+    if module == "slabs":
+        if name.startswith("height_"):
+            return "belagt"          # härledd ur belagd höjd
+        if name.startswith(("speed_", "volt_")):
+            return "kandidat"        # hjulhastighet/spänning: skala ej bekräftad
+    return "belagt"
+
+
+def _sig(values: "dict[str, float]", module: str = "td5") -> "dict[str, dict]":
+    """Paketera {namn: värde} → {namn: {"v", "u", "s", "c"}} (c = confidence)."""
+    conf = _conf_map(module)
     out = {}
     for k, v in values.items():
         vr = round(v, 2)
-        out[k] = {"v": vr, "u": UNITS.get(k, ""), "s": signal_status(k, vr)}
+        out[k] = {"v": vr, "u": UNITS.get(k, ""), "s": signal_status(k, vr),
+                  "c": _conf_of(module, k, conf)}
     return out
 
 
@@ -261,7 +281,9 @@ _SLABS_UNITS = {"height_left_mm": "mm", "height_right_mm": "mm"}
 
 
 def _slabs_sig(values: "dict[str, float]") -> "dict[str, dict]":
-    return {k: {"v": round(v, 1), "u": _SLABS_UNITS.get(k, ""), "s": None}
+    conf = _conf_map("slabs")
+    return {k: {"v": round(v, 1), "u": _SLABS_UNITS.get(k, ""), "s": None,
+                "c": _conf_of("slabs", k, conf)}
             for k, v in values.items()}
 
 

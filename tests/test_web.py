@@ -13,8 +13,10 @@ def test_mock_source_shape():
     assert d["status"] == "connected"
     assert d["source"] == "mock"
     assert "rpm" in d["signals"]
-    assert set(d["signals"]["rpm"]) == {"v", "u", "s"}
+    assert set(d["signals"]["rpm"]) == {"v", "u", "s", "c"}   # c = confidence (trust view)
     assert d["signals"]["battery"]["u"] == "V"
+    assert d["signals"]["rpm"]["c"] == "belagt"                # rpm is verified
+    assert d["signals"]["rpm_error"]["c"] == "kandidat"        # experimental → hidden in Verified view
     assert isinstance(d["faults"], list) and d["faults"]
 
 
@@ -144,6 +146,16 @@ def test_signal_upsert_and_list_round_trip(tmp_path, monkeypatch):
     listing = _signals_list("slabs")
     assert [s["name"] for s in listing["signals"]] == ["transport_mode"]
     assert listing["signals"][0]["confidence"] == "kandidat"  # default
+
+
+def test_fields_list_motor_maps_to_td5():
+    from d2diag.web.server import _fields_list
+    d = _fields_list("motor")                    # UI module "motor" → store "td5"
+    names = {f["name"] for f in d["fields"]}
+    assert d["module"] == "motor"
+    assert {"rpm", "coolant_temp"} <= names       # lets the UI show the layout with no cable
+    rpm = next(f for f in d["fields"] if f["name"] == "rpm")
+    assert rpm["unit"] == "rpm" and rpm["c"] == "belagt"
 
 
 def test_signal_upsert_validation():

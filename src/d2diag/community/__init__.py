@@ -33,6 +33,7 @@ def _ssl_context():
 TOOL_VERSION = "0.1.0"
 DEFAULT_ENDPOINT = os.environ.get("D2DIAG_ENDPOINT", "https://www.driftwoodstudios.se/d2diag")
 _VEHICLE_KEYS = ("model", "year", "engine", "market")
+_MAX_OUTBOX = 200  # cap the offline queue so it can't grow unbounded
 
 
 def _default_config_path() -> str:
@@ -104,17 +105,22 @@ class Community:
     def state(self) -> dict:
         return {"consent": self.consent, "vehicle": self._cfg.get("vehicle"),
                 "endpoint": self.endpoint, "install": self.install_id()[:8],
-                "registered": bool(self._cfg.get("registered"))}
+                "registered": bool(self._cfg.get("registered")),
+                "pending": len(self._cfg.get("outbox") or [])}
 
     # ---- consent + upload ----------------------------------------------- #
     def set_consent(self, consent: bool, vehicle: "dict | None" = None) -> dict:
-        """Record the opt-in/out. On opt-in, register the anonymous install."""
+        """Record the opt-in/out. On opt-in, register the anonymous install and, if
+        online, drain any queued (offline) contributions."""
         self._cfg["consent"] = bool(consent)
         if vehicle is not None:
             self._cfg["vehicle"] = _clean_vehicle(vehicle)
         self._save()
         if self._cfg["consent"]:
-            return {"ok": True, "consent": True, **self._register()}
+            reg = self._register()
+            sent = self._flush() if reg.get("registered") else 0
+            self._save()
+            return {"ok": True, "consent": True, **reg, "flushed": sent}
         return {"ok": True, "consent": False}
 
     def _register(self) -> dict:
@@ -127,10 +133,48 @@ class Community:
         return {"registered": bool(res.get("ok")), "register_error": res.get("error")}
 
     def contribute(self, record: dict) -> dict:
-        """Upload one reading — only if the user opted in. PII-free by whitelist."""
+        """Upload one reading — only if the user opted in. PII-free by whitelist.
+
+        Offline-safe: never raises. When online, sends now and drains the queue.
+        When offline, the reading is **queued locally** and sent on a later successful
+        call — so the app never depends on the endpoint being reachable, and nothing
+        is lost. A successful send also self-heals a first-run opt-in that couldn't
+        register while offline (the endpoint upserts the install)."""
         if not self.consent:
             return {"ok": False, "error": "sharing not enabled"}
-        return self._post(self.endpoint + "/contribute", self._payload(record))
+        payload = self._payload(record)
+        res = self._post(self.endpoint + "/contribute", payload)
+        if res.get("ok"):
+            self._cfg["registered"] = True
+            sent = self._flush()                       # drain anything queued offline
+            self._save()
+            return {"ok": True, "flushed": sent}
+        self._enqueue(payload)                          # offline → keep for later
+        return {"ok": False, "queued": True, "error": res.get("error"),
+                "pending": len(self._cfg.get("outbox") or [])}
+
+    # ---- offline outbox ------------------------------------------------- #
+    def _enqueue(self, payload: dict) -> None:
+        out = self._cfg.get("outbox") or []
+        out.append(payload)
+        if len(out) > _MAX_OUTBOX:
+            out = out[-_MAX_OUTBOX:]  # drop the oldest to stay bounded
+        self._cfg["outbox"] = out
+        self._save()
+
+    def _flush(self) -> int:
+        """Send queued contributions in order; stop at the first failure (still
+        offline). Returns how many were sent. Never raises."""
+        out = self._cfg.get("outbox") or []
+        sent = 0
+        while out:
+            if self._post(self.endpoint + "/contribute", out[0]).get("ok"):
+                out.pop(0)
+                sent += 1
+            else:
+                break
+        self._cfg["outbox"] = out
+        return sent
 
     def _payload(self, r: dict) -> dict:
         return {
