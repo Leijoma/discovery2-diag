@@ -26,8 +26,15 @@ block-pollning. Vår drivare måste göra likadant:
   hjälpte inte och gjorde bara reconnect trögt.
 - **Delad K-line-buss:** ett `7F 81 10` (generalReject) på StartCommunication =
   en session är redan öppen. Vanlig orsak: en kvarlämnad **TD5-session**
-  (StartDiagnosticSession + SecurityAccess) efter modulbyte. Släpp TD5-sessionen
-  rent innan SLABS-init; kör inte fault-watch som växlar moduler snabbt.
+  (StartDiagnosticSession + SecurityAccess) efter modulbyte.
+  **Åtgärdat i kod:** `EcuSession.release()` = StopDiagnosticSession (`20` → `60`)
+  + close, och den anropas vid modulbyte (`Td5DataSource.disconnect`,
+  `_select`/`_set_mode` i webbservern) och mellan modulerna i `faultscan`. Bara
+  `close()` räcker inte — ECU:n håller sessionen tills den timeoutar av sig själv.
+  Moduler utan session (SLABS, Airbag) har `_has_session = False` → no-op.
+  Kör ändå inte fault-watch som växlar moduler snabbt.
+  ⚠️ Kvarstår: en session som lämnats öppen av en **tidigare process** (kraschad
+  eller dödad dashboard) städas inte av oss — där hjälper bara bus-idle/timeout.
 
 ## ReadEcuIdentification — `1A xx`
 | Req | Svar | Innehåll |

@@ -28,6 +28,9 @@ class EcuSession:
 
     name: str = "ECU"
     _keepalive_sub: "int | None" = 0x01  # TesterPresent-sub; SLABS överrider → None (bar 3E)
+    # Har modulen en StartDiagnosticSession att avsluta rent? Td5 → True; SLABS och
+    # Airbag kör tjänsterna direkt efter init och har ingen session att stänga.
+    _has_session: bool = False
 
     def __init__(self, kwp: KWP2000) -> None:
         self._kwp = kwp
@@ -69,6 +72,34 @@ class EcuSession:
     def tester_present(self) -> None:
         """Keepalive (``3E`` → ``7E``) — håll sessionen vid liv mellan förfrågningar."""
         self._kwp.tester_present(self._keepalive_sub)
+
+    # ---- ren avslutning (delad buss) ----------------------------------- #
+    def end_session(self) -> None:
+        """Avsluta diagnostiksessionen rent (StopDiagnosticSession, ``20`` → ``60``).
+
+        **Best-effort** — K-line är en DELAD buss och ECU:n håller sessionen öppen
+        tills den timeoutar av sig själv. En kvarlämnad TD5-session får nästa
+        moduls StartCommunication att svara ``7F 81 10`` (generalReject), vilket
+        är roten till trög SLABS-anslutning efter modulbyte. Ett misslyckat
+        ``20`` (redan död session, tyst buss) är därför inte ett fel: vi stänger
+        ändå. Moduler utan session (``_has_session = False``) gör ingenting.
+        """
+        if not self._has_session:
+            return
+        try:
+            self._kwp.stop_diagnostic_session()
+        except Exception:  # noqa: BLE001 — sessionen kan redan vara borta
+            pass
+
+    def release(self) -> None:
+        """:meth:`end_session` + :meth:`close` — använd vid MODULBYTE på delad buss.
+
+        Felvägar (tappad kabel, död session) ska istället gå direkt på
+        :meth:`close`: där finns ingen session att avsluta och ett ``20`` mot en
+        tyst buss kostar bara timeout.
+        """
+        self.end_session()
+        self.close()
 
     # ---- etablering ---------------------------------------------------- #
     def _establish(

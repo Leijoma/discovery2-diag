@@ -15,7 +15,7 @@ VIN SALLXXXXXXXXXXXXX). Två delar:
   underhållsanteckningar + felkodsfacit) ligger i syskonmappen `../Discovery 2/`.
 
 Repo-rot: `/Users/magnus/Documents/Privat/discovery2-diag`. Branch: `main`,
-allt committat och rent, 188 tester gröna.
+195 tester gröna. Projektkonventioner för Claude Code finns i repots `CLAUDE.md`.
 
 ## 🔴 DÄR VI ÄR JUST NU — SLABS-stabilitet (aktivt arbete)
 
@@ -43,12 +43,17 @@ SLABS (Wabco ABS+luftfjädring, adress `0x29`) kopplade upp men **dog efter
 ### Vad som återstår (NÄSTA STEG)
 - **Testa baslinjen i bilen** — bekräfta att SLABS står stabilt igen som förr.
   Kolla `logs/connection.log`. Klistra in de sista raderna om det strular.
-- **TD5↔SLABS delad buss** — kvarvarande rot till trög reconnect. `7F 81 10`
-  (generalReject) på StartCommunication = en session är redan öppen; oftast en
-  kvarlämnad TD5-session (StartDiagnosticSession + SecurityAccess) efter
-  modulbyte. **Riktad fix som INTE är gjord:** rent stänga TD5-sessionen
-  (StopDiagnosticSession) vid modulbyte innan SLABS-init. Kör inte `--fault-watch`
-  när SLABS är aktivt (växlar moduler för snabbt på delad buss).
+- **TD5↔SLABS delad buss** — ✅ **fixat i kod (2026-08-18), otestat i bilen.**
+  `EcuSession.release()` = StopDiagnosticSession (`20` → `60`) + close, med
+  `_has_session` per modul (Td5 True; SLABS/Airbag no-op). Anropas vid modulbyte
+  (`Td5DataSource.disconnect` → `DiagServer._select`/`_set_mode`) och mellan
+  modulerna i `faultscan`. Felvägar går fortfarande direkt på `close()` — det
+  finns ingen session att avsluta och ett `20` mot tyst buss kostar bara timeout.
+  **Verifiera i bilen:** växla TD5 → SLABS i UI:t och se att SLABS kopplar upp
+  utan `7F 81 10` i `logs/connection.log`. Kör inte `--fault-watch` när SLABS är
+  aktivt (växlar moduler för snabbt på delad buss).
+  ⚠️ Ej löst: session som lämnats öppen av en **tidigare process** (kraschad/dödad
+  dashboard) — där hjälper bara bus-idle/ECU-timeout.
 
 ### Kör dashboarden
 ```bash
@@ -70,7 +75,8 @@ avslöjade 3E-keepalive-buggen. Mock loggas inte; övergångar loggas bara vid �
 ## Arkitektur (snabbkarta)
 
 - `src/d2diag/session.py` — `EcuSession`-bas: open/close, `read_block(lids)`,
-  `tester_present`, `_establish(after, idle, attempts, retry_sleep, progress)`.
+  `tester_present`, `_establish(after, idle, attempts, retry_sleep, progress)`,
+  `end_session`/`release` (ren sessionsavslutning vid modulbyte, `_has_session`).
 - `src/d2diag/td5/td5.py` — Td5: StartDiagnosticSession 0xA0 + SecurityAccess
   (seed→key), live-LID:er, felkoder (0x3B), output-tester. `establish(after=connect)`.
 - `src/d2diag/slabs/slabs.py` — SLABS: fast init 0x29, `after=None`, `_keepalive_sub=None`.
@@ -103,7 +109,6 @@ avslöjade 3E-keepalive-buggen. Mock loggas inte; övergångar loggas bara vid �
 
 ## Backlog (dokumenterat, ej gjort)
 
-- TD5-sessionsstädning vid modulbyte (löser SLABS generalReject på delad buss).
 - PyInstaller-distribution (.app/.exe).
 - Torque-proxy RE: hitta TD5:s fuel quantity/demand-LID (för gaspedal/torque-logg).
 - Översätt kodkommentarer/docstrings till engelska (koden är fortf. svensk).

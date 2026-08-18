@@ -73,7 +73,7 @@ def _live_report(port: str, sleep: "Callable[[float], None]") -> "list[dict]":
             faults = [f for f in t.read_faults() if not f.startswith("byte")]
             rows.append(_row("TD5", faults))
         finally:
-            t.close()
+            t.release()  # stäng sessionen rent — nästa modul initar på samma buss
     except Exception as exc:  # noqa: BLE001
         rows.append(_err("TD5", exc))
     sleep(0.5)  # låt bussen tystna mellan moduler
@@ -91,7 +91,7 @@ def _live_report(port: str, sleep: "Callable[[float], None]") -> "list[dict]":
                      [x + " (Current)" for x in f.get("aktuella", [])]
             rows.append(_row("SLABS", faults))
         finally:
-            s.close()
+            s.release()  # stäng sessionen rent — nästa modul initar på samma buss
     except Exception as exc:  # noqa: BLE001
         rows.append(_err("SLABS", exc))
     sleep(0.5)
@@ -107,7 +107,7 @@ def _live_report(port: str, sleep: "Callable[[float], None]") -> "list[dict]":
             faults = [f"{r['number']:03d}: {r['status_text']}" for r in a.read_faults()]
             rows.append(_row("Airbag", faults, note="experimental"))
         finally:
-            a.close()
+            a.release()  # stäng sessionen rent — nästa modul initar på samma buss
     except Exception as exc:  # noqa: BLE001
         rows.append(_err("Airbag", exc, note="experimental (may need SecurityAccess we can't do)"))
 

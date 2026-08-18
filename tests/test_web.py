@@ -384,3 +384,50 @@ def test_server_serves_snapshot_and_html():
         srv.shutdown()
         srv.server_close()
         srv.stop()
+
+
+class _RecordingSession:
+    """Stub som skiljer på release() (rent modulbyte) och close() (felväg)."""
+    def __init__(self): self.calls = []
+    def release(self): self.calls.append("release")
+    def close(self): self.calls.append("close")
+
+
+def test_td5_disconnect_releases_session_not_just_close():
+    # Modulbyte på delad buss: TD5-sessionen ska avslutas rent (StopDiagnosticSession)
+    # innan porten släpps, annars får SLABS 7F 81 10 på sin init.
+    from d2diag.web.sources import Td5DataSource
+    src = Td5DataSource(port="x", read_faults=False)
+    sess = _RecordingSession()
+    src._td5 = sess
+    src.disconnect()
+    assert sess.calls == ["release"]
+    assert src._td5 is None and not src.is_connected()
+
+
+def test_slabs_disconnect_releases_session():
+    from d2diag.web.sources import SlabsDataSource
+    src = SlabsDataSource(port="x", read_faults=False)
+    sess = _RecordingSession()
+    src._slabs = sess
+    src.disconnect()
+    assert sess.calls == ["release"]   # no-op för SLABS (ingen session), men symmetriskt
+    assert src._slabs is None
+
+
+def test_module_switch_disconnects_previous_source():
+    # DiagServer._select ska släppa den gamla sessionen innan den nya modulen väljs.
+    from d2diag.web.server import DiagServer
+    from d2diag.web.sources import MockDataSource, MockSlabsDataSource
+
+    td5, slabs = MockDataSource(), MockSlabsDataSource()
+    dropped = []
+    td5.disconnect = lambda: dropped.append("td5")  # type: ignore[method-assign]
+
+    srv = DiagServer({"td5": td5, "slabs": slabs}, host="127.0.0.1", port=0, active="td5")
+    try:
+        assert srv._select("slabs")["ok"] is True
+        assert dropped == ["td5"]                  # gamla modulen släppt
+        assert srv.source is slabs and srv.latest["status"] == "connecting"
+    finally:
+        srv.server_close()

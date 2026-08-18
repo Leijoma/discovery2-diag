@@ -89,3 +89,41 @@ def test_establish_raises_after_attempts_when_no_c1():
     with s:
         with pytest.raises(KWP2000Error):
             s.establish()
+
+
+# ---- ren avslutning på delad buss (release/end_session) ------------------ #
+
+class _WithSession(_Dummy):
+    """Modul MED diagnostiksession (som Td5) — ska stängas rent."""
+
+    name = "WITHSESSION"
+    _has_session = True
+
+
+def test_release_sends_stop_diagnostic_session_then_closes():
+    # Td5-fallet: release() ska skicka StopDiagnosticSession (20 → 60) INNAN porten
+    # stängs, annars ligger sessionen kvar och nästa moduls init får 7F 81 10.
+    ecu = FakeKLineEcu({_sess(b"\x20"): _sess(b"\x60")})
+    s = _WithSession(KWP2000(KLine(ecu)))
+    with s:
+        s.release()
+    assert _sess(b"\x20") in ecu.sent
+    assert ecu._is_open is False
+
+
+def test_release_without_session_sends_nothing():
+    # SLABS-fallet: ingen session att avsluta → ingen extra busstrafik vid modulbyte.
+    ecu, s = _dummy({})
+    with s:
+        s.release()
+    assert ecu.sent == []
+    assert ecu._is_open is False
+
+
+def test_release_closes_even_when_stop_fails():
+    # Tyst/död buss: 20 får inget svar. Stängningen får inte hänga på det.
+    ecu = FakeKLineEcu({})  # inget svar på 20
+    s = _WithSession(KWP2000(KLine(ecu, timeout=0.01)))
+    with s:
+        s.release()
+    assert ecu._is_open is False

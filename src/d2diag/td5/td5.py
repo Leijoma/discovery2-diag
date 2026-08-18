@@ -48,6 +48,7 @@ _DEFAULT_ATTEMPTS = 6
 
 class Td5(EcuSession):
     name = "Td5"
+    _has_session = True  # StartDiagnosticSession 0xA0 → måste stängas rent vid modulbyte
 
     # livscykel (open/close/context) + read_block/tester_present ärvs från EcuSession
 

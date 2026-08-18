@@ -230,9 +230,11 @@ class Td5DataSource(DataSource):
         return td5
 
     def disconnect(self) -> None:
+        # release() = StopDiagnosticSession + close. Bara close() lämnar TD5-sessionen
+        # öppen på den delade bussen → nästa modul (SLABS) får 7F 81 10 på sin init.
         try:
             if self._td5 is not None:
-                self._td5.close()
+                self._td5.release()
         except Exception:  # noqa: BLE001
             pass
         self._td5 = None
@@ -428,9 +430,11 @@ class SlabsDataSource(DataSource):
         return slabs
 
     def disconnect(self) -> None:
+        # release() — SLABS har ingen session att avsluta (no-op), men symmetrin gör
+        # att modulbyte ser likadant ut oavsett källa.
         try:
             if self._slabs is not None:
-                self._slabs.close()
+                self._slabs.release()
         except Exception:  # noqa: BLE001
             pass
         self._slabs = None
