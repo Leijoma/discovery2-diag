@@ -50,8 +50,8 @@ ABS_SUB_FRONT_LEFT = 0x11
 ABS_SUB_REAR_RIGHT = 0x12
 ABS_SUB_REAR_LEFT = 0x13
 
-_DEFAULT_IDLE = 0.3
-_DEFAULT_ATTEMPTS = 3
+_DEFAULT_IDLE = 3.0   # låt bussen/en ev. tidigare session (t.ex. TD5) lägga sig först
+_DEFAULT_ATTEMPTS = 4
 
 
 class Slabs(EcuSession):
@@ -61,6 +61,7 @@ class Slabs(EcuSession):
     ärvs från :class:`EcuSession`."""
 
     name = "SLABS"
+    _keepalive_sub = None  # SLABS vill ha bar 3E (sniffad ram 01 3e 3f), inte 3E 01
 
     def establish(
         self,

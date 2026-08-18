@@ -160,8 +160,12 @@ class KWP2000:
     def stop_diagnostic_session(self) -> bytes:
         return self.request(STOP_DIAGNOSTIC_SESSION)
 
-    def tester_present(self, sub: int = 0x01) -> bytes:
-        return self.request(TESTER_PRESENT, bytes([sub]))
+    def tester_present(self, sub: "int | None" = 0x01) -> bytes:
+        """TesterPresent-keepalive. ``sub=None`` skickar bar ``3E`` utan sub-byte
+        (SLABS vill ha det så — sniffad ram ``01 3e 3f`` → ``01 7e 7f``); annars
+        ``3E <sub>`` (standard, TD5 m.fl.)."""
+        payload = b"" if sub is None else bytes([sub])
+        return self.request(TESTER_PRESENT, payload)
 
     def request_seed(self, level: int = 0x01) -> bytes:
         """Returnerar seed-bytes (utan den ekade nivåbyten)."""

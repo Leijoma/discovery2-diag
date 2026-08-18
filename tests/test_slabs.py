@@ -93,6 +93,17 @@ def test_clear_faults_sends_exact_capture():
     assert ecu.sent[-1] == bytes.fromhex("0314ffff15")  # '03 14 ff ff 15'
 
 
+def test_keepalive_sends_bare_3e_matching_capture():
+    # Sniffad keepalive (slabs_session_20260807.log) = '01 3e 3f' → '01 7e 7f',
+    # dvs BAR 3E utan sub-byte. Ett tidigare '3E 01' fick inget svar och rev
+    # sessionen direkt efter uppkoppling.
+    responses = {_frame(b"\x3e"): _frame(b"\x7e")}
+    ecu, slabs = _slabs(responses)
+    with slabs:
+        slabs.tester_present()
+    assert ecu.sent[-1] == bytes.fromhex("013e3f")  # '01 3e 3f' — bar 3E
+
+
 @pytest.mark.parametrize("call, frame_hex", [
     (lambda s: s.buzzer(),               "03 31 31 0a 6f"),
     (lambda s: s.compressor(),           "03 31 30 28 8c"),

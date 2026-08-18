@@ -27,6 +27,7 @@ class EcuSession:
     """
 
     name: str = "ECU"
+    _keepalive_sub: "int | None" = 0x01  # TesterPresent-sub; SLABS överrider → None (bar 3E)
 
     def __init__(self, kwp: KWP2000) -> None:
         self._kwp = kwp
@@ -67,7 +68,7 @@ class EcuSession:
 
     def tester_present(self) -> None:
         """Keepalive (``3E`` → ``7E``) — håll sessionen vid liv mellan förfrågningar."""
-        self._kwp.tester_present()
+        self._kwp.tester_present(self._keepalive_sub)
 
     # ---- etablering ---------------------------------------------------- #
     def _establish(

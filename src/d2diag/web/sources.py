@@ -417,11 +417,17 @@ class SlabsDataSource(DataSource):
         try:
             if self._slabs is None:
                 self._slabs = self._connect()
-            self._slabs.tester_present()
+            try:
+                self._slabs.tester_present()  # keepalive — bästa försök, inte livstecken
+            except Exception:  # noqa: BLE001 — ett tappat 3E ska inte riva sessionen
+                pass
             # Läs alla LID:er storen bryr sig om + dashboardens (SVG) i ETT svep.
             store = load_signals("slabs")
             lids = {s.lid for s in store} | {0x54, 0x43, 0x50}
             raws = self._slabs.read_block(lids)  # {lid_hex: bytes}, felande hoppas över
+            if not raws:
+                # Ingen enda LID svarade → sessionen är faktiskt borta (inte bara 3E).
+                raise RuntimeError("inget SLABS-svar — tappad session")
             # Store-drivna signaler → nya bekräftade mappningar syns automatiskt.
             vals: "dict[str, float]" = {}
             for s in store:
