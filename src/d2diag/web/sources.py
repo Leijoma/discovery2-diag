@@ -81,11 +81,19 @@ def _sig(values: "dict[str, float]", module: str = "td5") -> "dict[str, dict]":
     return out
 
 
+def _sleep_kw(hook) -> "dict":
+    """``{"sleep": hook}`` om en hook finns, annars tomt (behåll time.sleep)."""
+    return {} if hook is None else {"sleep": hook}
+
+
 class DataSource(abc.ABC):
     """Kontrakt: ``poll()`` returnerar en färsk snapshot-dict."""
 
     name: str = "source"
     on_progress = None  # callback(str): live-status under blockande etablering (bas: ingen)
+    # sleep-hook för etableringens väntetider (SLABS tysta period är 28 s). Servern
+    # sätter en avbrytbar variant så ett modulbyte inte behöver vänta ut den.
+    on_sleep = None
 
     def is_connected(self) -> bool:
         """Har källan en levande session? Bas: nej (mock rapporterar alltid connected via poll)."""
@@ -226,7 +234,7 @@ class Td5DataSource(DataSource):
         port = resolve_serial_port(self._port)  # autodetektera vid varje försök
         td5 = Td5(KWP2000(KLine(SerialTransport(port, timeout=1.0)), tolerant=True))
         td5.open()
-        td5.establish(progress=self.on_progress)
+        td5.establish(progress=self.on_progress, **_sleep_kw(self.on_sleep))
         return td5
 
     def disconnect(self) -> None:
@@ -426,7 +434,7 @@ class SlabsDataSource(DataSource):
         slabs = Slabs(KWP2000(KLine(SerialTransport(port, timeout=1.0), target=SLABS_ADDRESS),
                               tolerant=True))
         slabs.open()
-        slabs.establish(progress=self.on_progress)
+        slabs.establish(progress=self.on_progress, **_sleep_kw(self.on_sleep))
         return slabs
 
     def disconnect(self) -> None:

@@ -4,6 +4,8 @@ import threading
 import time
 import urllib.request
 
+import pytest
+
 from d2diag.web import MockDataSource
 from d2diag.web.server import DiagServer
 
@@ -461,5 +463,33 @@ def test_ecu_commands_still_go_through_the_poll_queue():
         r = srv.enqueue_command({"action": "clear_faults"}, timeout=0.2)
         assert r["ok"] is False and "timeout" in r["error"]
         assert not srv._commands.empty()          # ligger kvar i kön till pollern
+    finally:
+        srv.server_close()
+
+
+def test_connect_sleep_aborts_when_a_command_is_queued():
+    # SLABS tysta period är 28 s och en full etablering ~90 s. Sover pollertråden
+    # ut den medan ett modulbyte står i kön får UI:t timeout trots giltigt kommando.
+    from d2diag.web.server import ConnectAborted, DiagServer
+    from d2diag.web.sources import MockDataSource
+
+    srv = DiagServer(MockDataSource(), host="127.0.0.1", port=0)
+    try:
+        srv._connect_sleep(0.05)                    # tom kö → sover klart
+        srv._commands.put(({"action": "select_module"}, {}))
+        with pytest.raises(ConnectAborted):
+            srv._connect_sleep(30)                  # köat kommando → avbryter direkt
+    finally:
+        srv.server_close()
+
+
+def test_sources_get_the_interruptible_sleep_hook():
+    from d2diag.web.server import DiagServer
+    from d2diag.web.sources import MockDataSource
+
+    src = MockDataSource()
+    srv = DiagServer(src, host="127.0.0.1", port=0)
+    try:
+        assert src.on_sleep == srv._connect_sleep
     finally:
         srv.server_close()

@@ -273,6 +273,10 @@ class _Handler(BaseHTTPRequestHandler):
 _INLINE_COMMANDS = frozenset({"start_csv", "stop_csv", "set_fault_watch"})
 
 
+class ConnectAborted(Exception):
+    """Etableringen avbröts för att ett kommando väntar (t.ex. modulbyte)."""
+
+
 class DiagServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -344,6 +348,7 @@ class DiagServer(ThreadingHTTPServer):
         self._apply_fault_watch()  # sätt fel-pollnings-kadensen på alla källor
         for s in self._all_sources():  # live-feedback under blockande etablering
             s.on_progress = self._connect_progress
+            s.on_sleep = self._connect_sleep
         # Anslutningslogg: hela etableringsförloppet + fel skrivs hit (och till stderr)
         # så man kan felsöka en session som "dör" strax efter uppkoppling.
         self._conn_log_path = os.path.join(self._csv_dir, "connection.log")
@@ -352,6 +357,26 @@ class DiagServer(ThreadingHTTPServer):
         self._stop = threading.Event()
         self._commands: "queue.Queue" = queue.Queue()
         self._poller = threading.Thread(target=self._poll_loop, daemon=True)
+
+    def _connect_sleep(self, seconds: float) -> None:
+        """Sleep som etableringen använder — avbryts av ett köat kommando.
+
+        SLABS tysta period är 28 s och en full etablering kan ta ~90 s. Utan detta
+        ligger pollertråden och sover medan ett modulbyte står i kön, och UI:t får
+        timeout trots att kommandot är giltigt. Vi sover i skivor och kastar
+        :class:`ConnectAborted` så snart något köats — etableringen avbryts, kön
+        dräneras, och nästa poll börjar om mot rätt modul.
+        """
+        deadline = time.monotonic() + seconds
+        while True:
+            if not self._commands.empty():
+                raise ConnectAborted("avbruten av ett köat kommando")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            self._stop.wait(min(0.2, remaining))
+            if self._stop.is_set():
+                return
 
     def _conn_log(self, msg: str) -> None:
         """Skriv en tidsstämplad rad till anslutningsloggen och stderr. Får aldrig
