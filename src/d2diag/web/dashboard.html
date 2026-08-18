@@ -207,6 +207,19 @@
             font-size:13px; font-weight:600; padding:7px 12px; border-radius:9px; cursor:pointer; }
   .csvbtn.rec { border-color:var(--err); color:var(--err); }
   .csvinfo { color:var(--muted); font-size:12px; font-family:ui-monospace,Menlo,monospace; }
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex;
+           align-items:center; justify-content:center; z-index:20; padding:16px; }
+  .modalbox { background:var(--card); border:1px solid var(--line); border-radius:14px;
+              padding:18px 18px 14px; max-width:460px; width:100%; }
+  .modalbox h2 { font-size:16px; color:var(--fg); text-transform:none; letter-spacing:0; margin:0 0 8px; }
+  .modalbox p { color:var(--muted); font-size:13px; line-height:1.5; margin:0 0 12px; }
+  .modalbox p b { color:var(--fg); }
+  .chk { display:flex; gap:9px; align-items:flex-start; font-size:14px; margin-bottom:12px; cursor:pointer; }
+  .chk input { margin-top:2px; }
+  .vehrow { display:flex; gap:8px; margin-bottom:14px; }
+  .vehrow input { flex:1; min-width:0; background:var(--card2); border:1px solid var(--line);
+                  color:var(--fg); border-radius:8px; padding:8px; font-size:13px; }
+  .commlink { color:var(--muted); cursor:pointer; text-decoration:underline dotted; }
 </style>
 
 <header>
@@ -363,7 +376,29 @@
   <div id="cmdResult" class="cmd"></div>
   <div class="err" id="error"></div>
 </main>
-<footer>Realtime via SSE · discovery2-diag</footer>
+
+<div id="consent" class="modal" style="display:none">
+  <div class="modalbox">
+    <h2>Help improve the tool?</h2>
+    <p>You can share <b>anonymous</b> readings with the community so we can verify
+      experimental mappings together and make the app better. We store a random
+      anonymous ID and the protocol readings you choose to share — <b>never</b> your
+      VIN, registration, location or any personal data, and never your IP address.
+      Sharing is off unless you turn it on, and you can change this any time.</p>
+    <label class="chk"><input type="checkbox" id="consent-cb"> Share anonymous data to help make the app better</label>
+    <div class="vehrow">
+      <input id="veh-model" placeholder="Model (e.g. Discovery 2)">
+      <input id="veh-year" placeholder="Year">
+      <input id="veh-engine" placeholder="Engine (e.g. Td5)">
+    </div>
+    <div class="btns">
+      <button class="btn ok" id="consent-save">Save</button>
+      <button class="btn" id="consent-skip">Not now</button>
+    </div>
+  </div>
+</div>
+
+<footer>Realtime via SSE · discovery2-diag · <span class="commlink" id="commstatus"></span></footer>
 
 <script>
   const $ = id => document.getElementById(id);
@@ -628,11 +663,30 @@
   async function saveSignalToStore(module, r, name, btn){
     btn.disabled=true; btn.textContent="saving…";
     try{
+      const rec=recordFromSolve(r, name, "");
       const res=await (await fetch("/signal",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({module, record:recordFromSolve(r, name, "")})})).json();
-      if(res.ok){ btn.textContent="✓ saved (candidate)"; showCmd(`${name} → signals/${module}.json`, true); }
+        body:JSON.stringify({module, record:rec})})).json();
+      if(res.ok){
+        btn.textContent="✓ saved (candidate)";
+        let msg=`${name} → signals/${module}.json`;
+        if(_community && _community.consent===true){       // opt-in → share with community
+          const sh=await shareContribution(module, r, rec);
+          if(sh) msg+=" · shared ✓";
+        }
+        showCmd(msg, true);
+      }
       else { btn.disabled=false; btn.textContent="✓ save to store"; showCmd(res.error||"could not save", false); }
     }catch(e){ btn.disabled=false; btn.textContent="✓ save to store"; showCmd("network error", false); }
+  }
+  async function shareContribution(module, r, rec){
+    try{
+      const payload={module, lid:r.lid, offset:r.offset, kind:r.kind, name:rec.name,
+        our_value:(r.mode==="numeric"?null:null), confidence:rec.confidence,
+        answer:{type:"map", value:(r.signal||r.rule||"")}};
+      const res=await (await fetch("/community/contribute",{method:"POST",
+        headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)})).json();
+      return !!res.ok;
+    }catch(e){ return false; }
   }
 
   function renderMode(d){
@@ -807,6 +861,46 @@
     box.innerHTML=l.length? l.map(r=>'<div class="flog"><span class="flid">21 '+r.lid+'</span> <code>'+(r.raw||"")+'</code> → '+r.text+' <span class="none">'+(r.t||"")+'</span></div>').join("") : '<div class="hint" style="padding:14px">None saved yet.</div>'; }
 
   $("csvbtn").onclick = toggleCsv;
+
+  // ---- Community sharing (opt-in): first-run consent + footer status ----
+  let _community = null;
+  async function loadCommunity(){
+    try{ _community = await (await fetch("/community")).json(); }
+    catch(e){ _community = {consent:null, endpoint:null}; }
+    renderCommunityStatus();
+    if(_community && _community.consent===null && _community.endpoint) openConsent();  // first run
+  }
+  function renderCommunityStatus(){
+    const el=$("commstatus"); if(!el) return;
+    if(!_community || !_community.endpoint){ el.textContent=""; return; }
+    const on=_community.consent===true;
+    el.textContent = on ? "community sharing: on" : "community sharing: off";
+    el.onclick = openConsent;
+  }
+  function openConsent(){
+    const m=$("consent"); if(!m) return;
+    $("consent-cb").checked = _community && _community.consent===true;
+    const v=(_community&&_community.vehicle)||{};
+    $("veh-model").value=v.model||""; $("veh-year").value=v.year||""; $("veh-engine").value=v.engine||"";
+    m.style.display="flex";
+  }
+  function closeConsent(){ const m=$("consent"); if(m) m.style.display="none"; }
+  async function saveConsent(consent){
+    const vehicle={model:$("veh-model").value.trim(), year:$("veh-year").value.trim(),
+                   engine:$("veh-engine").value.trim()};
+    try{
+      const r=await (await fetch("/community/consent",{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({consent, vehicle})})).json();
+      _community = await (await fetch("/community")).json();
+      renderCommunityStatus();
+      showCmd(consent?(r.registered?"community sharing on — thanks!":"sharing on (offline; will register later)"):"community sharing off", true);
+    }catch(e){ showCmd("network error", false); }
+    closeConsent();
+  }
+  $("consent-save").onclick = ()=>saveConsent($("consent-cb").checked);
+  $("consent-skip").onclick = closeConsent;
+  loadCommunity();
 
   (function connect() {
     const es = new EventSource("/events");

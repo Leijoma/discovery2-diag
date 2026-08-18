@@ -141,6 +141,9 @@ class _Handler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(self.path).query)
             self._json(_signals_list((q.get("module", ["td5"])[0]) or "td5"))
+        elif self.path == "/community":
+            c = self.server.community
+            self._json(c.state() if c is not None else {"consent": None, "endpoint": None})
         elif self.path == "/docs":
             self._json({"docs": self.server.docs.index()})
         elif self.path.split("?")[0] == "/doc":
@@ -188,6 +191,19 @@ class _Handler(BaseHTTPRequestHandler):
         elif self.path == "/signal":
             res = _signal_upsert(self._body())
             self._json(res, code=200 if res.get("ok") else 400)
+        elif self.path == "/community/consent":
+            c = self.server.community
+            if c is None:
+                self._json({"ok": False, "error": "community disabled"}, 400)
+            else:
+                body = self._body()
+                self._json(c.set_consent(bool(body.get("consent")), body.get("vehicle")))
+        elif self.path == "/community/contribute":
+            c = self.server.community
+            if c is None:
+                self._json({"ok": False, "error": "community disabled"}, 400)
+            else:
+                self._json(c.contribute(self._body()))
         else:
             self.send_error(404)
 
@@ -255,11 +271,13 @@ class DiagServer(ThreadingHTTPServer):
         mode: "str | None" = None,
         scan_port: str = "auto",
         csv_dir: str = "logs",
+        community=None,
     ) -> None:
         super().__init__((host, port), _Handler)
         self._scan_port = scan_port  # port för "läs alla felkoder" (basic mode)
         self._csv_dir = csv_dir  # var CSV-live-loggar hamnar (start/stop i UI:t)
         self._csv = None  # aktiv CsvLogger eller None
+        self.community = community  # opt-in bidrags-klient (Community) eller None
         self._menus = menus or {}  # modul → meny-lista (Karta-fliken)
         self.docs = docs or DocLibrary()  # markdown-vy (Dokument-fliken)
         self.sniffer = sniffer  # passiv sniff-feed (Mappning-fliken), valfri

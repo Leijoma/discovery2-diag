@@ -103,11 +103,13 @@ def main() -> int:
     os.makedirs(os.path.dirname(captures_path), exist_ok=True)
 
     csv_dir = os.path.join(repo_root, "logs")
+    from d2diag.community import Community  # opt-in community sharing (default OFF)
+    community = Community()
     srv = DiagServer(
         host=args.host, port=args.port,
         poll_interval=args.interval, stream_interval=args.interval, logger=logger,
         active=active, menus=MENUS, docs=docs, sniffer=sniffer, captures_path=captures_path,
-        variants=variants, mode=mode, scan_port=port, csv_dir=csv_dir,
+        variants=variants, mode=mode, scan_port=port, csv_dir=csv_dir, community=community,
     )
     print(f"Docs: {len(docs.index())} in the Docs tab")
     print(f"Captures → {captures_path}")
