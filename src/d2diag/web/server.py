@@ -352,7 +352,7 @@ class DiagServer(ThreadingHTTPServer):
         # Anslutningslogg: hela etableringsförloppet + fel skrivs hit (och till stderr)
         # så man kan felsöka en session som "dör" strax efter uppkoppling.
         self._conn_log_path = os.path.join(self._csv_dir, "connection.log")
-        self._last_conn_status: "str | None" = None
+        self._last_conn_status: "tuple | None" = None  # (modul, status) — se _log_conn_transition
         self._last_conn_error: "str | None" = None
         self._stop = threading.Event()
         self._commands: "queue.Queue" = queue.Queue()
@@ -378,10 +378,16 @@ class DiagServer(ThreadingHTTPServer):
             if self._stop.is_set():
                 return
 
-    def _conn_log(self, msg: str) -> None:
+    def _conn_log(self, msg: str, module: "str | None" = None) -> None:
         """Skriv en tidsstämplad rad till anslutningsloggen och stderr. Får aldrig
-        fälla poll-loopen — sväljer alla fel."""
-        line = f"{time.strftime('%Y-%m-%d %H:%M:%S')} [{self._active}/{self._mode}] {msg}"
+        fälla poll-loopen — sväljer alla fel.
+
+        ``module`` stämplar raden med den modul snapshoten gäller; utan den används
+        den just nu aktiva. Skillnaden spelar roll mitt i ett modulbyte, där en
+        snapshot från den gamla modulen annars skulle märkas med den nya.
+        """
+        line = (f"{time.strftime('%Y-%m-%d %H:%M:%S')} "
+                f"[{module or self._active}/{self._mode}] {msg}")
         try:
             print(line, flush=True)  # → task/stderr-loggen
         except Exception:  # noqa: BLE001
@@ -582,19 +588,29 @@ class DiagServer(ThreadingHTTPServer):
     def _log_conn_transition(self, snap: "dict") -> None:
         """Logga bara när status faktiskt ändras (connected↔error) eller när
         feltexten ändras — annars skulle en tappad kabel spamma varje ~0,5 s.
-        Mock-källor (alltid connected utan riktig session) loggas inte."""
+        Mock-källor (alltid connected utan riktig session) loggas inte.
+
+        Övergången nycklas på (MODUL, status): byter man från en uppkopplad modul
+        till en annan är status "connected" i båda ändar, och en ren status-jämförelse
+        tystar då den nya modulens CONNECTED-rad. Det gömde en lyckad SLABS-session
+        2026-08-18 23:08:54 ("session established" utan CONNECTED) och gjorde loggen
+        direkt vilseledande under felsökningen.
+        """
         status = snap.get("status")
         if self._mode == "mock" or type(self.source).__name__.startswith("Mock"):
             return  # mock är alltid "connected" utan riktig session → inget att logga
         err = snap.get("error") or ""
-        if status == self._last_conn_status and err == self._last_conn_error:
+        key = (snap.get("module"), status)
+        if key == self._last_conn_status and err == self._last_conn_error:
             return
         if status == "connected":
             n = len(snap.get("signals") or {})
-            self._conn_log(f"CONNECTED — {n} signaler, {len(snap.get('faults') or [])} felkoder")
+            self._conn_log(
+                f"CONNECTED — {n} signaler, {len(snap.get('faults') or [])} felkoder",
+                module=snap.get("module"))
         elif status == "error":
-            self._conn_log(f"ERROR — {err}")
-        self._last_conn_status = status
+            self._conn_log(f"ERROR — {err}", module=snap.get("module"))
+        self._last_conn_status = key
         self._last_conn_error = err
 
     def _poll_loop(self) -> None:

@@ -556,3 +556,26 @@ def test_slabs_faults_are_read_on_a_slow_clock():
     src._last_fault -= _SLABS_FAULT_PERIOD   # låtsas att 30 s gått
     src.poll()
     assert len(reads) == 2
+
+
+def test_connection_log_notes_each_module_separately(tmp_path):
+    # Byte från en uppkopplad modul till en annan: status är "connected" i båda
+    # ändar. Nycklas övergången bara på status tystnar den nya modulens rad — det
+    # gömde en lyckad SLABS-session 2026-08-18 23:08:54.
+    from d2diag.web.server import DiagServer
+    from d2diag.web.sources import MockDataSource
+
+    class _Liveish(MockDataSource):              # namnet får inte börja på "Mock"
+        name = "motor"
+
+    srv = DiagServer(_Liveish(), host="127.0.0.1", port=0, csv_dir=str(tmp_path))
+    try:
+        srv._mode = "live"                       # mock-källor loggas annars inte
+        srv._log_conn_transition({"module": "motor", "status": "connected", "signals": {"rpm": 1}})
+        srv._log_conn_transition({"module": "slabs", "status": "connected", "signals": {"h": 1}})
+        srv._log_conn_transition({"module": "slabs", "status": "connected", "signals": {"h": 1}})
+        lines = (tmp_path / "connection.log").read_text().strip().splitlines()
+    finally:
+        srv.server_close()
+    assert len(lines) == 2                       # en rad per modul, ingen upprepning
+    assert "[motor/live]" in lines[0] and "[slabs/live]" in lines[1]
