@@ -387,6 +387,9 @@ class MockSlabsDataSource(DataSource):
         return SLABS_MENU
 
 
+_SLABS_EMPTY_GRACE = 3  # tomma pollar i rad som tolereras innan reconnect (~1,5 s)
+
+
 class SlabsDataSource(DataSource):
     """Riktig Wabco SLABS. Etablerar fast init 0x29 lazily, läser om vid fel.
 
@@ -403,6 +406,8 @@ class SlabsDataSource(DataSource):
         self._tick = 0
         self.fault_every = 10  # läs felkoder var N:e poll (1 = "fault watch", varje cykel)
         self.on_progress = None  # callback(str): live-status under blockande etablering
+        self._empty_streak = 0  # antal pollar i rad utan svar (nåd innan reconnect)
+        self._last_signals: "dict" = {}  # senaste avkodade signaler (visas under nåd-perioden)
 
     def is_connected(self) -> bool:
         return self._slabs is not None
@@ -434,6 +439,7 @@ class SlabsDataSource(DataSource):
         try:
             if self._slabs is None:
                 self._slabs = self._connect()
+                self._empty_streak = 0  # färsk session → full nåd innan nästa reconnect
             try:
                 self._slabs.tester_present()  # keepalive — bästa försök, inte livstecken
             except Exception:  # noqa: BLE001 — ett tappat 3E ska inte riva sessionen
@@ -443,8 +449,18 @@ class SlabsDataSource(DataSource):
             lids = {s.lid for s in store} | {0x54, 0x43, 0x50}
             raws = self._slabs.read_block(lids)  # {lid_hex: bytes}, felande hoppas över
             if not raws:
-                # Ingen enda LID svarade → sessionen är faktiskt borta (inte bara 3E).
-                raise RuntimeError("inget SLABS-svar — tappad session")
+                # Ingen enda LID svarade. En full reconnect kostar ~20 s, så vi river
+                # inte sessionen direkt: SLABS tystnar ofta en cykel (bussglitch, eller
+                # bilen började rulla). Behåll sessionen i ett par pollar och visa
+                # senaste kända värden märkta "stale"; först efter flera tomma i rad
+                # ger vi upp och kopplar om.
+                self._empty_streak += 1
+                if self._empty_streak < _SLABS_EMPTY_GRACE:
+                    return {"status": "connected", "source": self.name, "stale": True,
+                            "signals": self._last_signals, "faults": self._faults}
+                raise RuntimeError(
+                    f"inget SLABS-svar på {self._empty_streak} pollar — tappad session")
+            self._empty_streak = 0
             # Store-drivna signaler → nya bekräftade mappningar syns automatiskt.
             vals: "dict[str, float]" = {}
             for s in store:
@@ -465,6 +481,7 @@ class SlabsDataSource(DataSource):
                 if len(vo) > i:
                     vals[f"volt_{w}"] = round(vo[i] * 0.02, 2)
             signals = _slabs_sig(vals)
+            self._last_signals = signals  # spara för nåd-perioden vid en tom cykel
             if self._read_faults and self._tick % self.fault_every == 0:
                 try:
                     self._faults = _slabs_faults_flat(self._slabs.read_faults())

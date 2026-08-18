@@ -188,6 +188,48 @@ def test_read_block_command_not_connected():
     assert not src.command("read_block", {"lids": ["54"]})["ok"]  # _slabs is None
 
 
+class _FakeSlabs:
+    """Minimal SLABS-stub som styr vad read_block returnerar (tomt = tyst buss)."""
+    def __init__(self, raws): self._raws = raws
+    def tester_present(self): pass
+    def read_block(self, lids): return self._raws
+    def read_faults(self): return {"loggade": [], "aktuella": []}
+    def close(self): pass
+
+
+def test_slabs_empty_read_grace_keeps_session_then_reconnects(monkeypatch):
+    # En tyst pollcykel ska INTE riva sessionen direkt (full reconnect ~20 s).
+    # Sessionen behålls i nåd-perioden och visar senaste kända värden ("stale"),
+    # först efter _SLABS_EMPTY_GRACE tomma i rad ges den upp.
+    from d2diag.web.sources import SlabsDataSource, _SLABS_EMPTY_GRACE
+    src = SlabsDataSource(port="x", read_faults=False)
+    src._slabs = _FakeSlabs({})            # bussen svarar aldrig
+    src._last_signals = {"height_left": {"v": 42, "u": "", "s": "ok", "c": "belagt"}}
+
+    for _ in range(_SLABS_EMPTY_GRACE - 1):  # nåd-pollar: connected+stale, session kvar
+        d = src.poll()
+        assert d["status"] == "connected" and d.get("stale") is True
+        assert d["signals"] == src._last_signals
+        assert src._slabs is not None
+
+    # Blockera reconnect (ingen hårdvara) så vi ser att sessionen faktiskt revs.
+    monkeypatch.setattr(src, "_connect", lambda: (_ for _ in ()).throw(RuntimeError("no cable")))
+    d = src.poll()                          # nåd slut → riv + försök koppla om (misslyckas)
+    assert d["status"] == "error"
+    assert src._slabs is None
+
+
+def test_slabs_successful_read_resets_empty_streak():
+    from d2diag.web.sources import SlabsDataSource
+    src = SlabsDataSource(port="x", read_faults=False)
+    src._slabs = _FakeSlabs({})
+    src.poll(); assert src._empty_streak == 1        # en tom cykel
+    src._slabs = _FakeSlabs({"54": b"\x91\x9c"})     # bussen svarar igen
+    d = src.poll()
+    assert d["status"] == "connected" and not d.get("stale")
+    assert src._empty_streak == 0                    # nollställd av lyckad läsning
+
+
 def test_mode_toggle_switches_variant():
     from d2diag.web import MockDataSource, MockSlabsDataSource
     from d2diag.web.server import DiagServer
