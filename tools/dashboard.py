@@ -42,6 +42,8 @@ def main() -> int:
     ap.add_argument("--public", action="store_true",
                     help="public/simple UI: home page + TD5/SLABS/Faults only "
                          "(hide Map/Capture/Docs + actuators)")
+    ap.add_argument("--fault-watch", action="store_true",
+                    help="poll fault codes every cycle (~0.5s) to catch intermittent faults")
     ap.add_argument("--dict", dest="dict_path",
                     help="path to the fault-code dictionary (default: sibling repo 'Discovery 2/')")
     ap.add_argument("--docs", action="append", default=[],
@@ -120,7 +122,7 @@ def main() -> int:
         poll_interval=args.interval, stream_interval=args.interval, logger=logger,
         active=active, menus=MENUS, docs=docs, sniffer=sniffer, captures_path=captures_path,
         variants=variants, mode=mode, scan_port=port, csv_dir=csv_dir, community=community,
-        public=args.public,
+        public=args.public, fault_watch=args.fault_watch,
     )
     print(f"Docs: {len(docs.index())} in the Docs tab")
     print(f"Captures → {captures_path}")

@@ -223,6 +223,26 @@ def test_read_all_faults_command_mock():
         srv.server_close()
 
 
+def test_fault_watch_sets_source_cadence():
+    from d2diag.web import MockDataSource, MockSlabsDataSource
+    from d2diag.web.server import DiagServer
+    from d2diag.web.sources import SlabsDataSource, Td5DataSource
+
+    variants = {"motor": {"mock": MockDataSource(), "live": Td5DataSource("x")},
+                "slabs": {"mock": MockSlabsDataSource(), "live": SlabsDataSource("x")}}
+    srv = DiagServer(host="127.0.0.1", port=0, variants=variants, mode="mock")
+    try:
+        assert variants["motor"]["live"].fault_every == 10        # default: ~5s
+        r = srv.set_fault_watch(True)
+        assert r["ok"] and r["fault_watch"] is True
+        assert variants["motor"]["live"].fault_every == 1         # now every cycle
+        assert variants["slabs"]["live"].fault_every == 1
+        srv.set_fault_watch(False)
+        assert variants["slabs"]["live"].fault_every == 10        # back to ~5s
+    finally:
+        srv.server_close()
+
+
 def test_single_source_has_no_mode_toggle():
     from d2diag.web import MockDataSource
     from d2diag.web.server import DiagServer

@@ -288,8 +288,10 @@ class DiagServer(ThreadingHTTPServer):
         csv_dir: str = "logs",
         community=None,
         public: bool = False,
+        fault_watch: bool = False,
     ) -> None:
         super().__init__((host, port), _Handler)
+        self._fault_watch = fault_watch  # True = polla felkoder varje cykel (snabbt)
         self._scan_port = scan_port  # port för "läs alla felkoder" (basic mode)
         self._csv_dir = csv_dir  # var CSV-live-loggar hamnar (start/stop i UI:t)
         self._csv = None  # aktiv CsvLogger eller None
@@ -328,11 +330,31 @@ class DiagServer(ThreadingHTTPServer):
             "status": "connecting", "source": self.source.name,
             "module": self._active, "mode": self._mode, "modes": self._modes,
             "signals": {}, "faults": [], "logging": {"recording": False},
-            "public": self._public,
+            "public": self._public, "fault_watch": self._fault_watch,
         }
+        self._apply_fault_watch()  # sätt fel-pollnings-kadensen på alla källor
         self._stop = threading.Event()
         self._commands: "queue.Queue" = queue.Queue()
         self._poller = threading.Thread(target=self._poll_loop, daemon=True)
+
+    def _all_sources(self) -> list:
+        if self._variants:
+            return [s for v in self._variants.values() for s in v.values()]
+        return list(self._modules.values())
+
+    def _apply_fault_watch(self) -> None:
+        """Sätt fel-pollnings-kadensen på alla källor: 1 = varje cykel (~0,5 s,
+        fångar intermittenta fel), annars var 10:e (~5 s, sparar busstrafik)."""
+        every = 1 if self._fault_watch else 10
+        for s in self._all_sources():
+            if hasattr(s, "fault_every"):
+                s.fault_every = every
+
+    def set_fault_watch(self, on: bool) -> "dict":
+        """Slå på/av snabb fel-pollning (för att fånga t.ex. tre-amigos i stunden)."""
+        self._fault_watch = bool(on)
+        self._apply_fault_watch()
+        return {"ok": True, "fault_watch": self._fault_watch}
 
     def enqueue_command(self, cmd: "dict", timeout: float = 8.0) -> "dict":
         """Köa ett skrivkommando till pollertråden och vänta på resultatet.
@@ -462,6 +484,8 @@ class DiagServer(ThreadingHTTPServer):
                     holder["result"] = self.start_csv()
                 elif action == "stop_csv":
                     holder["result"] = self.stop_csv()
+                elif action == "set_fault_watch":
+                    holder["result"] = self.set_fault_watch((cmd.get("params") or {}).get("on"))
                 else:
                     holder["result"] = self.source.command(action, cmd.get("params"))
             except Exception as exc:  # noqa: BLE001
@@ -484,6 +508,7 @@ class DiagServer(ThreadingHTTPServer):
             snap["modes"] = self._modes  # valbara lägen (för UI-toggeln)
             snap["logging"] = self._csv.status() if self._csv is not None else {"recording": False}
             snap["public"] = self._public  # UI förenklas i publikt läge
+            snap["fault_watch"] = self._fault_watch  # snabb fel-pollning på/av
             self.latest = snap
             if self.logger is not None:
                 try:

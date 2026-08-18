@@ -206,6 +206,9 @@
   .csvbtn { border:1px solid var(--line); background:var(--card); color:var(--fg);
             font-size:13px; font-weight:600; padding:7px 12px; border-radius:9px; cursor:pointer; }
   .csvbtn.rec { border-color:var(--err); color:var(--err); }
+  .fwbtn { border:1px solid var(--line); background:var(--card); color:var(--fg);
+           font-size:13px; font-weight:600; padding:7px 11px; border-radius:9px; cursor:pointer; }
+  .fwbtn.on { border-color:var(--warn); color:var(--warn); }
   .csvinfo { color:var(--muted); font-size:12px; font-family:ui-monospace,Menlo,monospace; }
   .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex;
            align-items:center; justify-content:center; z-index:20; padding:16px; }
@@ -293,6 +296,7 @@
       marked <span class="exp">exp</span>. Turn it on to help verify them by sharing readings.
     </span></span>
     <span style="flex:1"></span>
+    <button class="fwbtn" id="fwbtn" title="Poll fault codes every ~0.5s instead of ~5s — catch intermittent faults (e.g. three-amigos). Uses more bus traffic.">⚡ Fault watch</button>
     <button class="csvbtn" id="csvbtn">⏺ Log to CSV</button>
     <span class="csvinfo" id="csvinfo"></span>
   </div>
@@ -777,6 +781,21 @@
       showCmd(r.ok?`mode: ${mode}`:(r.error||"could not switch mode"), !!r.ok);
     }catch(e){ showCmd("network error", false); }
   }
+  // ---- Fault watch: poll fault codes every cycle (catch intermittent faults) ----
+  function renderFw(d){
+    const btn=$("fwbtn"); if(!btn) return;
+    const on = !!(d && d.fault_watch);
+    btn.classList.toggle("on", on);
+    btn.textContent = on ? "⚡ Fault watch: on" : "⚡ Fault watch";
+  }
+  async function toggleFw(){
+    const on = $("fwbtn").classList.contains("on");
+    try{
+      const r=await (await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"set_fault_watch",params:{on:!on}})})).json();
+      showCmd(r.ok?("fault watch "+(r.fault_watch?"on — polling faults every cycle":"off")):(r.error||"error"), !!r.ok);
+    }catch(e){ showCmd("network error", false); }
+  }
   // ---- CSV live-data logging (start/stop; logs whichever module is active) ----
   function renderCsv(d){
     const info = d.logging || {recording:false}, btn = $("csvbtn"), inf = $("csvinfo");
@@ -856,7 +875,7 @@
     $("dot").className = "dot " + st;
     $("status").textContent = ({connected:"connected",connecting:"connecting…",error:"error"}[st] || st) + (d.source ? " · " + d.source : "");
     $("error").textContent = d.error || "";
-    renderMode(d); renderCsv(d); renderConn(d);
+    renderMode(d); renderCsv(d); renderConn(d); renderFw(d);
     document.body.classList.toggle("public", !!d.public);
     const sig = d.signals || {}, faults = d.faults || [];
     const mod = d.module || ((d.source || "").indexOf("slabs") >= 0 ? "slabs" : "motor");
@@ -1010,6 +1029,7 @@
     box.innerHTML=l.length? l.map(r=>'<div class="flog"><span class="flid">21 '+r.lid+'</span> <code>'+(r.raw||"")+'</code> → '+r.text+' <span class="none">'+(r.t||"")+'</span></div>').join("") : '<div class="hint" style="padding:14px">None saved yet.</div>'; }
 
   $("csvbtn").onclick = toggleCsv;
+  $("fwbtn").onclick = toggleFw;
   $("homebtn").onclick = ()=>{ showTab("home"); renderHome(); };
   $("trustinfo").onclick = (e)=>{ e.stopPropagation(); $("trustinfo").classList.toggle("show"); };  // tap for touch
   document.addEventListener("click", ()=>$("trustinfo").classList.remove("show"));

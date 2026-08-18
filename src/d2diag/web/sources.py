@@ -204,6 +204,7 @@ class Td5DataSource(DataSource):
         self._td5 = None
         self._faults: "list[str]" = []
         self._fault_tick = 0
+        self.fault_every = 10  # läs felkoder var N:e poll (1 = "fault watch", varje cykel)
 
     def _connect(self):
         from ..kline import KLine
@@ -239,7 +240,7 @@ class Td5DataSource(DataSource):
                 # behandla som tappad kontakt så vi återansluter nästa poll.
                 raise RuntimeError("no signals read — noise or lost connection")
             # läs felkoder mer sällan (dyrt); var ~10:e poll
-            if self._read_faults and self._fault_tick % 10 == 0:
+            if self._read_faults and self._fault_tick % self.fault_every == 0:
                 try:
                     self._faults = [f for f in self._td5.read_faults() if not f.startswith("byte")]
                 except Exception:  # noqa: BLE001
@@ -389,6 +390,7 @@ class SlabsDataSource(DataSource):
         self._slabs = None
         self._faults: "list[str]" = []
         self._tick = 0
+        self.fault_every = 10  # läs felkoder var N:e poll (1 = "fault watch", varje cykel)
 
     def _connect(self):
         from ..kline import KLine
@@ -440,7 +442,7 @@ class SlabsDataSource(DataSource):
                 if len(vo) > i:
                     vals[f"volt_{w}"] = round(vo[i] * 0.02, 2)
             signals = _slabs_sig(vals)
-            if self._read_faults and self._tick % 10 == 0:
+            if self._read_faults and self._tick % self.fault_every == 0:
                 try:
                     self._faults = _slabs_faults_flat(self._slabs.read_faults())
                 except Exception:  # noqa: BLE001
