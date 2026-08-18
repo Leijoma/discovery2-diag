@@ -354,6 +354,7 @@ class DiagServer(ThreadingHTTPServer):
         self._conn_log_path = os.path.join(self._csv_dir, "connection.log")
         self._last_conn_status: "tuple | None" = None  # (modul, status) — se _log_conn_transition
         self._last_conn_error: "str | None" = None
+        self._last_phase_logged: "str | None" = None  # dedupe av identiska progress-rader
         self._stop = threading.Event()
         self._commands: "queue.Queue" = queue.Queue()
         self._poller = threading.Thread(target=self._poll_loop, daemon=True)
@@ -403,8 +404,15 @@ class DiagServer(ThreadingHTTPServer):
         """Källorna ropar hit under den blockande etableringen (i pollertråden).
         Vi uppdaterar ``self.latest`` direkt så SSE-tråden pushar fasen live till
         webläsaren medan poll fortfarande blockerar. Bara meningsfullt medan vi
-        faktiskt försöker koppla upp — poll skriver över med färsk snapshot sen."""
-        self._conn_log(f"establish: {phase}")
+        faktiskt försöker koppla upp — poll skriver över med färsk snapshot sen.
+
+        Identiska rader i följd loggas EN gång: utan kabel ropar återanslutningen
+        "opening the cable" två gånger i sekunden i all evighet (1,9 MB brus på en
+        kväll 2026-08-18), vilket dränker de rader man faktiskt felsöker med.
+        """
+        if phase != self._last_phase_logged:
+            self._conn_log(f"establish: {phase}")
+            self._last_phase_logged = phase
         self.latest = {
             **self.latest,
             "status": "connecting",
@@ -612,6 +620,7 @@ class DiagServer(ThreadingHTTPServer):
             self._conn_log(f"ERROR — {err}", module=snap.get("module"))
         self._last_conn_status = key
         self._last_conn_error = err
+        self._last_phase_logged = None  # ny status → nästa etableringsfas loggas igen
 
     def _poll_loop(self) -> None:
         while not self._stop.is_set():

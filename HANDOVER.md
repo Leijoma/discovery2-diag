@@ -40,20 +40,42 @@ SLABS (Wabco ABS+luftfjädring, adress `0x29`) kopplade upp men **dog efter
    höjder (`21 54`); felkoder högst var 10:e poll. `establish` tillbaka till
    `idle=0.3, attempts=3`.
 
+### Bilsession 2026-08-18 kväll — vad som mättes
+- ✅ **Lätt poll håller.** SLABS satt uppkopplad **2 min 25 s** med data
+  (17:27:41 → 17:30:06, 4 signaler, ingen reconnect). Gamla brytpunkten var ~15 s.
+- ✅ **`7F 81 10` är borta** sedan `82` (StopCommunication) infördes. Rejecten kommer
+  från en ANNAN modul (TD5 i session) — belagt både i sniffen och i bilen.
+- ⚠️ **Init är fortfarande opålitligt.** SLABS svarar ibland på första försöket,
+  ibland inte alls på elva försök över fyra minuter. Alla misslyckanden är TYSTA
+  (bara vårt eko i bursten) medan TD5 kopplar upp på första försöket sekunder
+  senare på samma kabel → kabel/buss/init-timing är uteslutna.
+- 📉 **Batteriet är en öppen kandidat.** 11,65 V på eftermiddagen, 12,43 V kl 23
+  (tändning på, motorn av — alltså INGEN laddspänning; laddare ger >13 V). SLABS
+  drar kompressor/ventiler och har underspänningsskydd; TD5 har lägre tröskel.
+  Korrelationen finns men är OBEVISAD — vi mätte aldrig spänningen i det ögonblick
+  SLABS tystnade.
+
+### Kodändringar 2026-08-18 kväll (alla committade, 207 tester gröna)
+`60e7bce` TD5-sessionsstädning vid modulbyte · `cd13085` CSV-loggning svarar direkt
+(inline-kommandon) · `56c56d7` StopCommunication `82` (release + före varje etablering)
+· `97e43b6` tyst period 28 s istället för att hamra (mätt ur sniffarna) · `baea354`
+avbrytbar väntan så modulbyte inte fastnar bakom en etablering · `36d7d2a` SLABS-trafik
+strypt till 1 Hz på klockan · `ec5440f` anslutningsloggen nycklad på (modul, status) —
+dolde en lyckad SLABS-session · progress-rader dedupas (1,9 MB brus på en kväll).
+
 ### Vad som återstår (NÄSTA STEG)
-- **Testa baslinjen i bilen** — bekräfta att SLABS står stabilt igen som förr.
-  Kolla `logs/connection.log`. Klistra in de sista raderna om det strular.
-- **TD5↔SLABS delad buss** — ✅ **fixat i kod (2026-08-18), otestat i bilen.**
-  `EcuSession.release()` = StopDiagnosticSession (`20` → `60`) + close, med
-  `_has_session` per modul (Td5 True; SLABS/Airbag no-op). Anropas vid modulbyte
-  (`Td5DataSource.disconnect` → `DiagServer._select`/`_set_mode`) och mellan
-  modulerna i `faultscan`. Felvägar går fortfarande direkt på `close()` — det
-  finns ingen session att avsluta och ett `20` mot tyst buss kostar bara timeout.
-  **Verifiera i bilen:** växla TD5 → SLABS i UI:t och se att SLABS kopplar upp
-  utan `7F 81 10` i `logs/connection.log`. Kör inte `--fault-watch` när SLABS är
-  aktivt (växlar moduler för snabbt på delad buss).
-  ⚠️ Ej löst: session som lämnats öppen av en **tidigare process** (kraschad/dödad
-  dashboard) — där hjälper bara bus-idle/ECU-timeout.
+1. **Lamptestet (utan verktyg, gör först).** Verkstadsmanualen: vid tändning läge II
+   gör SLABS-ECU:n en 3-sekunders lamptest av SLS- och ORM-lamporna. Sker det lever
+   modulen och felet sitter i K-line-kommunikationen; sker det inte är den strömlös
+   eller i skyddsläge → säkring och matning, inte mer kod.
+2. **Mät spänningen under testet.** Ladda/kör motorn (~14 V) och kör med `--csv` så
+   batterikurvan finns bredvid `logs/connection.log`. TD5:s batterivärde är proxyn —
+   SLABS egen matning (`21 53` byte0) är oavkodad.
+3. **Testa "TD5 först"-hypotesen.** Båda de lyckade SLABS-initarna 2026-08-18 kväll
+   kom strax efter en TD5-session (23:08:42 motor → 23:08:54 SLABS, första försöket),
+   och sniffen har samma mönster (`t=403982`: C1 bara 2,9 s efter TD5-keepalive) medan
+   alla andra lyckade initar krävde 25–28 s tystnad. Om det upprepar sig ska
+   TD5-kontakt byggas in som uppvärmning före SLABS.
 
 ### Kör dashboarden
 ```bash

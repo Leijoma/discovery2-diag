@@ -579,3 +579,20 @@ def test_connection_log_notes_each_module_separately(tmp_path):
         srv.server_close()
     assert len(lines) == 2                       # en rad per modul, ingen upprepning
     assert "[motor/live]" in lines[0] and "[slabs/live]" in lines[1]
+
+
+def test_repeated_connect_phase_is_logged_once(tmp_path):
+    # Utan kabel ropar återanslutningen "opening the cable" 2 ggr/s i all evighet
+    # (1,9 MB brus på en kväll) och dränker raderna man felsöker med.
+    from d2diag.web.server import DiagServer
+    from d2diag.web.sources import MockDataSource
+
+    srv = DiagServer(MockDataSource(), host="127.0.0.1", port=0, csv_dir=str(tmp_path))
+    try:
+        for _ in range(5):
+            srv._connect_progress("opening the cable")
+        srv._connect_progress("sending init (try 1/3)")   # ny text → ny rad
+        lines = (tmp_path / "connection.log").read_text().strip().splitlines()
+    finally:
+        srv.server_close()
+    assert len(lines) == 2
