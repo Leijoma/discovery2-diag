@@ -93,7 +93,12 @@ före första initförsöket. Verktyget skickar **aldrig** `82` i någon sniff �
 litar på att länken timeoutar av sig själv. Vårt `82` löste TD5:s generalReject
 men är ovaliderat mot bilen.
 
-### P4 — inter-byte-tid vid SÄNDNING (otestad lucka, upptäckt 2026-08-19)
+### P4 — inter-byte-tid vid SÄNDNING (mätt, inget utslag ännu)
+Första mätningen med blandad ordning (32 försök, 2026-08-19 16:03–16:07):
+**P4 = 0 ms gav 1/17, P4 = 5 ms gav 2/15.** För litet för att säga något —
+skillnaden är väl inom slumpen. Hypotesen lever men är obekräftad.
+
+
 muki01-referensen skickar **en byte i taget med 5 ms emellan**
 (`writeRawData`: `K_Serial.write(b); delay(WRITE_DELAY)`), och kommentaren citerar
 ISO 14230-2:s intervall **5–20 ms** för P4. Vi har alltid skickat hela ramen i ett
@@ -186,7 +191,13 @@ Alla probe-försök 2026-08-19 där alla varianter provades i samma tidsfönster
 Funktionellt sammanlagt **6/24 (25 %)** mot fysiskt **1/21 (5 %)** — Fishers
 exakta test ger p = 0,10.
 
-🚨 **Men siffran är sammanblandad med försöksnumret.** Proben körde alltid
+✅ **Upplöst 2026-08-19 med blandad ordning:** när variantordningen slumpas per
+varv försvinner skillnaden helt — funktionell/F1 1/8, funktionell/F7 1/9,
+fysisk/F7 1/7, fysisk/F1 0/8. Adressläget spelar alltså **ingen** roll; den
+tidigare skillnaden var positionseffekten nedan. Behåll flera varianter enbart
+för att det ger flera försök.
+
+🚨 **Siffrorna nedan är sammanblandade med försöksnumret.** Proben körde alltid
 varianterna i samma ordning, så träffkvoten per position är IDENTISK med den per
 variant:
 

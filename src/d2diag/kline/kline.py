@@ -136,7 +136,11 @@ class KLine:
             search, offset = raw, 0   # fysiskt eko (0x8n) innehåller inget 0xC1
         j = search.find(0xC1)
         if j < 0:
-            raise KLineTimeout(f"ingen C1 i bursten: {raw.hex(' ') or 'tom'}")
+            # Var tydlig med att ekot är bortsett: en funktionell ram BÖRJAR på 0xC1,
+            # så "ingen C1 i bursten" läste fel mot en burst som syns börja med c1.
+            raise KLineTimeout(
+                f"inget svar efter ekot (eko {frame.hex(' ')}, "
+                f"burst {raw.hex(' ') or 'tom'})")
         return raw[offset + j:]
 
     def slow_init(self, address: int) -> "tuple[int, int]":

@@ -153,7 +153,7 @@ def test_establish_progress_reports_the_burst_on_each_failed_try():
             s.establish(progress=msgs.append)
     tries = [m for m in msgs if m.startswith("no response yet")]
     assert len(tries) == 2                  # attempts=2 i _Dummy
-    assert all("bursten" in m for m in tries)
+    assert all("burst" in m for m in tries)
 
 
 def test_stale_link_is_cleared_once_not_between_tries():
