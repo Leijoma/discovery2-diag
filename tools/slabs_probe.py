@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import os
+import random
 import sys
 import time
 
@@ -181,8 +182,15 @@ def main() -> int:
     ap.add_argument("--rounds", type=int, default=1, help="antal varv genom matrisen")
     ap.add_argument("--no-td5", action="store_true",
                     help="hoppa över TD5-kontexten (ingen rpm/fart/batteri i loggen)")
+    ap.add_argument("--order", choices=("shuffle", "fixed"), default="shuffle",
+                    help="variantordning. SHUFFLE (default) krävs för att kunna skilja "
+                         "variantens effekt från försöksnumrets — med fast ordning är "
+                         "de perfekt sammanblandade (belagt 2026-08-19).")
+    ap.add_argument("--seed", type=int, default=None, help="seed för ordningen")
     args = ap.parse_args()
 
+    seed = args.seed if args.seed is not None else int(time.time())
+    rng = random.Random(seed)
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     os.makedirs("logs", exist_ok=True)
     raw_path = f"logs/slabs_probe-{stamp}.raw.log"
@@ -194,7 +202,7 @@ def main() -> int:
         say(f"ingen kabel hittad: {exc}")
         return 1
 
-    say(f"SLABS-prob {stamp} — port {port}")
+    say(f"SLABS-prob {stamp} — port {port} — ordning {args.order} (seed {seed})")
     say(f"rå TX/RX → {raw_path}")
     say("Kör STILLASTÅENDE med tändning på. SLABS vägrar comms >8–20 km/h.")
 
@@ -216,8 +224,12 @@ def main() -> int:
             return 1
 
         for rnd in range(1, args.rounds + 1):
-            say(f"\n[matris] varv {rnd}/{args.rounds}")
-            for name, functional, source in VARIANTS:
+            variants = list(VARIANTS)
+            if args.order == "shuffle":
+                rng.shuffle(variants)
+            say(f"\n[matris] varv {rnd}/{args.rounds} — ordning: "
+                + ", ".join(v[0].split()[0] for v in variants))
+            for name, functional, source in variants:
                 slabs = try_init(transport, name, functional, source)
                 results.append((name, "TRÄFF" if slabs else "tyst"))
                 if slabs is not None:

@@ -93,6 +93,15 @@ före första initförsöket. Verktyget skickar **aldrig** `82` i någon sniff �
 litar på att länken timeoutar av sig själv. Vårt `82` löste TD5:s generalReject
 men är ovaliderat mot bilen.
 
+### Fast-init-PULSEN är den enda verkliga luckan
+Sniffen är RX-only och ser bara UART-data — den elektriska init-pulsen (hur länge
+K-line dras låg/hög före `81 29 F7 81 22`) syns inte i något capture. Allt på
+applikationsnivå är därmed belagt och implementerat, medan pulstajmingen är
+gissad från ISO 14230-2 (25 ms låg + 25 ms hög). Det är också där vårt problem
+sitter: reference tool kommer in på första försöket, vi behöver flera. En ESP32 i
+master-läge (se `hardware/README.md`) skulle ge deterministisk pulstajming till
+skillnad från USB-KKL:ns OS-timade.
+
 ### 🔑 Adressläget: funktionell init (`C1 29 F1 81`) — outnyttjat spår
 Reference tool initierar **fysiskt** med testar-adress `0xF7` (`81 29 F7 81 22`),
 och det är vad vi kopierat. Men två oberoende källor pekar på ett annat läge:
@@ -160,8 +169,24 @@ Alla probe-försök 2026-08-19 där alla varianter provades i samma tidsfönster
 | fysisk/F1 | `81 29 f1 81 1c` | 0/7 |
 
 Funktionellt sammanlagt **6/24 (25 %)** mot fysiskt **1/21 (5 %)** — Fishers
-exakta test ger p = 0,10, alltså en tydlig tendens men inte signifikant.
-`_init_variants` provar därför funktionellt först och fysiskt sist.
+exakta test ger p = 0,10.
+
+🚨 **Men siffran är sammanblandad med försöksnumret.** Proben körde alltid
+varianterna i samma ordning, så träffkvoten per position är IDENTISK med den per
+variant:
+
+| Försök nr | Träffar | | Variant (alltid i denna ordning) | Träffar |
+|---|---|---|---|---|
+| 1 | 1/14 | | fysisk/F7 | 1/14 |
+| 2 | 2/13 | | funktionell/F1 | 2/13 |
+| 3 | 4/11 | | funktionell/F7 | 4/11 |
+| 4 | 0/7 | | fysisk/F1 | 0/7 |
+
+Det går alltså inte att skilja "funktionellt är bättre" från "andra/tredje
+försöket är bättre" — t.ex. att den första init-pulsen väcker modulen och nästa
+kommer fram. `tools/slabs_probe.py` blandar därför variantordningen per varv
+(``--order shuffle``, seed loggas). Först med blandad ordning går frågan att
+avgöra.
 
 ⚠️ **Fällan vi gick i:** ett tortyrpass låstes till enbart `fysisk/F7` och gav
 0 träffar på 50 försök. Det såg ut som att modulen slutat svara helt, men vi hade
