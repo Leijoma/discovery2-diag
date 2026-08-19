@@ -79,6 +79,20 @@ var en feltolkning av samma sniff).
   Felvägar (tom läsning, tappad kabel) går nu också via `release()` — loggen
   visade att just de lämnade länken öppen och gav ~90 s reconnect-loop.
 
+### `1A 8A` är reference tools FÖRSTA meddelande efter C1
+I varje lyckad init i sniffarna följs `C1 57 8F` av `02 1a 8a a6` → `5a 8a …`
+efter ~170 ms, innan keepalive och läsningar börjar. Vi speglar det sedan
+2026-08-19 och använder svaret som **kvittens på att sessionen lever**: den
+toleranta initen letar bara efter ett `C1` i bursten och kan i brus ge falskt
+positivt "session established" följt av noll läsningar (sett i bilen 2026-08-18).
+Uteblir svaret rivs inte etableringen — det rapporteras i anslutningsloggen, så
+"uppe" går att skilja från "trodde vi var uppe".
+
+⚠️ Kvarvarande avvikelse från verktyget: vi skickar `01 82 83` (StopCommunication)
+före första initförsöket. Verktyget skickar **aldrig** `82` i någon sniff — det
+litar på att länken timeoutar av sig själv. Vårt `82` löste TD5:s generalReject
+men är ovaliderat mot bilen.
+
 ## ReadEcuIdentification — `1A xx`
 | Req | Svar | Innehåll |
 |---|---|---|

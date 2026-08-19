@@ -59,6 +59,7 @@ _DEFAULT_IDLE = 0.3    # bevisat stabilt värde (sniff 2026-08-07)
 # vad som höll oss ute i ~2 min 2026-08-18.
 _DEFAULT_ATTEMPTS = 3
 _DEFAULT_RETRY_SLEEP = 28.0
+_CONFIRM_DELAY = 0.15  # paus mellan C1 och 1A 8A (reference tool: ~170 ms i sniffen)
 
 
 class Slabs(EcuSession):
@@ -78,14 +79,45 @@ class Slabs(EcuSession):
         sleep: Callable[[float], None] = time.sleep,
         progress: "Callable[[str], None] | None" = None,
     ) -> bytes:
-        """Bus-idle → tolerant fast init mot 0x29 (sök C1). Returnerar C1-datafältet
-        (`57 8F`). Ingen session/unlock behövs (``after=None``). Höjer
-        :class:`KWP2000Error` efter ``attempts`` försök.
+        """Bus-idle → tolerant fast init mot 0x29 (sök C1) → kvittens med `1A 8A`.
+
+        Returnerar C1-datafältet (`57 8F`). Ingen session/unlock behövs
+        (``after=None``). Höjer :class:`KWP2000Error` efter ``attempts`` försök.
+
+        **`1A 8A` som första begäran speglar reference tool.** I varje lyckad init
+        i sniffarna är verktygets första meddelande efter `C1` ett
+        `02 1a 8a a6` → `5a 8a …`, ~170 ms senare, innan keepalive och läsningar
+        börjar. Vi gör likadant och använder svaret som **kvittens på att sessionen
+        verkligen lever** — vår toleranta init letar bara efter ett `C1` i bursten
+        och kan i brus ge falskt positivt "session established" följt av noll
+        läsningar (sett i bilen 2026-08-18). Misslyckad kvittens river INTE
+        etableringen; den rapporteras via ``progress`` så anslutningsloggen visar
+        skillnaden mellan "uppe" och "trodde vi var uppe".
         """
-        return self._establish(
+        c1 = self._establish(
             after=None, idle=idle, attempts=attempts, retry_sleep=_DEFAULT_RETRY_SLEEP,
             sleep=sleep, progress=progress,
         )
+        self._confirm_session(sleep=sleep, progress=progress)
+        return c1
+
+    def _confirm_session(
+        self,
+        *,
+        sleep: Callable[[float], None] = time.sleep,
+        progress: "Callable[[str], None] | None" = None,
+    ) -> bool:
+        """Skicka `1A 8A` som reference tool gör och rapportera utfallet. Best-effort."""
+        sleep(_CONFIRM_DELAY)  # verktyget väntar ~170 ms efter C1 innan 1A 8A
+        try:
+            ident = self.read_ecu_id(ECU_ID_CONFIG)
+        except Exception as exc:  # noqa: BLE001 — kvittensen får inte riva etableringen
+            if progress:
+                progress(f"no answer to 1A 8A ({type(exc).__name__}) — session may be dead")
+            return False
+        if progress:
+            progress(f"session confirmed (1A 8A → {ident[:6].hex(' ')}…)")
+        return True
 
     # ---- ECU-identitet (1A xx) --------------------------------------- #
     def read_ecu_id(self, option: int) -> bytes:

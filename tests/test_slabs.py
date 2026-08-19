@@ -120,3 +120,43 @@ def test_actuator_command_matches_capture(call, frame_hex):
     with slabs:
         call(slabs)
     assert ecu.sent[-1] == want
+
+
+def _f(d):
+    from d2diag.kline import encode
+    return encode(d, addressed=False)
+
+
+def _slabs_over(responses):
+    from d2diag.kline import KLine, encode
+    from d2diag.kwp2000 import KWP2000
+    from d2diag.slabs import SLABS_ADDRESS, Slabs
+    from tests.fakes import FakeKLineEcu
+    responses = dict(responses)
+    responses[encode(b"\x81", SLABS_ADDRESS, 0xF7, addressed=True)] = _f(b"\xc1\x57\x8f")
+    ecu = FakeKLineEcu(responses)
+    return ecu, Slabs(KWP2000(KLine(ecu, target=SLABS_ADDRESS), tolerant=True))
+
+
+def test_establish_confirms_session_with_1a_8a():
+    # Reference tool skickar ALLTID 1A 8A som första begäran efter C1 (sniffen).
+    # Vi speglar det och använder svaret som kvittens på att sessionen lever.
+    ident = bytes.fromhex("00374460440310ff319010864000")
+    ecu, slabs = _slabs_over({_f(b"\x1a\x8a"): _f(b"\x5a\x8a" + ident)})
+    msgs = []
+    with slabs:
+        slabs.establish(sleep=lambda *_: None, progress=msgs.append)
+    assert _f(b"\x1a\x8a") in ecu.sent                  # kvittensen gick ut
+    assert any("session confirmed" in m for m in msgs)
+
+
+def test_establish_reports_a_dead_session_but_does_not_raise():
+    # Tolerant init letar bara efter C1 i bursten → kan ge falskt positivt
+    # "session established" följt av noll läsningar (bilen 2026-08-18). Uteblir
+    # svaret på 1A 8A ska loggen säga det — men etableringen får inte rivas.
+    ecu, slabs = _slabs_over({})                        # inget svar på 1A 8A
+    msgs = []
+    with slabs:
+        c1 = slabs.establish(sleep=lambda *_: None, progress=msgs.append)
+    assert c1.startswith(b"\xc1\x57\x8f")               # etableringen står kvar
+    assert any("no answer to 1A 8A" in m for m in msgs)
