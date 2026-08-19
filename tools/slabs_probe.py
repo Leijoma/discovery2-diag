@@ -33,6 +33,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from d2diag.kline import KLine, encode  # noqa: E402
+from d2diag.kline.kline import KLineTimeout  # noqa: E402
 from d2diag.kwp2000 import KWP2000  # noqa: E402
 from d2diag.slabs import SLABS_ADDRESS, Slabs  # noqa: E402
 from d2diag.td5 import Td5  # noqa: E402
@@ -88,8 +89,11 @@ def engine_context(transport, sleep_after: float) -> "dict | None":
         say(f"  TD5 läsfel: {type(exc).__name__}: {exc}")
         return None
     finally:
+        # end_session() = 20 + 82. INTE release()/close(): porten delas med
+        # SLABS-försöken, och en stängd port får varje följande init att "misslyckas"
+        # utan att en enda byte gått ut på bussen.
         try:
-            td5.release()  # 20 + 82: lämna inte en session som barkar 7F 81 10
+            td5.end_session()
         except Exception:  # noqa: BLE001
             pass
         quiet(sleep_after, "låt bussen tystna efter TD5")
@@ -103,9 +107,14 @@ def try_init(transport, name: str, functional: bool, source: int) -> "Slabs | No
     slabs = Slabs(kwp)
     try:
         c1 = kwp.start_communication(tolerant=True, functional=functional, source=source)
-    except Exception as exc:  # noqa: BLE001
-        say(f"     tyst ({exc})")
+    except KLineTimeout as exc:
+        say(f"     tyst ({exc})")          # bussen svarade inte — ett giltigt mätvärde
         return None
+    except Exception as exc:  # noqa: BLE001
+        # Allt annat är VÅRT fel (stängd port, trasig kabel). Det får aldrig
+        # rapporteras som "tyst" — då tolkas ett testfel som ett modulsvar.
+        say(f"     ✗ LOKALT FEL, inget skickades: {type(exc).__name__}: {exc}")
+        raise
     say(f"     C1! {c1[:4].hex(' ')}")
     # Kvittens: reference tool skickar alltid 1A 8A först — och svaret skiljer en
     # riktig session från ett C1 som bara låg i bruset.
@@ -194,6 +203,10 @@ def main() -> int:
         if not args.no_td5:
             say("\n[kontext] läser motorn först (och släpper sessionen rent)")
             engine_context(transport, args.quiet)
+
+        if not transport.is_open:   # property, inte metod
+            say("porten är stängd efter kontextfasen — avbryter (det vore inget mätvärde)")
+            return 1
 
         for rnd in range(1, args.rounds + 1):
             say(f"\n[matris] varv {rnd}/{args.rounds}")

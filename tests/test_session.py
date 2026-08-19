@@ -167,3 +167,19 @@ def test_stale_link_is_cleared_once_not_between_tries():
     stops = [f for f in ecu.sent if f == _sess(b"\x82")]
     assert len(stops) == 1                   # exakt en rensning, före tystnaden
     assert ecu.sent[0] == _sess(b"\x82")     # och den kom först av allt
+
+
+def test_end_session_leaves_the_port_open_but_release_closes_it():
+    # Delad port: tools/slabs_probe.py läser TD5 först och testar SEDAN SLABS på
+    # samma transport. Avslutas TD5 med release() stängs porten, och varje följande
+    # initförsök "misslyckas" utan att en byte gått ut — ett testfel som ser ut som
+    # en tyst modul (bilen 2026-08-19, 6,5 min bortkastade). end_session() får
+    # därför avsluta sessionen UTAN att stänga.
+    ecu = FakeKLineEcu({_sess(b"\x20"): _sess(b"\x60"), _sess(b"\x82"): _sess(b"\xc2")})
+    s = _WithSession(KWP2000(KLine(ecu)))
+    s.open()
+    s.end_session()
+    assert ecu.sent == [_sess(b"\x20"), _sess(b"\x82")]
+    assert ecu.is_open is True          # porten lever vidare för nästa modul
+    s.release()
+    assert ecu.is_open is False
