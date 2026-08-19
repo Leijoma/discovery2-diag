@@ -1,57 +1,69 @@
 # TODO — discovery2-diag
 
-Uppdaterad 2026-08-03. Kryssa av när klart.
+Uppdaterad 2026-08-19. Kryssa av när klart.
 
-## Nästa gång i bilen (kräver ansluten bil)
-Kör stillastående där det står. Verktyg körs `python3 tools/<x>.py ...`.
+## Läget
 
-- [ ] **Dashboard mot riktiga bilen:** `python3 tools/dashboard.py --serial /dev/cu.usbserial-12345678`
-      → öppna :8080, verifiera live-data + motorschema med äkta värden.
-- [ ] **Radera felkoder på riktigt** (dashboard-knappen) → kör en stund → kom
-      `inlet air temp`/`air flow (Current)` tillbaka? Avgör **intermittent vs konstant** (B-009).
-- [ ] **MAF/IAT-givarens kontakt** (fysiskt): okulär + rengör/sätt om. Loggad både
-      Low och High → intermittent glapp. Kolla ihop med **ECU-kablaget (B-001)** — samma område.
-- [ ] **SLABS slow-init-skanning** (stillastående, motorn dormant, 0x13 orörd):
-      `python3 tools/probe_slow.py /dev/cu.usbserial-12345678 01 3F` → hitta SLABS-adress.
-- [ ] **Motor-ECU:ns SLABS-länkkoder** — läs redan nu (P1590-serien/HDC-länk syns via Td5).
-- [ ] **Hitta TD5 fuel quantity/demand-LID (torque-proxy).** Insprutad bränslemängd
-      (mg/slag) = ECU:ns torque-kommando och loggas i SAMMA TD5-session som rpm/temp/
-      gaspedal (till skillnad från SLABS CAN-torque som kräver egen session). Sikta på
-      fuelling-LID:er vi ännu inte mappat; bekräfta mot bilen och lägg i signalstoren.
-- [ ] *Om lånat verktyg finns:* **sniffa** SLABS via OBD-splitter (pin 7 måste gå igenom):
-      `python3 tools/sniff.py /dev/cu.usbserial-XXXX 7 sniff_slabs.log` medan verktyget läser SLABS
-      → ger adress/init/tjänster/felstruktur. Knäcker BCU/SRS/ACE/HEVAC på köpet.
+TD5 och SLABS fungerar båda tillförlitligt sedan init-pulsen rättades 2026-08-19
+(TiniH var ~32 ms i stället för 25 ± 1 — se `references/slabs_protocol.md`).
+Dashboarden kopplar upp båda på första försöket och växlar modul utan problem.
+220 tester gröna.
 
-## Pi (discopi) — provisionering
-Status 2026-08-03: **uppe på 192.168.68.62, SSH öppen, lösenordsinlogg funkar**
-(vår nyckel ej auktoriserad, `discopi.local`/mDNS löser inte ut).
+## Nästa gång i bilen
 
-- [ ] Bekräfta inlogg: `ssh pi@192.168.68.62` (lösenord från userconf.txt).
-- [ ] Lägg in nyckel: `ssh-copy-id -i ~/.ssh/id_ed25519 pi@192.168.68.62` → nyckelbaserad inlogg.
-- [ ] **Fast IP:** DHCP-reservation i routern (MAC → .62) [renast], eller sätt inifrån.
-- [ ] Fixa mDNS/hostname så `discopi.local` funkar (avahi/hostnamn).
-- [ ] Deploya: klona/rsynca repot till Pi:n, `python3 -m venv .venv`, `pip install -e .[dev]`, `pytest`.
-- [ ] Kör dashboarden på Pi:n → öppna från **mobilen** i bilen.
+- [ ] **Verifiera SLABS över flera tillfällen.** Fixen är testad under en enda
+      eftermiddag. Kör `tools/slabs_probe.py --quiet 5 --hold 30 --no-td5` vid
+      kall start, efter längre stillestånd och i kyla. Träffkvoten ska ligga kvar
+      runt 50 %+ per försök, och dashboarden koppla upp på första försöket.
+- [ ] **Sänk `retry_sleep`.** SLABS `establish` väntar 28 s mellan försöken — ett
+      arv från när init misslyckades av timing-skäl. Prova 3–5 s och mät; troligen
+      onödigt nu och gör reconnect onödigt trögt.
+- [ ] **Avgör W5 och P4.** Båda är implementerade men avstängda och obevisade:
+      `--init-idle 1000` respektive `--write-gaps 0,5`. P4-mätningen gjordes
+      dessutom innan väntan blev exakt, så den mätte fel värde.
+- [ ] **Läs fler SLABS-LID:er nu när sessionen är pålitlig.** Öppet enligt
+      `slabs_protocol.md`: analogskalning för `21 53/55` (supplies), `44/49/57`
+      (ventiler/spänningar), `50` (ABS-sensor V), och settings-LID:erna där
+      LID→funktion är olöst (kräver differential: ändra EN setting, se vilken
+      råbyte som rör sig).
+- [ ] **Bilens egna fel:** `020` höger fram hjulhastighetsgivare (output too low)
+      och `027` shuttle valve switch (electrical failure) ligger loggade, 027 har
+      setts som Current. Riktig verkstadsåtgärd, inte kod.
 
-## Bygg/klart offline (referens)
-Klart: Td5 (livedata + felkoder + skalning korsvaliderad), tolerant läsning, 5-baud slow init,
-SLABS-skelett, passiv sniffer, realtidsdashboard (motorschema + radera-felkoder). 76 pytest gröna.
+## Kod / offline
 
-## Distribution / paketering (för icke-tekniska användare)
-- [ ] **Dubbelklickbar app med PyInstaller** → `.app` (Mac) + `.exe` (Windows) som
-      startar servern och öppnar webbläsaren automatiskt. Ingen terminal/pip/GitHub.
-      Behöver: launcher-entrypoint (starta `DiagServer` + `webbrowser.open`), `.spec`-fil,
-      byggskript per OS (PyInstaller kan inte cross-compila — Mac bygger Mac, Windows Windows).
-      Distribuera som zip-nedladdning (hemsida/Drive/Release-länk). OBS Gatekeeper/SmartScreen-
-      varning för osignerad app (instruera "högerklicka → Öppna", eller signera senare).
-- [ ] **Kabel-drivrutinsnotis** i kom-igång: FTDI/CH34x inbyggt i macOS; Windows+CH340 kan
-      kräva WCH VCP-drivrutin.
-- Mobil (utrett): iPhone kan **inte** använda USB-K-line-kabeln (iOS släpper ej in USB-serial).
-  Android kan tekniskt via native app (`usb-serial-for-android`) men timingkänsligt (fast/slow
-  init) — avvaktar. **Rekommenderad väg:** telefonen som *skärm* (webbläsare mot dator/Pi), inte
-  kabelvärd. "Bara telefon i bilen" = Raspberry Pi Zero W med kabeln + WiFi.
+- [ ] **ACE, EAT och BCU** — underlag finns i sniffarna men är oimplementerat.
+      EAT ReadFaults är bekräftad: `72 05 04 00 73` → `72 09 60 01 00 00 00 00 1B`
+      (svarets innebörd okänd — tolka inte som felräknare än).
+- [ ] **Airbag** är read-only och experimentell; overifierad live.
+- [ ] **PyInstaller-distribution** (.app/.exe) för icke-tekniska användare.
+- [ ] **Torque-proxy:** hitta TD5:s fuel quantity/demand-LID (mg/slag = ECU:ns
+      momentkommando, i samma session som rpm/temp/gaspedal).
+- [ ] Översätt kodkommentarer och docstrings till engelska (koden är svensk).
+- [ ] Ev. återinföra store-driven SLABS-läsning — men inom 1 Hz-budgeten, som är
+      det som gör sessionen stabil.
 
-## Kräver hårdvara/extern
-- OBD-splitter med **pin 7 genomkopplad** (för sniffning).
-- Ev. lånat D2-verktyg (reference tool/a commercial tool) att sniffa.
-- ESP32 + L9637D som robust RX-front (bäst för sniffning).
+## Pi (discopi)
+
+- [ ] Nyckelbaserad inloggning (`ssh-copy-id`), fast IP, fungerande `discopi.local`.
+- [ ] Deploya repot, kör `pytest`, starta dashboarden → nå den från mobilen i bilen.
+
+## Hårdvara
+
+- [ ] **ESP32 i master-läge** — sketchen finns (`esp32/kline_test/`) och bit-bangar
+      pulsen med mikrosekundsnoggrannhet. Inte längre nödvändig för SLABS, men den
+      enda vägen att mäta de **fysiska** flankerna (vi ser bara vår mjukvarusida)
+      och ett stabilare alternativ till USB-KKL.
+- [ ] OBD-splitter med stift 7 genomkopplat för fortsatt sniffning.
+
+## Metodlärdomar (kostade en hel dag 2026-08-19)
+
+- **Lås aldrig ett experiment till en variant innan frågan är avgjord.** Ett pass
+  låst till `fysisk/F7` gav 0/50 och såg ut som att modulen slutat svara.
+- **Blanda ordningen.** Fast variantordning gjorde att vi mätte försöksnumret och
+  trodde det var adressläget.
+- **Kör inte betingelser som separata tidsblock** — då mäter man klockan. En
+  "signifikant" skillnad (p=0,017) visade sig vara två olika tidpunkter.
+- **Mät det du påstår att du mäter.** Flera hypoteser föll på att mätvärdet
+  innehöll något annat (ekot i bursten, burst-läsningen i `to_frame_ms`,
+  `sleep`-överskjutning i P4).

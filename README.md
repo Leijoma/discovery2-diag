@@ -136,12 +136,16 @@ read-first and conservative:
 
 - [x] Transport, K-Line (addressed + unaddressed framing, fast + slow init), KWP2000
 - [x] Td5 — SecurityAccess seed→key, session, identifiers/scaling (validated on the car)
-- [x] SLABS — faults, live data, actuator tests + ABS bleed
+- [x] SLABS — faults, live data, actuator tests + ABS bleed. Connects on the first
+      attempt since the fast-init pulse was corrected (2026-08-19): our TiniH was
+      ~32 ms instead of the 25 ms ISO 14230-2 specifies, because the UART stop bit
+      after the wake byte was unaccounted for and `time.sleep` overshoots. The Td5
+      (Lucas) tolerated it for months; the Wabco module did not.
 - [~] Airbag/SRS — read-only fault read (experimental, addressed framing at 0x5B)
 - [~] ACE / auto gearbox (EAT) / BCU — partially reverse-engineered
 - [x] Web dashboard, signal store, sniff decoder, active differential mapping
 
-~160 unit tests, all passing, run without hardware.
+220 unit tests, all passing, run without hardware.
 
 ## Contributing
 
