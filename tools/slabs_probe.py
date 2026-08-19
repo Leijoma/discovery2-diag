@@ -108,7 +108,8 @@ def engine_context(transport, sleep_after: float) -> "dict | None":
 
 
 def try_init(transport, name: str, functional: bool, source: int,
-             write_gap: float = 0.0, init_high: float = 0.025) -> "Slabs | None":
+             write_gap: float = 0.0, init_high: float = 0.025,
+             init_idle: float = 0.0) -> "Slabs | None":
     """Ett enda initförsök med en given variant. Returnerar en levande Slabs eller None.
 
     ``write_gap`` är P4 — inter-byte-tiden i vår förfrågan. ISO 14230-2 anger
@@ -120,7 +121,8 @@ def try_init(transport, name: str, functional: bool, source: int,
     tags = ("" if not write_gap else f" · P4 {write_gap*1000:.0f}ms") + \
            ("" if abs(init_high - 0.025) < 1e-9 else f" · hög {init_high*1000:.0f}ms")
     say(f"  → {name}{tags}: {frame.hex(' ')}")
-    kline = KLine(transport, target=SLABS_ADDRESS, write_gap=write_gap, init_high=init_high)
+    kline = KLine(transport, target=SLABS_ADDRESS, write_gap=write_gap,
+                  init_high=init_high, init_idle=init_idle)
     kwp = KWP2000(kline, tolerant=True)
     slabs = Slabs(kwp)
     try:
@@ -193,6 +195,10 @@ def main() -> int:
     ap.add_argument("--rounds", type=int, default=1, help="antal varv genom matrisen")
     ap.add_argument("--no-td5", action="store_true",
                     help="hoppa över TD5-kontexten (ingen rpm/fart/batteri i loggen)")
+    ap.add_argument("--init-idle", type=float, default=0.0,
+                    help="W5 — garanterad buss-idle i ms före varje init-puls "
+                         "(ISO: 300). 0 = av. Kör 1000 för att eliminera W5 som "
+                         "variabel under felsökning.")
     ap.add_argument("--init-highs", default="25",
                     help="TiniH i ms — hur länge K-line hålls HÖG efter låg-pulsen "
                          "innan StartCommunication skickas (ISO: 25 ms ± 1). "
@@ -250,7 +256,8 @@ def main() -> int:
             say(f"\n[matris] varv {rnd}/{args.rounds} — {len(combos)} kombinationer")
             for name, functional, source, wgap, high in combos:
                 label = f"{name} · P4 {wgap*1000:.0f}ms · hög {high*1000:.0f}ms"
-                slabs = try_init(transport, name, functional, source, wgap, high)
+                slabs = try_init(transport, name, functional, source, wgap, high,
+                                 args.init_idle / 1000)
                 results.append((label, "TRÄFF" if slabs else "tyst"))
                 if slabs is not None:
                     hold(slabs, args.hold)
