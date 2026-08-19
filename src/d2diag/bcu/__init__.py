@@ -1,8 +1,9 @@
-"""BCU-lagret (Valeo, immobiliser/centralelektronik) — meny-data först.
+"""BCU-lagret (Valeo, immobiliser/centralelektronik) — **read-only**.
 
-Protokoll-lagret byggs efter BCU-sniff (EKA + market/DRL). Se
-``references/bcu_sniff_plan.md`` och ``references/reference_tool_master_menu.md``.
+Adress 0x40 via 5-baud slow init (kandidat, se :mod:`d2diag.bcu.bcu`), oadresserad
+session, EKA-kod via ``21 CC``. Menydata i :mod:`d2diag.bcu.menu`.
 """
+from .bcu import BCU_ADDRESS, EKA_LID, Bcu
 from .menu import BCU_MENU
 
-__all__ = ["BCU_MENU"]
+__all__ = ["BCU_MENU", "BCU_ADDRESS", "EKA_LID", "Bcu"]

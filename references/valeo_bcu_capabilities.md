@@ -47,3 +47,26 @@ K-line-bussen, så den är central för hur övriga moduler nås.
 ## Kvarvarande lucka
 Adress + init-typ + tjänstebytes för BCU är okända → bussavsökning/research, samma
 mönster som SLABS. Se `d2_diagnostic_overview.md`.
+
+## Protokoll — vad vi vet inför första uppkopplingen (2026-08-19)
+
+| Sak | Värde | Konfidens |
+|---|---|---|
+| Diagnosadress | `0x40` | **kandidat** — svarar på 5-baud slow init med tändningen AV, och BCU:n är enda permanent matade D2-modulen |
+| Init | **5-baud slow init**, KWP2000-keybytes `E5 8F`, `~addr` 0xBF | belagt ur `logs/slow_sweep-*.log` (2/3 kompletta handskakningar) |
+| Sessionsramar | oadresserade `<len> <SID> <data…> <cs>` | belagt ur sniff 2026-08-09 |
+| Keepalive | `02 3E 01 41` — **med sub-byte**, till skillnad från SLABS | belagt ur sniff |
+| **EKA-kod** | **`21 CC`** | belagt — ramen skickades exakt en gång under markören "read set eka" |
+| Inputs-svep | `21 D8`–`21 E9`, `21 2C`, `21 2D` | belagt ur sniff |
+| Settings | `21 C6, C7, CA, CB, CE, D3, D4, D5, D6, D7, EB` | belagt ur sniff |
+| SecurityAccess | `27 01` seed → `27 02` key | observerat tidigt i sessionen; **oklart om `21 CC` kräver det**, och seed→key-algoritmen är okänd |
+| EKA-svarets format | fyra siffror 1–16, kodning **okänd** | sniffens svar var trasigt (KKL som passiv tapp lastar bussen) |
+
+**Anslutningsprocedur:** BCU:n går in i diagnostikläge vid en **tändningsövergång**
+— reference tool ber operatören slå av tändningen, trycka en tangent, och slå på
+den igen. `tools/bcu_probe.py` guidar genom samma sekvens.
+
+**Nästa steg:** kör `tools/bcu_probe.py --expect <känd kod>`. Med facit i hand
+söker skriptet koden i råsvaret och avgör kodningen (en siffra per byte, eller två
+per byte) i stället för att gissa. ⚠️ Koden skickas som argument och lagras aldrig
+här — repot är publikt.
