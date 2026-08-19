@@ -1,5 +1,6 @@
 """CSV live-data logger (web/logger.py::CsvLogger) + server start/stop commands."""
 import csv
+import pathlib
 
 from d2diag.web.logger import CsvLogger
 
@@ -94,3 +95,27 @@ def test_csv_commands_do_not_queue_behind_the_poller(tmp_path):
         assert srv.enqueue_command({"action": "stop_csv"})["ok"] and srv._csv is None
     finally:
         srv.server_close()
+
+
+def test_csv_rotates_to_a_new_file_on_module_switch(tmp_path):
+    # Kolumnerna låses vid första datan. Byter man modul tillhör de fel modul och
+    # varje rad blir tom — 446 rader TD5-kolumner utan ett enda höjdvärde
+    # (bilen 2026-08-19). Nu roteras filen istället, en per modul.
+    from d2diag.web.logger import CsvLogger
+
+    p = tmp_path / "livedata-20260819-101325.csv"
+    log = CsvLogger(str(p))
+    log.log({"module": "motor", "status": "connected",
+             "signals": {"rpm": {"v": 800, "u": "rpm"}}})
+    first = log.path
+    log.log({"module": "slabs", "status": "connected",
+             "signals": {"height_left": {"v": 149, "u": ""}}})
+    log.log({"module": "slabs", "status": "connected",
+             "signals": {"height_left": {"v": 150, "u": ""}}})
+
+    assert log.path != first and log.path.endswith("-slabs.csv")
+    motor_rows = pathlib.Path(first).read_text().strip().splitlines()
+    slabs_rows = pathlib.Path(log.path).read_text().strip().splitlines()
+    assert "rpm (rpm)" in motor_rows[0] and len(motor_rows) == 2
+    assert "height_left" in slabs_rows[0] and len(slabs_rows) == 3   # header + 2 rader
+    assert "149" in slabs_rows[1] and "150" in slabs_rows[2]

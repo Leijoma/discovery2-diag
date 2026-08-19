@@ -72,6 +72,7 @@ class CsvLogger:
         self.path = path
         self.rows = 0
         self._columns: "list[str] | None" = None  # signal names, set on first data row
+        self._module: "str | None" = None  # which module the locked columns belong to
         directory = os.path.dirname(path)
         if directory:
             os.makedirs(directory, exist_ok=True)
@@ -87,10 +88,16 @@ class CsvLogger:
 
     def log(self, snapshot: "dict") -> None:
         signals = snapshot.get("signals") or {}
+        module = snapshot.get("module")
+        if self._columns is not None and module != self._module:
+            # Modulbyte: de låsta kolumnerna tillhör den gamla modulen, så varje rad
+            # skulle bli tom. Rotera till en egen fil per modul i stället.
+            self._rotate(module)
         if self._columns is None:
             if not signals:
                 return  # wait for real data before locking the header
             self._columns = sorted(signals)
+            self._module = module
             with open(self.path, "a", newline="", encoding="utf-8") as f:
                 csv.writer(f).writerow(self._header(signals))
         ts = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
@@ -102,6 +109,15 @@ class CsvLogger:
         with open(self.path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(line)
         self.rows += 1
+
+    def _rotate(self, module: "str | None") -> None:
+        """Börja en ny fil för en ny modul: ``…-<modul>.csv``. Radräknaren fortsätter
+        (den räknar loggade rader, inte rader per fil)."""
+        base = self.path[:-4] if self.path.endswith(".csv") else self.path
+        base = base.rsplit("-", 1)[0] if self._module and base.endswith(f"-{self._module}") else base
+        self.path = f"{base}-{module or 'unknown'}.csv"
+        self._columns = None
+        self._module = None
 
     def status(self) -> "dict":
         return {"recording": True, "file": os.path.basename(self.path), "rows": self.rows}

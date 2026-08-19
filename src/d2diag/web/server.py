@@ -355,9 +355,36 @@ class DiagServer(ThreadingHTTPServer):
         self._last_conn_status: "tuple | None" = None  # (modul, status) — se _log_conn_transition
         self._last_conn_error: "str | None" = None
         self._last_phase_logged: "str | None" = None  # dedupe av identiska progress-rader
+        # Senast kända motorkontext (rpm/fart/batteri) från TD5. K-line är en delad
+        # buss så vi kan inte läsa motorn medan SLABS är aktiv — men SLABS-försök
+        # föregås nästan alltid av en TD5-session, och då är värdena sekunder gamla.
+        # Utan detta går det inte att i efterhand se om ett tyst initförsök gjordes
+        # i rörelse (SLABS vägrar comms >8–20 km/h) eller på tomgång.
+        self._engine: "dict | None" = None
         self._stop = threading.Event()
         self._commands: "queue.Queue" = queue.Queue()
         self._poller = threading.Thread(target=self._poll_loop, daemon=True)
+
+    def _remember_engine(self, snap: "dict") -> None:
+        """Spara rpm/fart/batteri från en TD5-snapshot (till _engine_note)."""
+        sig = snap.get("signals") or {}
+        if not {"rpm", "battery"} <= set(sig):
+            return
+        self._engine = {
+            "rpm": sig["rpm"].get("v"), "battery": sig["battery"].get("v"),
+            "speed": (sig.get("speed") or {}).get("v"), "t": time.monotonic(),
+        }
+
+    def _engine_note(self) -> str:
+        """`· motor: rpm 761, 0 km/h, 13.9 V (12s sedan)` — tom om vi inget vet."""
+        e = self._engine
+        if not e:
+            return ""
+        age = time.monotonic() - e["t"]
+        if age > 600:  # äldre än 10 min säger inget om nuläget
+            return ""
+        speed = "?" if e["speed"] is None else f"{e['speed']:.0f} km/h"
+        return f" · motor: rpm {e['rpm']:.0f}, {speed}, {e['battery']:.1f} V ({age:.0f}s sedan)"
 
     def _connect_sleep(self, seconds: float) -> None:
         """Sleep som etableringen använder — avbryts av ett köat kommando.
@@ -411,7 +438,8 @@ class DiagServer(ThreadingHTTPServer):
         kväll 2026-08-18), vilket dränker de rader man faktiskt felsöker med.
         """
         if phase != self._last_phase_logged:
-            self._conn_log(f"establish: {phase}")
+            ctx = self._engine_note() if phase.startswith("sending init") else ""
+            self._conn_log(f"establish: {phase}{ctx}")
             self._last_phase_logged = phase
         self.latest = {
             **self.latest,
@@ -639,6 +667,7 @@ class DiagServer(ThreadingHTTPServer):
             snap["logging"] = self._csv.status() if self._csv is not None else {"recording": False}
             snap["public"] = self._public  # UI förenklas i publikt läge
             snap["fault_watch"] = self._fault_watch  # snabb fel-pollning på/av
+            self._remember_engine(snap)      # spara motorkontext för SLABS-loggen
             self._log_conn_transition(snap)  # logga connected/error-övergångar
             self.latest = snap
             if self.logger is not None:

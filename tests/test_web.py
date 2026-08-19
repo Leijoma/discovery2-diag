@@ -596,3 +596,23 @@ def test_repeated_connect_phase_is_logged_once(tmp_path):
     finally:
         srv.server_close()
     assert len(lines) == 2
+
+
+def test_init_lines_carry_the_last_known_engine_context(tmp_path):
+    # K-line är delad: vi kan inte läsa motorn medan SLABS är aktiv. Utan den
+    # senast kända kontexten går det inte att i efterhand se om ett tyst
+    # initförsök gjordes i rörelse (SLABS vägrar comms >8–20 km/h) eller stilla.
+    from d2diag.web.server import DiagServer
+    from d2diag.web.sources import MockDataSource
+
+    srv = DiagServer(MockDataSource(), host="127.0.0.1", port=0, csv_dir=str(tmp_path))
+    try:
+        srv._remember_engine({"signals": {
+            "rpm": {"v": 761.0}, "battery": {"v": 13.93}, "speed": {"v": 0.0}}})
+        srv._connect_progress("sending init (try 1/3)")
+        srv._connect_progress("waiting for the bus to settle")   # ingen kontext här
+        lines = (tmp_path / "connection.log").read_text().strip().splitlines()
+    finally:
+        srv.server_close()
+    assert "motor: rpm 761, 0 km/h, 13.9 V" in lines[0]
+    assert "motor:" not in lines[1]
