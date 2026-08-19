@@ -13,7 +13,30 @@ _Skriven 2026-08-19. Fristående — förutsätter ingen kännedom om vår kodba
 - Referensmaterial: passiva sniffar (ESP32, RX-only på stift 7) av ett kommersiellt
   verktyg som kör hela funktionsuppsättningen mot bilen.
 
-## Problemet i en mening
+## ✅ LÖST 2026-08-19 kl 17:26 — orsaken var vår egen init-puls
+
+Dokumentet skrevs medan problemet var öppet. Det står kvar som dokumentation av
+felsökningen, men **orsaken är hittad och åtgärdad**:
+
+Vår TiniH (höga perioden mellan låg-pulsen och StartCommunication) var **~32 ms
+i stället för 25 ± 1**, av två skäl: UART-stoppbiten efter puls-byten (~2,8 ms)
+räknades inte, och `time.sleep(25 ms)` överskjuter till 25,3–32,0 ms (median 29,1)
+på macOS. Med stoppbiten avdragen och en spinnande väntan i stället för `sleep`:
+
+| | Träffkvot per initförsök |
+|---|---|
+| Före (TiniH ~32 ms) | 3/32 = **9 %** |
+| Efter (TiniH 25,00 ± 0,01 ms) | 6/11 = **55 %** |
+
+Fishers exakta test: **p = 0,007**. Fem körningar i rad gav träff, varje gång på
+första eller andra försöket — och tre av dem på `81 29 F7 81 22`, alltså exakt
+den ram vi kört hela tiden. **Adressläget var aldrig problemet.**
+
+Slutsatsen är den hypotes som föreslogs vid granskning: en Wabco-modul har ett
+smalare toleransfönster för fast-init-timing än TD5:ans Lucas-ECU, som accepterade
+vår felaktiga puls utan protest.
+
+## Problemet som det såg ut (historik)
 
 **TD5 kopplar upp på första försöket i stort sett varje gång. SLABS svarar på
 ungefär 1 av 10 initförsök — men när den väl svarar är sessionen helt stabil.**
