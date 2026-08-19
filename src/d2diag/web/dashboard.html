@@ -51,6 +51,8 @@
         white-space:pre-line; box-shadow:0 6px 24px rgba(0,0,0,.35); pointer-events:none;
         opacity:0; transition:opacity .1s; }
   #tt.show { opacity:1; }
+  .row.dim { background:transparent; }
+  .row.dim .n, .row.dim .val, .row.dim .exp, .row.dim .u { color:var(--muted); opacity:.45; }
   /* buttons */
   .btns { display:flex; flex-wrap:wrap; gap:8px; }
   .btn { flex:1; min-width:calc(50% - 4px); padding:13px 10px; border-radius:11px; border:1px solid var(--line);
@@ -576,7 +578,8 @@
         if(reveal && s) val = (n==="any_door") ? (s.v?"open":"closed") : fmt(s.v);
         const unit = (n==="any_door") ? "" : (reveal ? (s?(s.u||""):(f.u||"")) : "");
         const tip = tipFor(n, s, f).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/\n/g,"&#10;");
-        return `<div class="row" data-tip="${tip}"><span class="n">${LABELS[n]||n}${badge}`
+        const dim = reveal ? "" : " dim";
+        return `<div class="row${dim}" data-tip="${tip}"><span class="n">${LABELS[n]||n}${badge}`
              + ` <span class="info">ⓘ</span></span>`
              + `<span class="val${cls}">${val} <span class="u">${unit}</span></span></div>`;
       }).join("");
