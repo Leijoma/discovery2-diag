@@ -207,3 +207,36 @@ class Slabs(EcuSession):
         `31 22 <sub> <mask> c1 f4` + 8 nollbyte (belagt ur sniff)."""
         sub, mask = self._WHEEL[corner]
         self.start_routine(RID_ABS_TEST, bytes([sub, mask, 0xc1, 0xf4]) + bytes(8))
+
+    # ---- ABS-luftning (belagt ur sniff 2026-08-07) ------------------------- #
+    # Två procedurer under RID_ABS_TEST (0x22), skilda från hjul-ventiltestet ovan:
+    #   * POWER BLEED — kör ABS-pumpen så vätska trycks genom modulatorn.
+    #       start `31 22 04 00 49 c4 …`, stop `31 22 04 00 40 00 …`
+    #   * MODULE BLEED — cyklar modulatorns kretsar 0x11→0x14 i sekvens,
+    #       varje steg `31 22 <sub> 00 c0 7d 00 bb …` (~2,3 s mellan i sniffen).
+    def abs_power_bleed(self, on: bool = True) -> None:
+        """⚠️ ABS POWER BLEED — kör pumpen för att trycka bromsvätska genom
+        modulatorn. ``on`` startar (`04 00 49 c4`), ``on=False`` stoppar
+        (`04 00 40 00`). Bromssystem — endast stillastående, se säkerhetsnoter."""
+        tail = b"\x00\x49\xc4" if on else b"\x00\x40\x00"
+        self.start_routine(RID_ABS_TEST, bytes([0x04]) + tail + bytes(8))
+
+    _BLEED_STEPS = (0x11, 0x12, 0x13, 0x14)  # modulatorkretsar i sniffens ordning
+
+    def abs_module_bleed_step(self, step: int) -> None:
+        """⚠️ Ett steg i MODULE BLEED (``step`` 1–4 → sub 0x11–0x14).
+        `31 22 <sub> 00 c0 7d 00 bb` + 6 nollbyte. Bromssystem — stillastående."""
+        if not 1 <= step <= 4:
+            raise ValueError("step måste vara 1–4")
+        sub = self._BLEED_STEPS[step - 1]
+        self.start_routine(RID_ABS_TEST, bytes([sub, 0x00, 0xc0, 0x7d, 0x00, 0xbb]) + bytes(6))
+
+    def abs_module_bleed(self, sleep: "Callable[[float], None] | None" = None,
+                         gap: float = 2.3) -> None:
+        """⚠️ Hela MODULE BLEED-sekvensen: fyra steg 0x11→0x14 med ``gap`` s emellan
+        (reference tools takt i sniffen). Bromssystem — stillastående, tändning på."""
+        _sleep = sleep or time.sleep
+        for step in range(1, 5):
+            self.abs_module_bleed_step(step)
+            if step < 4:
+                _sleep(gap)

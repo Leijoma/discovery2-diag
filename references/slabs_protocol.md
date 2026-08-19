@@ -398,3 +398,18 @@ taket. Batteri/ECU-supply (21 44 byte12/13) är starkast — de varierar och mat
 **Nästa steg för full avkodning:** riktade differential-captures — ändra EN sak
 (öppna en switch, lyft en hörna, mät en spänning) och jämför råbytesen före/efter.
 Kör `analyze_capture.py --variance <logg>` för kandidaterna direkt.
+
+### ABS-luftning — kompletta frames (belagt ur sniff 2026-08-07, kodat)
+Två procedurer under `31 22`, skilda från hjul-ventiltestet (`31 22 <sub> <mask> c1 f4`):
+
+| Kommando | Frame (data efter `31 22`) | Kod |
+|---|---|---|
+| Power bleed START | `04 00 49 c4` + 8×00 | `Slabs.abs_power_bleed(True)` |
+| Power bleed STOP | `04 00 40 00` + 8×00 | `Slabs.abs_power_bleed(False)` |
+| Module bleed steg 1 | `11 00 c0 7d 00 bb` + 6×00 | `abs_module_bleed_step(1)` |
+| Module bleed steg 2 | `12 00 c0 7d 00 bb` + 6×00 | `abs_module_bleed_step(2)` |
+| Module bleed steg 3 | `13 00 c0 7d 00 bb` + 6×00 | `abs_module_bleed_step(3)` |
+| Module bleed steg 4 | `14 00 c0 7d 00 bb` + 6×00 | `abs_module_bleed_step(4)` |
+
+`abs_module_bleed()` kör alla fyra i sekvens med ~2,3 s emellan (reference tools
+takt). Alla svarar `71 22 20`. ⚠️ Bromssystem — endast stillastående, tändning på.

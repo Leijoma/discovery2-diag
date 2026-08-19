@@ -208,3 +208,53 @@ def test_establish_falls_back_to_physical_on_later_tries():
         slabs.establish(attempts=3, sleep=lambda *_: None)
     sent = [f.hex(" ") for f in ecu.sent if len(f) == 5]
     assert sent == ["c1 29 f1 81 5c", "c1 29 f7 81 62", "81 29 f7 81 22"]
+
+
+class _RoutineEcu(FakeKLineEcu):
+    """Ekar sända ramar och svarar 71 22 20 på ALLA 31 22-rutiner (params varierar)."""
+    def send(self, data):
+        data = bytes(data); self.sent.append(data); self._rx.extend(data)  # eko
+        # ramen är <len><31 22 …><cs>; svara alltid med 71 22 20 (ack, ingen data)
+        from d2diag.kline import encode
+        self._rx.extend(encode(b"\x71\x22\x20", addressed=False))
+        return len(data)
+
+
+def _slabs_capture():
+    from d2diag.kline import KLine
+    from d2diag.kwp2000 import KWP2000
+    from d2diag.slabs import SLABS_ADDRESS, Slabs
+    ecu = _RoutineEcu()
+    return ecu, Slabs(KWP2000(KLine(ecu, target=SLABS_ADDRESS), tolerant=True))
+
+
+def test_abs_power_bleed_frames_match_the_sniff():
+    from d2diag.kline import encode
+    from tests.fakes import FakeKLineEcu  # noqa: F401 (används av _RoutineEcu)
+    ecu, slabs = _slabs_capture()
+    with slabs:
+        slabs.abs_power_bleed(True)
+        slabs.abs_power_bleed(False)
+    # 31 22 04 00 49 c4 + 8 nollor (start), 31 22 04 00 40 00 + 8 (stop) — belagt 2026-08-07
+    start = encode(bytes.fromhex("31 22 04 00 49 c4".replace(" ","")) + bytes(8), addressed=False)
+    stop  = encode(bytes.fromhex("31 22 04 00 40 00".replace(" ","")) + bytes(8), addressed=False)
+    assert start in ecu.sent and stop in ecu.sent
+
+
+def test_abs_module_bleed_steps_through_0x11_to_0x14():
+    from d2diag.kline import encode
+    ecu, slabs = _slabs_capture()
+    with slabs:
+        slabs.abs_module_bleed(sleep=lambda *_: None)
+    for sub in (0x11, 0x12, 0x13, 0x14):
+        frame = encode(bytes([0x31, 0x22, sub, 0x00, 0xc0, 0x7d, 0x00, 0xbb]) + bytes(6),
+                       addressed=False)
+        assert frame in ecu.sent, f"saknar module-bleed-steg 0x{sub:02x}"
+
+
+def test_abs_module_bleed_step_validates_range():
+    import pytest
+    ecu, slabs = _slabs_capture()
+    with slabs:
+        with pytest.raises(ValueError):
+            slabs.abs_module_bleed_step(5)

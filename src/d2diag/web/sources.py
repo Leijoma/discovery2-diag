@@ -344,6 +344,8 @@ _SLABS_ACTUATORS = {
     "lower_left": "Lower left", "lower_right": "Lower right",
     "wheel_fl": "Valve test FL", "wheel_fr": "Valve test FR",
     "wheel_rl": "Valve test RL", "wheel_rr": "Valve test RR",
+    "bleed_power_on": "ABS power bleed — start", "bleed_power_off": "ABS power bleed — stop",
+    "bleed_module": "ABS module bleed (4-step sequence)",
 }
 
 
@@ -365,6 +367,12 @@ def _slabs_do(slabs, action: str) -> None:
         slabs.lower_corner(action.split("_", 1)[1])
     elif action.startswith("wheel_"):
         slabs.wheel_test(action.split("_", 1)[1])
+    elif action == "bleed_power_on":
+        slabs.abs_power_bleed(True)
+    elif action == "bleed_power_off":
+        slabs.abs_power_bleed(False)
+    elif action == "bleed_module":
+        slabs.abs_module_bleed()
     else:
         raise ValueError(f"unknown command: {action}")
 
