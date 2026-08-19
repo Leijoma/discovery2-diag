@@ -108,7 +108,7 @@ def engine_context(transport, sleep_after: float) -> "dict | None":
 
 
 def try_init(transport, name: str, functional: bool, source: int,
-             write_gap: float = 0.0) -> "Slabs | None":
+             write_gap: float = 0.0, init_high: float = 0.025) -> "Slabs | None":
     """Ett enda initförsök med en given variant. Returnerar en levande Slabs eller None.
 
     ``write_gap`` är P4 — inter-byte-tiden i vår förfrågan. ISO 14230-2 anger
@@ -117,21 +117,24 @@ def try_init(transport, name: str, functional: bool, source: int,
     första försöket och vi behöver flera.
     """
     frame = encode(b"\x81", SLABS_ADDRESS, source, addressed=True, functional=functional)
-    gaptxt = "" if not write_gap else f" · P4 {write_gap*1000:.0f} ms"
-    say(f"  → {name}{gaptxt}: {frame.hex(' ')}")
-    kwp = KWP2000(KLine(transport, target=SLABS_ADDRESS, write_gap=write_gap), tolerant=True)
+    tags = ("" if not write_gap else f" · P4 {write_gap*1000:.0f}ms") + \
+           ("" if abs(init_high - 0.025) < 1e-9 else f" · hög {init_high*1000:.0f}ms")
+    say(f"  → {name}{tags}: {frame.hex(' ')}")
+    kline = KLine(transport, target=SLABS_ADDRESS, write_gap=write_gap, init_high=init_high)
+    kwp = KWP2000(kline, tolerant=True)
     slabs = Slabs(kwp)
     try:
         c1 = kwp.start_communication(tolerant=True, functional=functional, source=source)
     except KLineTimeout as exc:
-        say(f"     tyst ({exc})")          # bussen svarade inte — ett giltigt mätvärde
+        # Visa vad pulsen FAKTISKT blev — nominella värden säger inget om en USB-port.
+        say(f"     tyst · puls {kline.last_pulse} ({exc})")
         return None
     except Exception as exc:  # noqa: BLE001
         # Allt annat är VÅRT fel (stängd port, trasig kabel). Det får aldrig
         # rapporteras som "tyst" — då tolkas ett testfel som ett modulsvar.
         say(f"     ✗ LOKALT FEL, inget skickades: {type(exc).__name__}: {exc}")
         raise
-    say(f"     C1! {c1[:4].hex(' ')}")
+    say(f"     C1! {c1[:4].hex(' ')} · puls {kline.last_pulse}")
     # Kvittens: reference tool skickar alltid 1A 8A först — och svaret skiljer en
     # riktig session från ett C1 som bara låg i bruset.
     try:
@@ -190,6 +193,10 @@ def main() -> int:
     ap.add_argument("--rounds", type=int, default=1, help="antal varv genom matrisen")
     ap.add_argument("--no-td5", action="store_true",
                     help="hoppa över TD5-kontexten (ingen rpm/fart/batteri i loggen)")
+    ap.add_argument("--init-highs", default="25",
+                    help="TiniH i ms — hur länge K-line hålls HÖG efter låg-pulsen "
+                         "innan StartCommunication skickas (ISO: 25 ms ± 1). "
+                         "Kommaseparerat för att svepa, t.ex. 15,25,35.")
     ap.add_argument("--write-gaps", default="0,5",
                     help="P4-värden att testa i ms (default 0,5). 0 = hela ramen i ett "
                          "svep som hittills, 5 = muki01:s inter-byte-fördröjning.")
@@ -235,14 +242,15 @@ def main() -> int:
             return 1
 
         wgaps = [float(g) / 1000 for g in args.write_gaps.split(",") if g.strip()]
+        highs = [float(h) / 1000 for h in args.init_highs.split(",") if h.strip()]
         for rnd in range(1, args.rounds + 1):
-            combos = [(n, f, s, w) for (n, f, s) in VARIANTS for w in wgaps]
+            combos = [(n, f, s, w, h) for (n, f, s) in VARIANTS for w in wgaps for h in highs]
             if args.order == "shuffle":
                 rng.shuffle(combos)
             say(f"\n[matris] varv {rnd}/{args.rounds} — {len(combos)} kombinationer")
-            for name, functional, source, wgap in combos:
-                label = f"{name} · P4 {wgap*1000:.0f}ms"
-                slabs = try_init(transport, name, functional, source, wgap)
+            for name, functional, source, wgap, high in combos:
+                label = f"{name} · P4 {wgap*1000:.0f}ms · hög {high*1000:.0f}ms"
+                slabs = try_init(transport, name, functional, source, wgap, high)
                 results.append((label, "TRÄFF" if slabs else "tyst"))
                 if slabs is not None:
                     hold(slabs, args.hold)

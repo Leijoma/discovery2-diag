@@ -47,6 +47,8 @@ class KLine:
         timeout: float = 1.0,
         echo: bool = True,
         write_gap: float = 0.0,
+        init_low: float = _FAST_INIT_LOW,
+        init_high: float = _FAST_INIT_HIGH,
     ) -> None:
         self._t = transport
         self._target = target
@@ -58,6 +60,15 @@ class KLine:
         # emellan. Vi har alltid skickat hela ramen i ett svep (~1 ms/byte vid
         # 10400 baud), vilket en strikt ECU kan vägra parsa. 0.0 = gammalt beteende.
         self.write_gap = write_gap
+        # ISO 14230-2 fast init: TiniL = 25 ms ± 1 låg, sedan 25 ms ± 1 hög, sedan
+        # StartCommunication. Låg-pulsen är hårdvarutimad (baud-drop), men den HÖGA
+        # perioden är time.sleep() och det som händer efteråt — flush + USB-write —
+        # ligger utanför vår kontroll. En FTDI/CH340 buffrar dessutom med sin
+        # latency timer (default 16 ms), så den faktiska tiden till första byten kan
+        # bli 25–45 ms i stället för 25. Därav justerbart, och mätt: se last_pulse.
+        self.init_low = init_low
+        self.init_high = init_high
+        self.last_pulse: "dict" = {}
         self._rxbuf = bytearray()  # kvarvarande bytes mellan ramar (resync)
 
     # ---- livscykel ---------------------------------------------------- #
@@ -76,22 +87,31 @@ class KLine:
 
     # ---- init --------------------------------------------------------- #
     def _fast_init_pulse(self) -> None:
-        """Den fysiska init-pulsen: linjen låg 25 ms, sedan hög 25 ms."""
+        """Den fysiska init-pulsen: linjen låg ``init_low``, sedan hög ``init_high``.
+
+        Mäter vad som FAKTISKT hände (``last_pulse``) — nominella värden säger inget
+        om en USB-serieport där drivrutin och OS lägger på egen fördröjning.
+        """
+        t0 = time.perf_counter()
         self._flush_input()
         # Deterministisk låg-puls: föredra baud-drop (0x00 @ ~360 baud) framför
         # OS-timad break, vars längd jittrar på icke-realtids-OS och gör att Td5:an
         # aldrig går in i diag-läge (03 7F 81 10 = generalReject).
         pulse = getattr(self._t, "fast_init_low", None)
         if pulse is not None:
-            pulse(_FAST_INIT_LOW)
+            pulse(self.init_low)
         else:
             send_break = getattr(self._t, "send_break", None)
             if send_break is None:
                 raise KLineError(
                     "transporten saknar fast_init_low()/send_break() — krävs för fast init"
                 )
-            send_break(_FAST_INIT_LOW)
-        time.sleep(_FAST_INIT_HIGH)  # K-line hög innan StartCommunication
+            send_break(self.init_low)
+        t1 = time.perf_counter()
+        time.sleep(self.init_high)  # K-line hög innan StartCommunication
+        t2 = time.perf_counter()
+        self.last_pulse = {"low_ms": round((t1 - t0) * 1000, 1),
+                           "high_ms": round((t2 - t1) * 1000, 1)}
 
     def fast_init(self, start_communication: bytes = DEFAULT_START_COMMUNICATION) -> bytes:
         """Kör fast init (adresserad StartCommunication) och returnerar svarets
@@ -116,11 +136,14 @@ class KLine:
         annars öppnar sessionen upprepat och låser ECU:n (``7F`` generalReject).
         """
         self._fast_init_pulse()
+        t_send = time.perf_counter()
         frame = encode(start_communication, self._target,
                        self._source if source is None else source,
                        addressed=True, functional=functional)
         raw = self.converse(start_communication, addressed=True,
                             functional=functional, source=source)
+        # Tiden från pulsens slut tills ramen är ute säger hur mycket USB/OS lade på.
+        self.last_pulse["to_frame_ms"] = round((time.perf_counter() - t_send) * 1000, 1)
         # HOPPA ÖVER EKOT innan vi söker C1. Halv-duplex ekar allt vi sänder, och
         # en FUNKTIONELL ram börjar själv på 0xC1 — utan detta hittar sökningen
         # vårt eget eko och rapporterar "session established" på tomma bussen
