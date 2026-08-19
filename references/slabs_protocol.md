@@ -118,9 +118,19 @@ en variant i taget med 30 s tystnad emellan, kvittens via `1A 8A`):
 | 13:46 | 13,80 V | igång | TRÄFF → **fysisk/F7** (första försöket) |
 | 13:47 | 12,28 V | av | tyst |
 
-**Motorn igång: 3 träffar av 4. Motorn av: 1 av 4.** Spänningen överlappar
-(träffar 12,11–13,80 V, missar 11,83–13,66 V) så det är ingen skarp tröskel — men
-motorstatus är den klart starkaste faktorn vi mätt.
+**Motorn igång: 3 träffar av 4. Motorn av: 1 av 4.**
+
+Konfidens: **KANDIDAT, inte belagt.** n=8 är för litet, intervallen överlappar
+(träffar 12,11–13,80 V, missar 11,83–13,66 V) och det finns motexempel åt båda
+håll — 13:25 misslyckades med motorn igång, 13:28 lyckades med motorn av. Vad vi
+har är den starkaste korrelationen vi mätt, inte en fastställd orsak. Mekanismen
+är helt öppen: det kan vara matningsspänning, men lika gärna att modulen är vaken
+och nivåreglerar när motorn går och går i viloläge när bilen står parkerad.
+
+**Så här blir det belagt:** kör proben ~10 gånger i varje motorläge i blandad
+ordning (så tid och temperatur inte sammanfaller med tillståndet), och mät
+helst SLABS egen matning på C0504 stift 1/2 samtidigt — TD5:s batterivärde är
+bara en proxy för vad modulen faktiskt ser.
 
 ⚠️ **Adressläget är INTE avgörande.** Alla tre varianter har vunnit minst en gång,
 och vid 13,80 V tog reference tools egen fysiska init (`81 29 F7 81`) på första
@@ -128,8 +138,8 @@ försöket. En tidigare notering här hävdade att adressläget var skillnaden �
 byggde på en enda körning och var fel. `_init_variants` växlar ändå mellan
 lägena: det kostar inget och ger fler chanser per cykel.
 
-**Praktisk regel: kör motorn när du pratar med SLABS.** Det är också modulens
-normala driftfall (SLS nivåreglerar med motorn igång).
+**Arbetsregel (inte en fastställd sanning): kör motorn när du pratar med SLABS.**
+Den ger bäst odds i det vi mätt, och det är modulens normala driftfall.
 
 ⚠️ **Ekot ser ut som ett svar i funktionellt läge.** Ramen börjar själv på `0xC1`,
 och halv-duplex ekar allt vi sänder. En naiv sökning efter `0xC1` i bursten hittar
@@ -137,8 +147,9 @@ vårt eget eko och rapporterar uppkoppling på tom buss (`C1! c1 29 f1 81`).
 `fast_init_tolerant` hoppar därför över ekot innan den söker — och `1A 8A`-
 kvittensen fångar resten.
 
-**Stabiliteten är löst.** Båda 120-sekundersperioderna gav 95/95 lyckade
-läsningar, noll tappade, på 1 Hz.
+**Stabiliteten ser löst ut:** tre hållperioder (2026-08-19 13:29, 13:40, 13:44)
+gav 95/95, 95/95 respektive 71/71 lyckade läsningar på 1 Hz — noll tappade. Det
+är starkt men fortfarande n=3, och alla under samma eftermiddag.
 
 `0xC1` = funktionellt adressläge (bit 7-6 = 11) i stället för fysiskt `0x81`.
 Jakten fick svar **enbart** i funktionellt läge med `0xF1`, samma kombination som
