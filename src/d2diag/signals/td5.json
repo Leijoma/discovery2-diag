@@ -84,7 +84,7 @@
     "unit": "°C",
     "confidence": "kandidat",
     "limits": null,
-    "source": "givare EJ monterad → konstant 0x1088=150 °C (oansluten)"
+    "source": "21 1A@8; extern temp-givare. Operatören bekräftar att givaren INTE finns (labeled_captures 1a: 'ext_temp osäker finns inte motsvarande') → fältet är en spökavläsning (konstant 0x1088=150 °C). Behåll kandidat: värdet betyder inget."
   },
   {
     "name": "fuel_temp",
@@ -144,7 +144,7 @@
       0.0,
       5.1
     ],
-    "source": "21 1B@4; tredje spänningsspår, skala ej bekräftad (0 V i fångst)"
+    "source": "21 1B@4 u16/1000 V; tredje gaspedalsspår. Läser konstant 0 V i vila (session.log), operatören 'verkar korrekt' (svagare än 'korrekt'). Skala/funktion ej bekräftad vid pådrag → kandidat."
   },
   {
     "name": "accel_supply",
@@ -186,7 +186,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 1C@4; ingen MAF på tidig ROM — rått fält, tolka ej som mg"
+    "source": "21 1C@4; ingen MAF på tidig ROM → rått fält, tolka EJ som luftmassa. Kandidat."
   },
   {
     "name": "rpm_error",
@@ -196,12 +196,12 @@
     "scale": 1.0,
     "bias": 0.0,
     "unit": "rpm",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       -300,
       300
     ],
-    "source": "21 21@0 s16; idle-reglerfel"
+    "source": "21 21@0 s16; idle-reglerfel. BELAGT mot bilen (labeled_captures 21='korrekt'); varierar −10…+18 över session.log — signerad skala bekräftad, inte bara tomgångsnoll."
   },
   {
     "name": "ambient_press_1",
@@ -241,12 +241,12 @@
     "scale": 1.0,
     "bias": 0.0,
     "unit": "",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       -12,
       12
     ],
-    "source": "21 40@0 s16; cylinderbalans 1"
+    "source": "21 40@0 s16; cylinderbalans 1. BELAGT (labeled_captures 40='korrekt'); värden −6…+2 över captures."
   },
   {
     "name": "balance_2",
@@ -256,12 +256,12 @@
     "scale": 1.0,
     "bias": 0.0,
     "unit": "",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       -12,
       12
     ],
-    "source": "21 40@2 s16; cylinderbalans 2"
+    "source": "21 40@2 s16; cylinderbalans 2. BELAGT (labeled_captures 40='korrekt'); värden −6…+2 över captures."
   },
   {
     "name": "balance_3",
@@ -271,12 +271,12 @@
     "scale": 1.0,
     "bias": 0.0,
     "unit": "",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       -12,
       12
     ],
-    "source": "21 40@4 s16; cylinderbalans 3"
+    "source": "21 40@4 s16; cylinderbalans 3. BELAGT (labeled_captures 40='korrekt'); värden −6…+2 över captures."
   },
   {
     "name": "balance_4",
@@ -286,12 +286,12 @@
     "scale": 1.0,
     "bias": 0.0,
     "unit": "",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       -12,
       12
     ],
-    "source": "21 40@6 s16; cylinderbalans 4"
+    "source": "21 40@6 s16; cylinderbalans 4. BELAGT (labeled_captures 40='korrekt'); värden −6…+2 över captures."
   },
   {
     "name": "balance_5",
@@ -301,11 +301,11 @@
     "scale": 1.0,
     "bias": 0.0,
     "unit": "",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       -12,
       12
     ],
-    "source": "21 40@8 s16; cylinderbalans 5"
+    "source": "21 40@8 s16; cylinderbalans 5. BELAGT (labeled_captures 40='korrekt'); värden −6…+2 över captures."
   }
 ]

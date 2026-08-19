@@ -18,7 +18,11 @@ def test_mock_source_shape():
     assert set(d["signals"]["rpm"]) == {"v", "u", "s", "c"}   # c = confidence (trust view)
     assert d["signals"]["battery"]["u"] == "V"
     assert d["signals"]["rpm"]["c"] == "belagt"                # rpm is verified
-    assert d["signals"]["rpm_error"]["c"] == "kandidat"        # experimental → hidden in Verified view
+    # rpm_error och balance_1..5 befordrades till belagt 2026-08-19 (labeled_captures
+    # 21/40 = "korrekt", värden varierar över captures). Kvarvarande TD5-kandidater
+    # (maf_raw, accel_way3, ext_temp) emitteras inte av mocken, så confidence-
+    # filtret testas separat i test_conf_of_reads_store.
+    assert d["signals"]["rpm_error"]["c"] == "belagt"
     assert isinstance(d["faults"], list) and d["faults"]
 
 
@@ -656,3 +660,13 @@ def test_init_lines_carry_the_last_known_engine_context(tmp_path):
         srv.server_close()
     assert "motor: rpm 761, 0 km/h, 13.9 V" in lines[0]
     assert "motor:" not in lines[1]
+
+
+def test_conf_of_reads_store():
+    # Confidence-filtret (Verified/Experimental) läser storen. Efter att rpm_error
+    # och balansfälten befordrats 2026-08-19 är maf_raw en kvarvarande TD5-kandidat.
+    from d2diag.web.sources import _conf_map, _conf_of
+    conf = _conf_map("td5")
+    assert _conf_of("td5", "rpm_error", conf) == "belagt"
+    assert _conf_of("td5", "balance_3", conf) == "belagt"
+    assert _conf_of("td5", "maf_raw", conf) == "kandidat"
