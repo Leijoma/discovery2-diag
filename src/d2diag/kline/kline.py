@@ -110,12 +110,28 @@ class KLine:
         annars öppnar sessionen upprepat och låser ECU:n (``7F`` generalReject).
         """
         self._fast_init_pulse()
+        frame = encode(start_communication, self._target,
+                       self._source if source is None else source,
+                       addressed=True, functional=functional)
         raw = self.converse(start_communication, addressed=True,
                             functional=functional, source=source)
-        i = raw.find(0xC1)
-        if i < 0:
+        # HOPPA ÖVER EKOT innan vi söker C1. Halv-duplex ekar allt vi sänder, och
+        # en FUNKTIONELL ram börjar själv på 0xC1 — utan detta hittar sökningen
+        # vårt eget eko och rapporterar "session established" på tomma bussen
+        # (bilen 2026-08-19: `C1! c1 29 f1 81` = ekot, kvittensen 1A 8A föll).
+        i = raw.find(frame)
+        if i >= 0:
+            search, offset = raw[i + len(frame):], i + len(frame)
+        elif functional:
+            # Ekot glitchade. Sök ändå inte i de första bytes där det låg — ett
+            # 0xC1 där är med största sannolikhet vårt eget.
+            search, offset = raw[len(frame):], len(frame)
+        else:
+            search, offset = raw, 0   # fysiskt eko (0x8n) innehåller inget 0xC1
+        j = search.find(0xC1)
+        if j < 0:
             raise KLineTimeout(f"ingen C1 i bursten: {raw.hex(' ') or 'tom'}")
-        return raw[i:]
+        return raw[offset + j:]
 
     def slow_init(self, address: int) -> "tuple[int, int]":
         """5-baud slow init mot en modul (t.ex. SLABS — motorn använder fast init).

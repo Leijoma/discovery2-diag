@@ -69,3 +69,30 @@ def test_request_resyncs_past_leading_glitch():
     ecu = FakeKLineEcu({req: b"\xf8" + resp})
     with KLine(ecu) as k:
         assert k.request(b"\x81") == b"\x7f\x81\x10"
+
+
+def test_functional_init_does_not_mistake_its_own_echo_for_c1():
+    # En FUNKTIONELL initram börjar själv på 0xC1 (c1 29 f1 81 5c). Halv-duplex ekar
+    # den, så en naiv sökning efter 0xC1 hittar ekot och rapporterar uppkoppling på
+    # en tyst buss — exakt vad som hände i bilen 2026-08-19 ("C1! c1 29 f1 81",
+    # kvittensen 1A 8A föll direkt efteråt).
+    from d2diag.kline import KLine
+    from d2diag.kline.kline import KLineTimeout
+    from tests.fakes import FakeKLineEcu
+
+    ecu = FakeKLineEcu({})               # ekar bara, ingen ECU svarar
+    kl = KLine(ecu, target=0x29, timeout=0.05)
+    kl.open()
+    with pytest.raises(KLineTimeout):
+        kl.fast_init_tolerant(functional=True, source=0xF1)
+
+
+def test_functional_init_finds_a_real_c1_after_the_echo():
+    from d2diag.kline import KLine, encode
+    from tests.fakes import FakeKLineEcu
+
+    req = encode(b"\x81", 0x29, 0xF1, addressed=True, functional=True)
+    ecu = FakeKLineEcu({req: encode(b"\xc1\x57\x8f", addressed=False)})
+    kl = KLine(ecu, target=0x29, timeout=0.05)
+    kl.open()
+    assert kl.fast_init_tolerant(functional=True, source=0xF1).startswith(b"\xc1\x57\x8f")
