@@ -1,0 +1,468 @@
+Discovery 2 reference tool — final logging session handoff
+Scope
+
+Two final reference tool captures were made immediately before the borrowed reference tool was returned:
+
+faultread-20260809-3.log — Bosch Auto Gearbox / EAT
+faultread-20260809-4.log — mainly WABCO SLABS outputs, followed by Valeo BCU output attempts
+
+These captures should be merged into the existing protocol state, but some findings are structural only and must not yet be turned into individual output decoders.
+
+1. Bosch Auto Gearbox / EAT
+
+The final capture independently reproduced the previously observed proprietary 0x72 protocol.
+
+Read faults
+
+Observed:
+
+72 04 1E 68
+72 04 60 99 FF
+
+72 05 04 00 73
+72 09 60 01 00 00 00 00 1B
+
+72 04 1E 68
+72 04 60 99 FF
+
+reference tool then displayed:
+
+unable to perform function
+
+The actual Read Faults request is therefore very strongly confirmed as:
+
+72 05 04 00 73
+
+with ECU response:
+
+72 09 60 01 00 00 00 00 1B
+
+This is now reproducible across separate sessions.
+
+Confidence
+EAT ReadFaults command             CONFIRMED
+EAT ECU responds                   CONFIRMED
+reference tool rejects/fails UI parsing   REPRODUCIBLE
+Response payload interpretation    UNKNOWN
+
+Do not yet interpret:
+
+01 00 00 00 00
+
+as a fault count, empty fault list, or DTC structure.
+
+Clear faults
+
+Observed:
+
+72 04 05 73
+→
+72 04 60 99 FF
+
+reference tool again displayed “unable to perform function”.
+
+Therefore:
+
+EAT ClearFaults = 72 04 05 73
+
+is also effectively confirmed.
+
+The generic response:
+
+72 04 60 99 FF
+
+appears repeatedly around session/command handling and should not automatically be treated as a fault-specific acknowledgement.
+
+2. SLABS — final output/lamp attempt
+
+The final SLABS capture successfully established normal communication.
+
+Fast-init/session entry again showed:
+
+81 29 F7 81 22
+→
+C1 57 8F
+
+followed by the usual TesterPresent traffic:
+
+01 3E
+→
+7E
+
+represented in the raw passive log as:
+
+01 3E 3F 00 01 7E 7F
+
+The SLABS connection therefore worked normally.
+
+Important result: the attempted outputs did NOT generate actuator commands
+
+The operator stepped through many reference tool outputs, including:
+
+front-left inlet/outlet
+front-right inlet/outlet
+rear-left inlet/outlet
+rear-right inlet/outlet
+SLS left/right valve
+SLS exhaust valve
+ABS pump relay
+speedometer
+SLS compressor
+SLS buzzer
+TC lamp
+ABS warning lamp
+HDC warning lamp
+brake warning lamp
+SLS lamp
+offroad lamp
+HDC fault lamp
+HDC brake lamp
+
+However, during these attempts the bus contains essentially only:
+
+01 3E → 7E
+
+TesterPresent traffic.
+
+For example, during TC lamp / ABS warning / HDC warning tests there are no 31 xx StartRoutine commands at all.
+
+The reference tool UI was repeatedly noted as:
+
+inactive
+
+during this part of the capture.
+
+Conclusion
+
+The final capture gives no new SLABS actuator mappings.
+
+Do not associate the output annotations with nearby TesterPresent frames.
+
+This does not invalidate the earlier successfully captured SLABS actuator mappings such as:
+
+31 22 ...
+31 25 ...
+31 2F ...
+31 30 ...
+31 31 ...
+31 33
+31 34
+31 35
+31 36
+
+It only means the final attempt did not transmit the requested routines.
+
+The missing clean SLABS lamp-test protocol remains unresolved.
+
+3. Valeo BCU — new and important structural information
+
+The second half of faultread-20260809-4.log switched to BCU.
+
+This produced the most useful new information from the final session.
+
+BCU SecurityAccess
+
+On the first BCU connection attempt, the log contains:
+
+27 01
+→
+67 01 EB CD
+
+So the BCU returned seed:
+
+EB CD
+
+reference tool then sent:
+
+27 02 C0 10
+
+and the BCU answered:
+
+7F 27 83
+
+i.e. a negative response to SecurityAccess. The operator then noted loss/failure of communication.
+
+So we have strong confirmation of the usual sequence:
+
+27 01
+→ 67 01 <seed>
+
+27 02 <key>
+→ success or negative response
+
+For this capture:
+
+seed = EB CD
+attempted key = C0 10
+result = negative response 7F 27 83
+
+Do not infer the seed→key algorithm from this one sample.
+
+BCU restart / second SecurityAccess attempt
+
+After restart, reference tool again sends:
+
+27 01
+
+and then:
+
+27 02 4A 8A
+
+After this attempt the diagnostic session continues and WriteLocalIdentifier traffic begins.
+
+The response to the seed/key exchange is not cleanly separated in this part of the passive log, so do not mark:
+
+4A 8A
+
+as a universally valid key.
+
+What is supported is:
+
+BCU diagnostic write/output mode appears to use SecurityAccess before WriteLocalIdentifier commands.
+
+Confidence: high.
+
+4. BCU output/control banks
+
+Once the BCU session is active, the same four WriteLocalIdentifier commands appear repeatedly:
+
+3B 22 00 00 00 00
+3B 23 00 00 00 00
+3B C1 00 00 00 00
+3B C2 00 00 00 00
+
+The length-prefixed raw frames are:
+
+06 3B 22 00 00 00 00 63
+06 3B 23 00 00 00 00 64
+06 3B C1 00 00 00 00 02
+06 3B C2 00 00 00 00 03
+
+Their checksums are consistent with the normal additive KWP framing:
+
+06 + 3B + 22 = 63
+06 + 3B + 23 = 64
+06 + 3B + C1 = 102 → 02
+06 + 3B + C2 = 103 → 03
+
+Thus these are valid BCU:
+
+WriteLocalIdentifier (SID 0x3B)
+
+operations.
+
+They appear repeatedly around output attempts such as front/rear fog lights, daylight running lights and indicators.
+
+They also appear around window commands.
+
+5. Candidate BCU output-bank model
+
+The strongest structural hypothesis is:
+
+LID 22 → 32-bit diagnostic/output state bank
+LID 23 → 32-bit diagnostic/output state bank
+LID C1 → 32-bit diagnostic/output state bank
+LID C2 → 32-bit diagnostic/output state bank
+
+with wire format:
+
+3B <LID> <b0> <b1> <b2> <b3>
+
+Example:
+
+3B 22 00 00 00 00
+
+would mean writing a four-byte state to bank 22.
+
+Confidence
+SID 3B = WriteLocalIdentifier       CONFIRMED
+LIDs 22/23/C1/C2 exist              CONFIRMED
+Each carries four payload bytes     CONFIRMED
+They occur in BCU output context    HIGH
+They are output/control bitfields   STRONG HYPOTHESIS
+Individual bit mappings             UNKNOWN
+6. Critical warning: all captured BCU bank payloads are ZERO
+
+Every observed write in this final session uses:
+
+00 00 00 00
+
+for all four banks.
+
+Therefore it is not valid to map:
+
+front fog light = LID 22 bit X
+window up       = LID C1 bit Y
+etc.
+
+from this capture.
+
+The nearest annotation is not sufficient evidence.
+
+7. Likely interpretation of the zero writes
+
+The best current hypothesis is that these are reset / diagnostic override clear / inactive-state writes, not the actual activation state.
+
+Supporting observation:
+
+During front left window up, reference tool writes the four zero banks:
+
+22
+23
+C1
+C2
+
+and then later writes the same four zero banks again before the next annotated command.
+
+That pattern is consistent with something like:
+
+clear all diagnostic output overrides
+
+or:
+
+return all output banks to inactive state
+
+rather than an output-specific command.
+
+Confidence: medium/high structural hypothesis.
+
+Do not implement it as fact yet.
+
+8. Why the actual BCU “ON” writes may be missing
+
+Possible explanations supported by the capture structure, but not proven:
+
+A. reference tool sent a short activation pulse between logged frames and it was missed.
+B. The UI operation was inactive/not accepted, analogous to the SLABS tests.
+C. The four zero-bank writes are preparation/reset, while another command controls activation.
+D. reference tool normally writes one non-zero bank followed quickly by zero, but the non-zero frame was lost by the passive logger/framing.
+
+No choice between these can be made from the final capture.
+
+Claude should therefore preserve:
+
+22/23/C1/C2
+
+as candidate bank IDs, but should not create individual output decoders.
+
+9. Front fog light connection anomaly
+
+The first BCU attempt after the SLABS session failed.
+
+The log shows:
+
+27 01
+→ 67 01 EB CD
+
+27 02 C0 10
+→ 7F 27 83
+
+followed by:
+
+>>> no coms from vcar
+>>> restart
+
+After restart, the second BCU attempt proceeded far enough to produce repeated 3B writes.
+
+So BCU writes appear dependent on successfully establishing the proper diagnostic/security state.
+
+10. Final protocol-state deltas to merge
+
+Suggested state update:
+
+EAT / AUTO GEARBOX
+==================
+
+CONFIRMED:
+ReadFaults:
+  REQ 72 05 04 00 73
+  RESP 72 09 60 01 00 00 00 00 1B
+
+ClearFaults:
+  REQ 72 04 05 73
+  RESP 72 04 60 99 FF
+
+OBSERVATION:
+reference tool reports "unable to perform function" despite deterministic ECU replies.
+Repeated in independent capture.
+
+OPEN:
+72-frame structure/checksum semantics.
+Meaning of 60.
+Meaning of read-fault payload.
+Why reference tool rejects response.
+
+
+SLABS
+=====
+
+FINAL CAPTURE:
+Module/session communication valid:
+  FAST INIT 81 29 F7 81 22
+  RESP      C1 57 8F
+
+Keepalive:
+  01 3E → 7E
+
+Attempted output/lamp tests produced NO new StartRoutine traffic.
+Only TesterPresent observed.
+
+NO NEW DECODERS from final capture.
+
+Remaining unresolved:
+SLABS instrument/lamp test commands.
+
+
+BCU
+===
+
+HIGH CONFIDENCE:
+Diagnostic write/output mode uses SecurityAccess.
+
+Observed failed example:
+  27 01
+  → 67 01 EB CD
+
+  27 02 C0 10
+  → 7F 27 83
+
+Second session:
+  27 01
+  27 02 4A 8A
+  then WriteLocalIdentifier traffic appears.
+
+WRITE STRUCTURE:
+  SID = 3B
+
+Observed four 4-byte LIDs:
+  3B 22 xx xx xx xx
+  3B 23 xx xx xx xx
+  3B C1 xx xx xx xx
+  3B C2 xx xx xx xx
+
+Strong hypothesis:
+22/23/C1/C2 are BCU diagnostic-output/control banks,
+probably 32 bits each.
+
+FINAL CAPTURE PAYLOAD:
+all four banks repeatedly written as:
+  00 00 00 00
+
+Strong caution:
+DO NOT map individual outputs from annotation proximity.
+Zero writes are probably reset/disable/housekeeping writes.
+
+OPEN:
+Capture/derive non-zero bank state.
+Map individual BCU output bits.
+Determine exact seed→key algorithm.
+Determine whether output bank writes need SecurityAccess and which session.
+Bottom line
+
+Den sista reference tool-sessionen löste inte SLABS-lamptesterna, men gav två ganska värdefulla resultat:
+
+EAT-kommandona för Read/Clear Faults är nu reproducerade och kan betraktas som bekräftade, trots reference tools eget felmeddelande.
+
+Och ännu viktigare för BCU: vi har nu starkt stöd för att dess diagnostic-outputmekanism använder SecurityAccess + 3B WriteLocalIdentifier mot fyra fyrbytesbanker 22, 23, C1, C2. Själva bitmappningen återstår, eftersom den enda state vi fångade var 00000000.
+
+Det är den del jag skulle be Claude lägga in i protokollbiblioteket som structural/high-confidence, men uttryckligen inte som färdiga output-decoders.

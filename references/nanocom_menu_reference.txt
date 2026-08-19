@@ -1,0 +1,127 @@
+this is what the reference tool emulator includes. 
+modules:
+TD5
+Motronic (seems to require an unlock code on my device)
+SLABS
+VALEO BCU
+ACE
+D2 AUTOGEARBOX
+Airbag
+
+
+each module has submenues
+faults
+-read faults
+- clear faults
+settings
+- read settings
+- write settings
+inputs
+outputs
+-a list of valves and lamps you can turn on and off
+utility
+- module specific things
+
+
+TD5 
+SLABS
+settings:
+test status en/dis
+ecu calibrated yes/no
+transport mode en/dis
+suspension type AIR/springs
+
+inputs:
+abs sensors
+FR
+FL
+RR
+RL 
+wheel speed
+FR
+FL
+RR
+RL 
+inlet valve
+FR
+FL
+RR
+RL 
+outlet valve
+FR
+FL
+RR
+RL 
+pump monitor (V)
+Pump relay  (V)
+Battery (V)
+ECU internal supply (V)
+Ground Reference (V)
+Engine speed (rpm)
+Engine Torque (N/m)
+Throttle Position (%)
+HDC Brake (V)
+Shuttle Switch
+
+Left Sensor Value
+Right Sensor Value
+Left sensor Supply (V)
+Right sensor Supply (V)
+Left Value (V)
+Right Value (V)
+Exhaust Valve (V)
+Compressor Relay (V)
+
+Neutral Switch
+Low Range Switch
+Diff Lock Switch
+Reverse Switch
+HDC Switch
+Any Door Switch
+Plip signal
+
+Outputs (can set on/off):
+FR Inlet Valve
+FR Outlet Valve
+FL Inlet Valve
+FL Outlet Valve
+RR Inlet Valve
+RR Outlet Valve
+RL Inlet Valve
+RL Outlet Valve
+SLS Left valve
+SLS Right valve
+SLS Exhaust valve
+ABS Pump relay
+Speedometer 
+SLS CompressorSLS Buzzer
+T. C. Lamp
+ABS Warning Light
+HDC Warning Light
+Brake Warning Light
+SLS lamps
+Offroad Lamp
+HDC Fault lamps
+HDC Brake lamps
+
+Utility:
+ABS Bleeding - tests
+Power Bleed  - Start bleed
+Modulator Bleed - Start Bleed
+FR Test - Start test
+FL Test - Start test
+RR Test - Start test
+RL Test - Start test
+SLS height calibration
+Raise Left - start/stop
+Lower left - start/stop
+Raise Right - start/stop
+Lower Right - start/stop
+Store heights
+
+
+
+BCU
+
+
+
