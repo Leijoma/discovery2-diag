@@ -2,6 +2,10 @@
 
 Uppdaterad 2026-08-19. Kryssa av när klart.
 
+> **Avgränsning:** det här repot är verktyget. Bilens faktiska fel och
+> underhållsåtgärder hanteras i systerprojektet `../Discovery 2/` — felkoder vi
+> läser ut hör hemma där, inte här.
+
 ## Läget
 
 TD5 och SLABS fungerar båda tillförlitligt sedan init-pulsen rättades 2026-08-19
@@ -26,9 +30,6 @@ Dashboarden kopplar upp båda på första försöket och växlar modul utan prob
       (ventiler/spänningar), `50` (ABS-sensor V), och settings-LID:erna där
       LID→funktion är olöst (kräver differential: ändra EN setting, se vilken
       råbyte som rör sig).
-- [ ] **Bilens egna fel:** `020` höger fram hjulhastighetsgivare (output too low)
-      och `027` shuttle valve switch (electrical failure) ligger loggade, 027 har
-      setts som Current. Riktig verkstadsåtgärd, inte kod.
 
 ## Kod / offline
 
