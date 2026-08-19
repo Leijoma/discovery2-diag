@@ -107,11 +107,19 @@ def engine_context(transport, sleep_after: float) -> "dict | None":
         quiet(sleep_after, "låt bussen tystna efter TD5")
 
 
-def try_init(transport, name: str, functional: bool, source: int) -> "Slabs | None":
-    """Ett enda initförsök med en given variant. Returnerar en levande Slabs eller None."""
+def try_init(transport, name: str, functional: bool, source: int,
+             write_gap: float = 0.0) -> "Slabs | None":
+    """Ett enda initförsök med en given variant. Returnerar en levande Slabs eller None.
+
+    ``write_gap`` är P4 — inter-byte-tiden i vår förfrågan. ISO 14230-2 anger
+    5–20 ms och muki01-referensen använder 5 ms, medan vi alltid skickat hela ramen
+    i ett svep. Det är en otestad hypotes om varför reference tool kommer in på
+    första försöket och vi behöver flera.
+    """
     frame = encode(b"\x81", SLABS_ADDRESS, source, addressed=True, functional=functional)
-    say(f"  → {name}: {frame.hex(' ')}")
-    kwp = KWP2000(KLine(transport, target=SLABS_ADDRESS), tolerant=True)
+    gaptxt = "" if not write_gap else f" · P4 {write_gap*1000:.0f} ms"
+    say(f"  → {name}{gaptxt}: {frame.hex(' ')}")
+    kwp = KWP2000(KLine(transport, target=SLABS_ADDRESS, write_gap=write_gap), tolerant=True)
     slabs = Slabs(kwp)
     try:
         c1 = kwp.start_communication(tolerant=True, functional=functional, source=source)
@@ -182,6 +190,9 @@ def main() -> int:
     ap.add_argument("--rounds", type=int, default=1, help="antal varv genom matrisen")
     ap.add_argument("--no-td5", action="store_true",
                     help="hoppa över TD5-kontexten (ingen rpm/fart/batteri i loggen)")
+    ap.add_argument("--write-gaps", default="0,5",
+                    help="P4-värden att testa i ms (default 0,5). 0 = hela ramen i ett "
+                         "svep som hittills, 5 = muki01:s inter-byte-fördröjning.")
     ap.add_argument("--order", choices=("shuffle", "fixed"), default="shuffle",
                     help="variantordning. SHUFFLE (default) krävs för att kunna skilja "
                          "variantens effekt från försöksnumrets — med fast ordning är "
@@ -223,15 +234,16 @@ def main() -> int:
             say("porten är stängd efter kontextfasen — avbryter (det vore inget mätvärde)")
             return 1
 
+        wgaps = [float(g) / 1000 for g in args.write_gaps.split(",") if g.strip()]
         for rnd in range(1, args.rounds + 1):
-            variants = list(VARIANTS)
+            combos = [(n, f, s, w) for (n, f, s) in VARIANTS for w in wgaps]
             if args.order == "shuffle":
-                rng.shuffle(variants)
-            say(f"\n[matris] varv {rnd}/{args.rounds} — ordning: "
-                + ", ".join(v[0].split()[0] for v in variants))
-            for name, functional, source in variants:
-                slabs = try_init(transport, name, functional, source)
-                results.append((name, "TRÄFF" if slabs else "tyst"))
+                rng.shuffle(combos)
+            say(f"\n[matris] varv {rnd}/{args.rounds} — {len(combos)} kombinationer")
+            for name, functional, source, wgap in combos:
+                label = f"{name} · P4 {wgap*1000:.0f}ms"
+                slabs = try_init(transport, name, functional, source, wgap)
+                results.append((label, "TRÄFF" if slabs else "tyst"))
                 if slabs is not None:
                     hold(slabs, args.hold)
                     try:

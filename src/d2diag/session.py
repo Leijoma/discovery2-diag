@@ -35,12 +35,18 @@ class EcuSession:
     # Standard är fysisk adressering med testar-adress 0xF7 (som reference tool).
     # Moduler kan lägga till fler — se Slabs.
     _init_variants: "tuple" = ((False, None),)
+    # P4 (inter-byte-tid vid sändning) i sekunder. 0.0 = hela ramen i ett svep, som
+    # vi alltid gjort. Sätts per modul och appliceras på KLine i :meth:`open`.
+    _write_gap: float = 0.0
 
     def __init__(self, kwp: KWP2000) -> None:
         self._kwp = kwp
 
     # ---- livscykel (delegeras hela vägen ner till transporten) --------- #
     def open(self) -> None:
+        kline = getattr(self._kwp, "_k", None)
+        if kline is not None and self._write_gap:
+            kline.write_gap = self._write_gap
         self._kwp.open()
 
     def close(self) -> None:

@@ -46,12 +46,18 @@ class KLine:
         source: int = TESTER_ADDRESS,
         timeout: float = 1.0,
         echo: bool = True,
+        write_gap: float = 0.0,
     ) -> None:
         self._t = transport
         self._target = target
         self._source = source
         self._timeout = timeout
         self._echo = echo
+        # P4 — inter-byte-tid i testarens förfrågan. ISO 14230-2 anger 5–20 ms, och
+        # muki01-referensen (bekräftad korrekt) skickar en byte i taget med 5 ms
+        # emellan. Vi har alltid skickat hela ramen i ett svep (~1 ms/byte vid
+        # 10400 baud), vilket en strikt ECU kan vägra parsa. 0.0 = gammalt beteende.
+        self.write_gap = write_gap
         self._rxbuf = bytearray()  # kvarvarande bytes mellan ramar (resync)
 
     # ---- livscykel ---------------------------------------------------- #
@@ -161,7 +167,7 @@ class KLine:
         last: Exception | None = None
         for _ in range(retries + 1):
             self._flush_input()
-            self._t.send(frame)
+            self._send(frame)
             try:
                 if self._echo:
                     self.read_frame()  # konsumera vårt eget eko (första giltiga ram)
@@ -191,7 +197,7 @@ class KLine:
         frame = encode(data, self._target, self._source if source is None else source,
                        addressed=addressed, functional=functional)
         self._flush_input()
-        self._t.send(frame)
+        self._send(frame)
         return self._burst_read(gap, overall)
 
     def _burst_read(self, gap: float, overall: float) -> bytes:
@@ -210,6 +216,16 @@ class KLine:
             else:
                 time.sleep(0.002)  # väntar fortfarande på första byten
         return bytes(buf)
+
+    def _send(self, frame: bytes) -> None:
+        """Sänd en ram, med P4-mellanrum mellan byten om ``write_gap`` är satt."""
+        if self.write_gap <= 0:
+            self._t.send(frame)
+            return
+        for i, b in enumerate(frame):
+            self._t.send(bytes([b]))
+            if i + 1 < len(frame):
+                time.sleep(self.write_gap)
 
     def read_frame(self, timeout: "float | None" = None) -> DecodedFrame:
         """Läs och avkoda en ram — robust mot skräp i början.

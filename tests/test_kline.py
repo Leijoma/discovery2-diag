@@ -96,3 +96,23 @@ def test_functional_init_finds_a_real_c1_after_the_echo():
     kl = KLine(ecu, target=0x29, timeout=0.05)
     kl.open()
     assert kl.fast_init_tolerant(functional=True, source=0xF1).startswith(b"\xc1\x57\x8f")
+
+
+def test_write_gap_sends_one_byte_at_a_time():
+    # P4 — inter-byte-tid i testarens förfrågan. ISO 14230-2 anger 5–20 ms och
+    # muki01 använder 5 ms; vi skickade alltid hela ramen i ett svep. write_gap=0
+    # behåller det gamla beteendet, >0 delar upp sändningen.
+    from d2diag.kline import KLine
+    from tests.fakes import FakeKLineEcu
+
+    ecu = FakeKLineEcu({})
+    kl = KLine(ecu, target=0x29, timeout=0.01, write_gap=0.001)
+    kl.open()
+    kl.converse(b"\x81", addressed=True)
+    assert [len(f) for f in ecu.sent] == [1, 1, 1, 1, 1]   # 5 bytes, en i taget
+
+    ecu2 = FakeKLineEcu({})
+    kl2 = KLine(ecu2, target=0x29, timeout=0.01)           # write_gap=0 → oförändrat
+    kl2.open()
+    kl2.converse(b"\x81", addressed=True)
+    assert [len(f) for f in ecu2.sent] == [5]

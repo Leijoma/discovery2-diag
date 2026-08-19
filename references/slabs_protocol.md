@@ -93,7 +93,22 @@ före första initförsöket. Verktyget skickar **aldrig** `82` i någon sniff �
 litar på att länken timeoutar av sig själv. Vårt `82` löste TD5:s generalReject
 men är ovaliderat mot bilen.
 
-### Fast-init-PULSEN är den enda verkliga luckan
+### P4 — inter-byte-tid vid SÄNDNING (otestad lucka, upptäckt 2026-08-19)
+muki01-referensen skickar **en byte i taget med 5 ms emellan**
+(`writeRawData`: `K_Serial.write(b); delay(WRITE_DELAY)`), och kommentaren citerar
+ISO 14230-2:s intervall **5–20 ms** för P4. Vi har alltid skickat hela ramen i ett
+enda `write()` — vid 10400 baud tar en 5-byteram då ~5 ms i stället för ~25 ms.
+
+En strikt ECU kan vägra parsa en ram utan P4-mellanrum. Det är en bättre kandidat
+än adressläget till varför reference tool kommer in på första försöket medan vi
+behöver flera, och det förklarar också varför TD5 (Lucas) fungerar medan SLABS
+(Wabco) är nyckfull — olika ECU:er, olika tolerans.
+
+`KLine(write_gap=…)` och `EcuSession._write_gap` finns nu, men **är inte påslaget
+för någon modul** — testa först med `tools/slabs_probe.py --write-gaps 0,5`, som
+kör P4 = 0 och 5 ms som separata celler i den blandade matrisen.
+
+### Fast-init-PULSEN är den andra luckan
 Sniffen är RX-only och ser bara UART-data — den elektriska init-pulsen (hur länge
 K-line dras låg/hög före `81 29 F7 81 22`) syns inte i något capture. Allt på
 applikationsnivå är därmed belagt och implementerat, medan pulstajmingen är
