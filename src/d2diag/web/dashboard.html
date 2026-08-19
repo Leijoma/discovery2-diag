@@ -39,6 +39,12 @@
   .fault { padding:10px 12px; border-radius:9px; background:var(--card2); border-left:4px solid var(--warn); }
   .fault.current { border-left-color:var(--err); } .fault .tag { font-size:11px; color:var(--muted); margin-left:6px; }
   .none { color:var(--muted); }
+  .siggroup { grid-column:1/-1; }
+  .ghead { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px;
+           margin:12px 2px 6px; }
+  .siggroup .row { margin-bottom:6px; }
+  .row .info { color:var(--muted); font-size:11px; cursor:help; opacity:.6; }
+  .row[title]:hover .info { opacity:1; color:var(--accent); }
   /* buttons */
   .btns { display:flex; flex-wrap:wrap; gap:8px; }
   .btn { flex:1; min-width:calc(50% - 4px); padding:13px 10px; border-radius:11px; border:1px solid var(--line);
@@ -486,10 +492,95 @@
 <script>
   const $ = id => document.getElementById(id);
   const fmt = x => (Math.abs(x) >= 100 ? Math.round(x) : x.toFixed(1));
+  // Signal-metadata: grupp + kort beskrivning (vad siffran betyder). Normalintervall
+  // och confidence kommer från storen (limits/c) och sätts ihop i tooltip-texten.
+  const GROUPS = ["Engine","Temperatures","Fuelling","Pressures","Accelerator",
+                  "Ride height","Wheels","Electrical","Inputs","Other"];
+  const META = {
+    // TD5
+    rpm:{g:"Engine",d:"Engine speed."},
+    rpm_error:{g:"Engine",d:"Idle-speed error: target minus actual idle rpm. Near 0 when idle is stable."},
+    speed:{g:"Engine",d:"Road speed as reported by the ECU."},
+    coolant_temp:{g:"Temperatures",d:"Coolant temperature. Normal 86–95 °C (thermostat opens 88); above 105 °C = overheating."},
+    air_temp:{g:"Temperatures",d:"Intake air temperature."},
+    fuel_temp:{g:"Temperatures",d:"Fuel temperature \u2014 normally 10\u201315 \u00b0C below coolant (~70\u201380 \u00b0C when warm). Sensor fault falls back to 60 or 100 \u00b0C."},
+    ext_temp:{g:"Temperatures",d:"External temp sensor — not fitted on this car, so this reads a phantom constant (~150 °C). Ignore."},
+    balance_1:{g:"Fuelling",d:"Cylinder 1 fuelling correction. ±4 at idle is healthy; a cylinder stuck +6…+15 = weak (worn injector / low compression)."},
+    balance_2:{g:"Fuelling",d:"Cylinder 2 fuelling correction. ±4 at idle is healthy; stuck +6…+15 = weak cylinder."},
+    balance_3:{g:"Fuelling",d:"Cylinder 3 fuelling correction. ±4 at idle is healthy; stuck +6…+15 = weak cylinder."},
+    balance_4:{g:"Fuelling",d:"Cylinder 4 fuelling correction. ±4 at idle is healthy; stuck +6…+15 = weak cylinder."},
+    balance_5:{g:"Fuelling",d:"Cylinder 5 fuelling correction. ±4 at idle is healthy; stuck +6…+15 = weak cylinder."},
+    manifold_press:{g:"Pressures",d:"Turbo / boost pressure. Idle ~1.0 bar (atmospheric); full load 2.0\u20132.2 bar; ECU overboost-cut above 2.42 bar."},
+    ambient_press_1:{g:"Pressures",d:"Atmospheric pressure \u2014 ~1.0 bar at sea level; the ECU\u2019s altitude reference."},
+    ambient_press_2:{g:"Pressures",d:"Atmospheric pressure (second reading)."},
+    maf_raw:{g:"Engine",d:"Air-flow meter (MAF). Idle 55–65 kg/hr, ~190 at 2000 rpm; stuck at 0 or 4.00 = dead sensor (limp home). Raw units here — kg/hr scale not yet mapped."},
+    accel_way1:{g:"Accelerator",d:"Pedal track 1: ~0.3\u20130.5 V at idle, rising to ~4.7 V at full throttle."},
+    accel_way2:{g:"Accelerator",d:"Pedal track 2: mirror of track 1 \u2014 ~4.7 V at idle, falling to ~0.3 V at full throttle."},
+    accel_way3:{g:"Accelerator",d:"Pedal track 3 \u2014 Euro 3 (NNN) engines only; reads 0 on Euro 2."},
+    accel_supply:{g:"Accelerator",d:"5 V reference to the pedal sensor \u2014 rock-solid 5.0 V \u00b10.1; dips = wiring short."},
+    battery:{g:"Electrical",d:"System voltage. 13.8\u201314.4 V with the engine running and alternator charging; below 13 V = charging fault."},
+    // SLABS
+    height_left:{g:"Ride height",d:"Left ride-height sensor (raw 0–255). Normal ~110–135 (calibration-dependent); left and right should be close on level ground. Stuck at 0 or 255 = broken sensor arm."},
+    height_right:{g:"Ride height",d:"Right ride-height sensor (raw 0–255). Normal ~110–135; should track the left side closely on level ground."},
+    height_left_mm:{g:"Ride height",d:"Left ride height in millimetres (derived)."},
+    height_right_mm:{g:"Ride height",d:"Right ride height in millimetres (derived)."},
+    any_door:{g:"Inputs",d:"Any door open. SLABS refuses to adjust the suspension while a door is open — the compressor won\u2019t run to raise the car. Normal: closed."},
+    wheel_speed_fr:{g:"Wheels",d:"Front-right wheel speed. Raw ~124 baseline stationary (not km/h). Driving straight all four should read equal; flutter or 0 while moving trips the Three Amigos (ABS/TC/HDC)."},
+    abs_sensor_fr:{g:"Wheels",d:"Front-right ABS wheel-sensor voltage."},
+    ecu_supply:{g:"Electrical",d:"Internal SLABS ECU supply voltage."},
+    speed_fl:{g:"Wheels",d:"Front-left wheel speed."},
+    speed_fr:{g:"Wheels",d:"Front-right wheel speed."},
+    speed_rl:{g:"Wheels",d:"Rear-left wheel speed."},
+    speed_rr:{g:"Wheels",d:"Rear-right wheel speed."},
+    volt_fl:{g:"Wheels",d:"Front-left ABS sensor voltage."},
+    volt_fr:{g:"Wheels",d:"Front-right ABS sensor voltage."},
+    volt_rl:{g:"Wheels",d:"Rear-left ABS sensor voltage."},
+    volt_rr:{g:"Wheels",d:"Rear-right ABS sensor voltage."},
+  };
+  function groupOf(n){ return (META[n]&&META[n].g) || "Other"; }
+  // Bygg tooltip-text: beskrivning + normalintervall (ur limits) + confidence.
+  function tipFor(n, s, f){
+    const m = META[n] || {}, lim = (f&&f.limits) || null;
+    const parts = [];
+    if(m.d) parts.push(m.d);
+    if(lim) parts.push("Normal: "+lim[0]+"–"+lim[1]+((s&&s.u)||(f&&f.u)||""));
+    const c = (s&&s.c) || (f&&f.c);
+    if(c) parts.push(c==="kandidat" ? "Experimental (candidate — unverified)" : "Verified against the car");
+    return parts.join("\n");
+  }
+  // Rendera en grupperad lista av signalrader. ALLA fält visas alltid (layouten är
+  // konstant); för en kandidat som filtrerats bort i Verified-läget döljs bara
+  // VÄRDET (visas som "–"), inte raden. Så ser man vad som finns att mappa utan att
+  // exponera overifierade siffror.
+  function renderRows(el, names, sig, fmap, skip){
+    if(!el) return;
+    const all = names.filter(n => !(skip&&skip.has(n)));
+    const byGroup = {};
+    for(const n of all){ (byGroup[groupOf(n)] ||= []).push(n); }
+    const order = GROUPS.filter(g => byGroup[g]).concat(
+      Object.keys(byGroup).filter(g => !GROUPS.includes(g)));
+    el.innerHTML = order.map(g => {
+      const rows = byGroup[g].sort().map(n => {
+        const s = sig[n], f = fmap[n]||{}, c = s ? s.c : f.c;
+        const reveal = shown(sig[n]||fmap[n]);   // kandidat + ej experimental → dölj värdet
+        const badge = c==="kandidat" ? ' <span class="exp">exp</span>' : "";
+        const cls = (reveal && s && (s.s==="low"||s.s==="high")) ? " s-"+s.s : "";
+        let val = "–";
+        if(reveal && s) val = (n==="any_door") ? (s.v?"open":"closed") : fmt(s.v);
+        const unit = (n==="any_door") ? "" : (reveal ? (s?(s.u||""):(f.u||"")) : "");
+        const tip = tipFor(n, s, f).replace(/"/g,"&quot;");
+        return `<div class="row" title="${tip}"><span class="n">${LABELS[n]||n}${badge}`
+             + ` <span class="info">ⓘ</span></span>`
+             + `<span class="val${cls}">${val} <span class="u">${unit}</span></span></div>`;
+      }).join("");
+      return `<div class="siggroup"><div class="ghead">${g}</div>${rows}</div>`;
+    }).join("") || '<span class="none">—</span>';
+  }
+
   const LABELS = {
     rpm:"RPM", speed:"Speed", battery:"Battery", coolant_temp:"Coolant",
-    air_temp:"Intake air", fuel_temp:"Fuel", manifold_press:"Manifold pressure",
-    ambient_press_1:"Ambient pressure", maf_raw:"MAF (raw)", rpm_error:"RPM error",
+    air_temp:"Intake air", fuel_temp:"Fuel", manifold_press:"Turbo pressure",
+    ambient_press_1:"Ambient pressure", maf_raw:"Air flow (MAF)", rpm_error:"RPM error",
     balance_1:"Injector 1", balance_2:"Injector 2", balance_3:"Injector 3",
     balance_4:"Injector 4", balance_5:"Injector 5",
     height_left_mm:"Height left", height_right_mm:"Height right",
@@ -923,7 +1014,7 @@
   async function loadFields(module){
     try{
       const d = await (await fetch("/fields?module="+module)).json();
-      const m = {}; (d.fields||[]).forEach(f=>{ m[f.name] = {u:f.unit, c:f.c}; });
+      const m = {}; (d.fields||[]).forEach(f=>{ m[f.name] = {u:f.unit, c:f.c, limits:f.limits}; });
       _fields[module] = m;
       if(_last) render(_last);   // fill placeholders now that we know the fields
     }catch(e){}
@@ -934,15 +1025,8 @@
     $("hero").innerHTML = HERO.map(k => { const s = sig[k];
       return `<div class="card"><div class="k">${LABELS[k]||k}</div><div class="v">${s?fmt(s.v):"–"}<span class="u"> ${s&&s.u?s.u:""}</span></div></div>`; }).join("");
     const fmap = _fields.motor || {};
-    const names = Object.keys(sig).length ? Object.keys(sig) : Object.keys(fmap);
-    $("signals").innerHTML = names.sort().filter(n => shown(sig[n] || fmap[n])).map(n => {
-      const s = sig[n], f = fmap[n] || {};
-      const c = s ? s.c : f.c;
-      const cls = (s && (s.s==="low"||s.s==="high")) ? " s-"+s.s : "";
-      const badge = (c==="kandidat") ? ' <span class="exp">exp</span>' : "";
-      const val = s ? fmt(s.v) : "–", unit = s ? (s.u||"") : (f.u||"");
-      return `<div class="row"><span class="n">${LABELS[n]||n}${badge}</span><span class="val${cls}">${val} <span class="u">${unit}</span></span></div>`;
-    }).join("") || '<span class="none">—</span>';
+    const names = Array.from(new Set([...Object.keys(fmap), ...Object.keys(sig)]));
+    renderRows($("signals"), names, sig, fmap, new Set(HERO));  // hero-fälten visas redan ovan
     $("m_faults").innerHTML = faultHtml(faults);
   }
 
@@ -958,19 +1042,11 @@
     }
     setT("c_h_l", sig.height_left ? fmt(sig.height_left.v) : "–");
     setT("c_h_r", sig.height_right ? fmt(sig.height_right.v) : "–");
-    // Generisk lista: varje mappat store-fält syns automatiskt (trust-filtrerat).
-    // Höjderna visas redan i SVG:n → hoppa dem här för att undvika dubblering.
+    // Generisk grupperad lista: alla mappade store-fält (höjderna visas i SVG:n → skip).
+    const fmap = _fields.slabs || {};
     const skip = new Set(["height_left","height_right","height_left_mm","height_right_mm"]);
-    const el = $("slabs-signals");
-    if (el) {
-      const rows = Object.keys(sig).filter(n => !skip.has(n) && shown(sig[n])).sort().map(n => {
-        const x = sig[n], badge = x.c==="kandidat" ? ' <span class="exp">exp</span>' : "";
-        const val = (n==="any_door") ? (x.v ? "open" : "closed") : fmt(x.v);
-        return `<div class="row"><span class="n">${LABELS[n]||n}${badge}</span>`
-             + `<span class="val">${val} <span class="u">${x.u||""}</span></span></div>`;
-      }).join("");
-      el.innerHTML = rows || '<span class="none">—</span>';
-    }
+    const names = Array.from(new Set([...Object.keys(fmap), ...Object.keys(sig)]));
+    renderRows($("slabs-signals"), names, sig, fmap, skip);
     const cur = faults.filter(f => /current/i.test(f)).length;
     setT("c_abs", !has ? "–" : (faults.length ? (cur ? cur+" active" : faults.length+" logged") : "OK"));
     $("s_faults").innerHTML = faultHtml(faults);
@@ -1121,6 +1197,7 @@
   $("consent-skip").onclick = closeConsent;
   loadCommunity();
   loadFields("motor");   // so the Engine layout shows even before a cable is connected
+  loadFields("slabs");   // samma för SLABS-vyns signallista
 
   (function connect() {
     const es = new EventSource("/events");

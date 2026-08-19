@@ -112,7 +112,7 @@ def _fields_list(module: str) -> "dict":
     from ..signals import load_signals
 
     store_mod = {"motor": "td5"}.get(module, module)  # UI-modulnamn → store-modul
-    fields = [{"name": s.name, "unit": s.unit, "c": s.confidence}
+    fields = [{"name": s.name, "unit": s.unit, "c": s.confidence, "limits": s.limits}
               for s in load_signals(store_mod)]
     return {"module": module, "fields": fields}
 

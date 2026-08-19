@@ -9,7 +9,7 @@
     "unit": "",
     "confidence": "belagt",
     "limits": null,
-    "source": "21 54 byte0 = vänster höjd; belagt via varians session.log 2026-08-08"
+    "source": "21 54 byte0 = vänster höjd; belagt via varians session.log 2026-08-08 reference tool-referens: normal ~110–135 (kalibreringsberoende); L och R ska ligga nära varandra på plan mark; fast 0/255 = trasig arm/givare."
   },
   {
     "name": "height_right",
@@ -21,7 +21,7 @@
     "unit": "",
     "confidence": "belagt",
     "limits": null,
-    "source": "21 54 byte1 = höger höjd; belagt via varians session.log 2026-08-08"
+    "source": "21 54 byte1 = höger höjd; belagt via varians session.log 2026-08-08 reference tool-referens: normal ~110–135 (kalibreringsberoende); L och R ska ligga nära varandra på plan mark; fast 0/255 = trasig arm/givare."
   },
   {
     "name": "any_door",
@@ -34,7 +34,10 @@
     "unit": "",
     "confidence": "belagt",
     "limits": null,
-    "states": {"0": "stängd", "1": "öppen"},
+    "states": {
+      "0": "stängd",
+      "1": "öppen"
+    },
     "source": "21 56 byte0 bit0 = any-door; BELAGT via differential 2026-08-08 (00 stängd/01 öppen)"
   },
   {
@@ -47,7 +50,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43 = 4x hjulhastighet (2 byte/hjul); stillastående 7c00-baslinje. Skala EJ bekräftad."
+    "source": "21 43 = 4×hjulhastighet (2 byte/hjul). reference tool: 0 km/h stilla, alla fyra lika vid rakkörning; fladder/0 under körning → Three Amigos. Råvärde ~124 baseline stilla (≠ km/h) → skala okänd. KANDIDAT."
   },
   {
     "name": "abs_sensor_fr",
@@ -70,8 +73,11 @@
     "bias": 0.0,
     "unit": "V",
     "confidence": "kandidat",
-    "limits": null,
-    "source": "21 44 byte12 = batteri (~0xb3 -> x1/16 ~11.3 V); varierar & matchar men skala EJ bekräftad"
+    "limits": [
+      11.5,
+      15.0
+    ],
+    "source": "21 44 byte12 ~0xb3·0.0625 ~11.3 V. Ventil-/systemmatning ska ligga på batterispänning ~12,5–14 V. KANDIDAT — skala (1/16) ej korsvaliderad."
   },
   {
     "name": "ecu_supply",
@@ -82,7 +88,10 @@
     "bias": 0.0,
     "unit": "V",
     "confidence": "kandidat",
-    "limits": null,
+    "limits": [
+      11.5,
+      15.0
+    ],
     "source": "21 44 byte13 = ECU-supply (~0xb1 -> x1/16 ~11.5 V); varierar & matchar men skala EJ bekräftad"
   }
 ]

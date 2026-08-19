@@ -43,7 +43,7 @@ _SPEC_LIMITS = {
     "manifold_press": (0.8, 2.6), "ambient_press_1": (0.8, 1.1),
     "ambient_press_2": (0.8, 1.1), "rpm_error": (-300, 300),
     "accel_way1": (0.0, 5.1), "accel_way2": (0.0, 5.1), "accel_way3": (0.0, 5.1),
-    "accel_supply": (4.7, 5.3),
+    "accel_supply": (4.9, 5.1),   # reference tool: 5,0 V ±0,1 stenhårt (2026-08-19)
     "balance_1": (-12, 12), "balance_2": (-12, 12), "balance_3": (-12, 12),
     "balance_4": (-12, 12), "balance_5": (-12, 12),
 }

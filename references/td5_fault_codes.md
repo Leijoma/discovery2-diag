@@ -64,3 +64,44 @@ stämmer), immobiliser-status `03` = ej immobiliserad, fast init `0x13`, session
 - **Security:** `31 C0` + `33 C0` → statusbyte. Implementerat i `td5/td5.py`
   (`output_test`, `injector_pulse`, `security_status`); `LEARN SECURITY CODE`
   medvetet ej implementerat (tillståndsändrande).
+
+## reference tool live-data-skärmar → våra LID:er (referens 2026-08-19)
+
+Extern beskrivning av reference tools Td5-skärmar, korskörd mot våra sniffade LID:er.
+Bekräftar mappningar och namnger fält vi ännu inte läser.
+
+| reference tool-fält | Vår LID | Status |
+|---|---|---|
+| Engine Speed | `21 09` rpm | belagt |
+| Road Speed | `21 0D` speed | belagt |
+| Coolant Temp | `21 1A@0` | belagt (normal 86–95 °C, termostat 88, >105 fara) |
+| **Turbo Pressure** | `21 1C@0` manifold_press | belagt — = laddtryck. Tomgång ~1,0 bar, full last 2,0–2,2, overboost-cut >2,42 |
+| Battery Volt | `21 10` | belagt (13,8–14,4 V vid laddning) |
+| Ambient Pressure | `21 23` | belagt (~1,0 bar havsnivå) |
+| **Air Flow (MAF)** | `21 1C@4` maf_raw | **KANDIDAT — omklassat.** Tidigare "ingen MAF" var fel; reference tool visar det. Tomgång 55–65 kg/hr. Vår enda avläsning=0 (motorn av). Skala okänd → kräver capture med motorn igång |
+| Air Inlet Temp | `21 1A@4` air_temp | belagt |
+| Fuel Temp | `21 1A@12` | belagt (~70–80 °C varm, 10–15 under kylvatten) |
+| Cylinder 1–5 balance | `21 40@0..8` | belagt (±4 tomgång; +6…+15 = svag cylinder) |
+| Accel Track 1 | `21 1B@0` | belagt (0,3→4,7 V) |
+| Accel Track 2 | `21 1B@2` | belagt (INVERTERAD 4,7→0,3 V) |
+| Accel Track 3 | `21 1B@4` | kandidat — **endast Euro 3 (NNN)**; 0 på Euro 2 |
+| Accel Supply | `21 1B@6` | belagt (5,0 V ±0,1) |
+| Idle Speed Error | `21 21` rpm_error | belagt |
+
+### Ännu OMAPPADE live-fält (reference tool skärm 5) — nästa capture-mål
+- **EGR Inlet**, **EGR Modulator** (PWM), **Wastegate** (elektroniskt styrd på D2).
+  Finns troligen i någon av de osniffat-tolkade LID:erna `0E, 11, 20, 24, 32, 37, 3D`.
+  Kräver labeled captures (reference tool-värde + råbytes) för att mappas.
+- **`21 1C@2`**: en andra tryck-liknande u16 (~1,007 bar) intill manifold — oidentifierad.
+- Switch-inputs `21 1E / 21 36 / 21 38` (bitfält) — dokumenterade i handoff, ej i storen.
+
+## reference tool SLABS-skärmar → våra LID:er
+
+| reference tool-fält | Vår LID | Status |
+|---|---|---|
+| L/R Height Sensor | `21 54@0/1` | belagt (normal ~110–135, kalibreringsberoende; L≈R på plan mark) |
+| Wheel speeds FL/FR/RL/RR | `21 43` (4×) | kandidat — bara FR mappad; råvärde ~124 baseline ≠ km/h |
+| Door switches | `21 56@0 bit0` any_door | belagt — SLABS justerar EJ fjädringen med öppen dörr |
+| Valve/target supply V | `21 44@12/13` | kandidat — ~12,5–14 V, skala ej korsvaliderad |
+| **Shuttle Valve Switches** | `21 42/48/58`? | omappad — vår felkod **027** = klassiskt WABCO-kretskortsfel |
+| Brake switch, SLS off-road switch | switch-LID:er | omappade (`21 42/48/56/58` bitfält) |

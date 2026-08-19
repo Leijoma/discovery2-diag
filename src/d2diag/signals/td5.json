@@ -114,7 +114,7 @@
       0.0,
       5.1
     ],
-    "source": "21 1B@0 u16/1000 V; sniffat 2026-08-08"
+    "source": "21 1B@0 u16/1000 V. Track 1: ~0,3–0,5 V i vila → ~4,7 V full gas. Bekräftat mot bilen."
   },
   {
     "name": "accel_way2",
@@ -129,7 +129,7 @@
       0.0,
       5.1
     ],
-    "source": "21 1B@2 u16/1000 V"
+    "source": "21 1B@2 u16/1000 V. Track 2 rör sig SPEGELVÄNT mot track 1: ~4,7 V i vila → 0,3 V vid full gas. Bekräftat mot bilen (way1 låg medan way2 hög)."
   },
   {
     "name": "accel_way3",
@@ -144,7 +144,7 @@
       0.0,
       5.1
     ],
-    "source": "21 1B@4 u16/1000 V; tredje gaspedalsspår. Läser konstant 0 V i vila (session.log), operatören 'verkar korrekt' (svagare än 'korrekt'). Skala/funktion ej bekräftad vid pådrag → kandidat."
+    "source": "21 1B@4 u16/1000 V; gaspedal track 3. Finns ENDAST på Euro 3 (NNN-box) — läser 0 på Euro 2. Vår bil läser 0 → antingen Euro 2 eller ej mappat. KANDIDAT tills bekräftat vid pådrag."
   },
   {
     "name": "accel_supply",
@@ -156,10 +156,10 @@
     "unit": "V",
     "confidence": "belagt",
     "limits": [
-      4.7,
-      5.3
+      4.9,
+      5.1
     ],
-    "source": "21 1B@6 u16/1000 V (5V-referens)"
+    "source": "21 1B@6 u16/1000 V (5V-referens). Ska ligga stenhårt 5,0 V ±0,1; dipp = kortslutning i pedalkablaget. Verifierat 5,01 V."
   },
   {
     "name": "manifold_press",
@@ -174,7 +174,7 @@
       0.8,
       2.6
     ],
-    "source": "21 1C@0 u16/10000 bar; BEKRÄFTAT 2026-08-03 (1.0→1.2 bar)"
+    "source": "21 1C@0 u16/10000 bar = TURBO/laddtryck (reference tool 'Turbo Pressure'). Tomgång ~1,0 bar (atmosfär); full last 2,0–2,2 bar absolut; ECU:ns overboost-cut > 2,42 bar. BEKRÄFTAT 2026-08-03 (1,0→1,2 bar)."
   },
   {
     "name": "maf_raw",
@@ -186,7 +186,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 1C@4; ingen MAF på tidig ROM → rått fält, tolka EJ som luftmassa. Kandidat."
+    "source": "21 1C@4 = luftmassa (MAF), reference tool skärm 2 'Air Flow'. Vår enda avläsning var 0 (motorn AV → manifold=atmosfär). Tomgång ska ge 55–65 kg/hr, ~190 vid 2000 rpm; fast 0 eller 4.00 = död givare (limp home). Råvärde→kg/hr-skala EJ bestämd — kräver capture med motorn igång. KANDIDAT."
   },
   {
     "name": "rpm_error",
