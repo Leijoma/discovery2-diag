@@ -71,13 +71,13 @@ class Slabs(EcuSession):
     name = "SLABS"
     _keepalive_sub = None  # SLABS vill ha bar 3E (sniffad ram 01 3e 3f), inte 3E 01
 
-    # Växla adressläge mellan försöken. Fysisk `81 29 F7 81` är vad reference tool
-    # använder i sniffen — men den är bevisat flakig hos oss. Vår egen adressjakt
-    # 2026-08-05 fick svar från 0x29 ENBART i funktionellt läge med testar-adress
-    # 0xF1 (`C1 29 F1 81 5c` → `C1 57 8F`), medan fysisk init var tyst — och
-    # muki01-referensen (bekräftad korrekt) initierar likadant: `C1 33 F1 81 66`.
-    # Vi provar därför båda: udda försök fysiskt, jämna funktionellt.
-    _init_variants = ((False, None), (True, 0xF1))
+    # Växla adressläge mellan försöken — FUNKTIONELLT FÖRST. Reference tool använder
+    # fysisk init (`81 29 F7 81`) i sniffen, men hos oss står den för 1 träff av 18
+    # medan de funktionella står för 5 av 19 (bilen 2026-08-19; p = 0,18, alltså en
+    # tendens och inget mer). Vår adressjakt 2026-08-05 och muki01-referensen pekar
+    # åt samma håll: `C1 29 F1 81 5c` respektive `C1 33 F1 81 66`. Fysisk behålls
+    # sist — den har trots allt gett kontakt en gång.
+    _init_variants = ((True, 0xF1), (True, 0xF7), (False, None))
 
     def establish(
         self,

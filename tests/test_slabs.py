@@ -172,9 +172,10 @@ def test_functional_init_frame_matches_the_address_hunt():
     assert f.hex(" ") == "c1 29 f1 81 5c"
 
 
-def test_establish_alternates_physical_and_functional_init():
-    # Udda försök fysiskt (som reference tool), jämna funktionellt (som jakten och
-    # muki01). Annars provar vi bara den variant som bevisat är flakig.
+def test_establish_tries_functional_addressing_first():
+    # FUNKTIONELLT först: i bilen 2026-08-19 stod de funktionella ramarna för
+    # 6 träffar av 24 medan fysisk gav 1 av 21. Fysisk provas sist — den har trots
+    # allt gett kontakt en gång, och det är den reference tool använder.
     from d2diag.kline import KLine, encode
     from d2diag.kwp2000 import KWP2000, KWP2000Error
     from d2diag.slabs import SLABS_ADDRESS, Slabs
@@ -185,9 +186,25 @@ def test_establish_alternates_physical_and_functional_init():
     slabs = Slabs(KWP2000(KLine(ecu, target=SLABS_ADDRESS, timeout=0.05), tolerant=True))
     msgs = []
     with slabs:
-        slabs.establish(attempts=2, sleep=lambda *_: None, progress=msgs.append)
+        slabs.establish(attempts=1, sleep=lambda *_: None, progress=msgs.append)
 
     physical = encode(b"\x81", SLABS_ADDRESS, 0xF7, addressed=True)
-    assert physical in ecu.sent and functional in ecu.sent      # båda provades
-    assert ecu.sent.index(physical) < ecu.sent.index(functional)  # fysisk först
-    assert any("[funktionell, F1]" in m for m in msgs)          # syns i loggen
+    assert functional in ecu.sent          # funktionell provas …
+    assert physical not in ecu.sent        # … och räcker, fysisk behövs inte
+    assert any("[funktionell, F1]" in m for m in msgs)   # syns i loggen
+
+
+def test_establish_falls_back_to_physical_on_later_tries():
+    # Alla tre lägena ska provas innan vi ger upp — fysisk sist.
+    from d2diag.kline import KLine, encode
+    from d2diag.kwp2000 import KWP2000
+    from d2diag.slabs import SLABS_ADDRESS, Slabs
+    from tests.fakes import FakeKLineEcu
+
+    physical = encode(b"\x81", SLABS_ADDRESS, 0xF7, addressed=True)
+    ecu = FakeKLineEcu({physical: encode(b"\xc1\x57\x8f", addressed=False)})
+    slabs = Slabs(KWP2000(KLine(ecu, target=SLABS_ADDRESS, timeout=0.05), tolerant=True))
+    with slabs:
+        slabs.establish(attempts=3, sleep=lambda *_: None)
+    sent = [f.hex(" ") for f in ecu.sent if len(f) == 5]
+    assert sent == ["c1 29 f1 81 5c", "c1 29 f7 81 62", "81 29 f7 81 22"]

@@ -52,7 +52,11 @@ def test_live_reads_modules_over_fake(monkeypatch):
         _f(b"\x27\x01"): _f(b"\x67\x01\x10\xe6"),
         _f(b"\x27\x02\x90\x86"): _f(b"\x67\x02"),             # keygen(10,e6)→90 86 (test_tolerant)
         _f(b"\x21\x3b"): _f(b"\x61\x3b" + bytes(35)),
-        # SLABS (target 0x29): fast init → 21 11 (loggade) + 21 47 (aktuella tomt)
+        # SLABS (target 0x29): fast init → 21 11 (loggade) + 21 47 (aktuella tomt).
+        # Slabs provar FUNKTIONELL adressering först (se _init_variants) — svara på
+        # den, annars sover etableringen 28 s per misslyckat försök innan den faller
+        # tillbaka på den fysiska ramen.
+        encode(b"\x81", 0x29, 0xF1, addressed=True, functional=True): _f(b"\xc1\x57\x8f"),
         encode(b"\x81", 0x29, 0xF7, addressed=True): _f(b"\xc1\x57\x8f"),
         _f(b"\x21\x11"): _f(b"\x61\x11" + slabs_logged),
         _f(b"\x21\x47"): _f(b"\x61\x47" + bytes(16)),

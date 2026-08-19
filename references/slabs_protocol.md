@@ -149,11 +149,24 @@ modulen faktiskt ser.
 **Ekot bekräftat som felkälla:** de fem falska `C1` som rapporterades 13:25–13:34
 försvann helt efter echo-fixen — noll i de fem körningarna därefter.
 
-⚠️ **Adressläget är INTE avgörande.** Alla tre varianter har vunnit minst en gång,
-och vid 13,80 V tog reference tools egen fysiska init (`81 29 F7 81`) på första
-försöket. En tidigare notering här hävdade att adressläget var skillnaden — den
-byggde på en enda körning och var fel. `_init_variants` växlar ändå mellan
-lägena: det kostar inget och ger fler chanser per cykel.
+**Adressläget: funktionellt ser bättre ut, men det är inte avgjort.**
+Alla probe-försök 2026-08-19 där alla varianter provades i samma tidsfönster:
+
+| Variant | Ram | Träffar |
+|---|---|---|
+| funktionell/F7 | `c1 29 f7 81 62` | 4/11 |
+| funktionell/F1 | `c1 29 f1 81 5c` | 2/13 |
+| fysisk/F7 | `81 29 f7 81 22` | 1/14 |
+| fysisk/F1 | `81 29 f1 81 1c` | 0/7 |
+
+Funktionellt sammanlagt **6/24 (25 %)** mot fysiskt **1/21 (5 %)** — Fishers
+exakta test ger p = 0,10, alltså en tydlig tendens men inte signifikant.
+`_init_variants` provar därför funktionellt först och fysiskt sist.
+
+⚠️ **Fällan vi gick i:** ett tortyrpass låstes till enbart `fysisk/F7` och gav
+0 träffar på 50 försök. Det såg ut som att modulen slutat svara helt, men vi hade
+bara slutat skicka de ramar som brukade fungera. Lås aldrig experimentet till en
+variant innan frågan är avgjord.
 
 **Arbetsregel (inte en fastställd sanning): kör motorn när du pratar med SLABS.**
 Den ger bäst odds i det vi mätt, och det är modulens normala driftfall.
