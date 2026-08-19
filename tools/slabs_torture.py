@@ -22,8 +22,16 @@ Resultatet skrivs som JSONL (en rad per försök) + en sammanfattning per faktor
     PYTHONPATH=src python3 tools/slabs_torture.py --gaps 0,5,15,30 --hold 15
     PYTHONPATH=src python3 tools/slabs_torture.py --td5 both --rounds 4
 
-Kör STILLASTÅENDE. Mätningen 2026-08-19 antyder att motorn bör vara igång — kör
-gärna en omgång i varje läge och jämför.
+Kör STILLASTÅENDE.
+
+**Data ackumuleras mellan körningar.** Varje körning skriver en egen JSONL, och
+``--summary`` slår ihop dem. Kör därför hellre flera KORTA block än ett långt —
+motorn ska inte gå på tomgång i tjugo minuter. Med ``--max-minutes`` stannar
+skriptet av sig självt och sammanfattar det som hanns med.
+
+Statistiken kräver ungefär 50 försök per strömläge för att kunna skilja 30 % från
+7 % (Fishers exakta test på materialet 2026-08-19 gav p = 0,27 — inte
+signifikant). Det blir ~3 block à 5 minuter per läge.
 """
 from __future__ import annotations
 
@@ -211,6 +219,12 @@ def main() -> int:
     ap.add_argument("--td5", choices=("never", "always", "both"), default="both",
                     help="TD5-session före SLABS: aldrig / alltid / båda (default both)")
     ap.add_argument("--seed", type=int, default=None, help="seed för ordningen")
+    ap.add_argument("--max-minutes", type=float, default=None,
+                    help="stoppa när så här många minuter gått (motorn ska inte gå "
+                         "på tomgång i onödan). Resultatet sammanfattas ändå.")
+    ap.add_argument("--td5-every", type=int, default=5,
+                    help="läs motorkontext var N:e försök i stället för varje (default 5). "
+                         "Sparar ~7 s per försök; åldern på kontexten loggas.")
     ap.add_argument("--label", default="",
                     help="strömläge för körningen, t.ex. motor / laddare / tandning. "
                          "Sparas på varje rad så körningarna kan jämföras efteråt.")
@@ -235,10 +249,14 @@ def main() -> int:
     trials = [(g, v, t) for g in gaps for v in variants for t in td5_modes] * args.rounds
     rng.shuffle(trials)   # blandad ordning: tid/temperatur ska inte följa tillståndet
 
-    est = sum(g + args.hold + 12 for g, _, t in trials) / 60
+    # grov uppskattning: tyst period + init + ev. hållperiod + andning, plus TD5
+    # -kontexten som numera bara läses var N:e försök
+    per_td5 = 7.0 / max(1, args.td5_every)
+    est = sum(g + 2 + args.hold * 0.3 + 1 + per_td5 for g, _, t in trials) / 60
     say(f"SLABS-tortyr {stamp} — seed {seed}" + (f" — läge: {args.label}" if args.label else ""))
     say(f"{len(trials)} försök · gap {gaps} · varianter {variants} · TD5 {td5_modes}")
-    say(f"uppskattad tid: ~{est:.0f} min. Kör stillastående. Ctrl-C sparar resultatet.")
+    budget = f" (stoppar efter {args.max_minutes:.0f} min)" if args.max_minutes else ""
+    say(f"uppskattad tid: ~{est:.0f} min{budget}. Stillastående. Ctrl-C sparar resultatet.")
 
     try:
         port = resolve_serial_port(args.serial)
@@ -254,9 +272,23 @@ def main() -> int:
         return 1
 
     results = []
+    t_start = time.monotonic()
+    last_ctx: "dict" = {}
+    last_ctx_at = 0.0
     try:
         for i, (gap, variant, use_td5) in enumerate(trials, 1):
-            ctx = td5_context(transport) if use_td5 else {}
+            if args.max_minutes and (time.monotonic() - t_start) / 60 >= args.max_minutes:
+                say(f"\ntidsbudgeten ({args.max_minutes:.0f} min) slut — stoppar här. "
+                    f"Kör fler block senare och slå ihop med --summary.")
+                break
+            # Motorkontexten kostar ~7 s. Läs den var N:e försök och återanvänd
+            # däremellan — spänningen rör sig långsamt, och åldern loggas.
+            if use_td5 and (i == 1 or (i - 1) % max(1, args.td5_every) == 0):
+                last_ctx = td5_context(transport)
+                last_ctx_at = time.monotonic()
+            ctx = dict(last_ctx) if use_td5 else {}
+            if ctx:
+                ctx["ctx_age"] = round(time.monotonic() - last_ctx_at, 1)
             quiet(gap)
             r = attempt(transport, variant, args.hold)
             row = {"n": i, "label": args.label, "gap": gap, "variant": variant,
@@ -271,7 +303,7 @@ def main() -> int:
             if r["result"] == "lokalt_fel":
                 say(f"   ✗ avbryter: {r.get('error')}")
                 break
-            quiet(3.0)  # låt bussen andas mellan försöken
+            quiet(1.0)  # låt bussen andas mellan försöken
     except KeyboardInterrupt:
         say("\navbrutet — sammanfattar det vi hann mäta")
     finally:
