@@ -30,6 +30,27 @@ _FAST_INIT_LOW = 0.025
 _FAST_INIT_HIGH = 0.025
 
 
+def _precise_wait(seconds: float) -> None:
+    """Vänta ``seconds`` med sub-millisekundsprecision.
+
+    ``time.sleep`` överskjuter: uppmätt på macOS ger ``sleep(25 ms)`` i själva
+    verket 25,3–32,0 ms (median 29,1). För TiniH, som ISO 14230-2 sätter till
+    25 ms ± 1, är det för trubbigt. Vi sover därför bara fram till 2 ms före målet
+    och snurrar sista biten — 25 ms brända CPU-cykler en gång per anslutningsförsök
+    är ett billigt pris för en puls inom toleransen.
+    """
+    if seconds <= 0:
+        return
+    deadline = time.perf_counter() + seconds
+    # Grovsömn bara för långa väntor: en sleep() kan överskjuta 5–7 ms, så för
+    # init-pulsens 25 ms skulle den ensam missa målet. Snurra hela vägen i stället.
+    coarse = seconds - 0.050
+    if coarse > 0:
+        time.sleep(coarse)
+    while time.perf_counter() < deadline:
+        pass
+
+
 class KLineError(Exception):
     pass
 
@@ -49,6 +70,7 @@ class KLine:
         write_gap: float = 0.0,
         init_low: float = _FAST_INIT_LOW,
         init_high: float = _FAST_INIT_HIGH,
+        init_idle: float = 0.0,
     ) -> None:
         self._t = transport
         self._target = target
@@ -68,6 +90,9 @@ class KLine:
         # bli 25–45 ms i stället för 25. Därav justerbart, och mätt: se last_pulse.
         self.init_low = init_low
         self.init_high = init_high
+        # W5 — buss-idle före fast init. ISO 14230-2 anger 300 ms; vi hade inget alls.
+        # 0.0 = av (gammalt beteende); sätt 0.3–1.0 för att eliminera W5 som variabel.
+        self.init_idle = init_idle
         self.last_pulse: "dict" = {}
         self._rxbuf = bytearray()  # kvarvarande bytes mellan ramar (resync)
 
@@ -92,14 +117,17 @@ class KLine:
         Mäter vad som FAKTISKT hände (``last_pulse``) — nominella värden säger inget
         om en USB-serieport där drivrutin och OS lägger på egen fördröjning.
         """
+        if self.init_idle:
+            time.sleep(self.init_idle)   # W5: låt bussen vara tyst före pulsen
         t0 = time.perf_counter()
         self._flush_input()
         # Deterministisk låg-puls: föredra baud-drop (0x00 @ ~360 baud) framför
         # OS-timad break, vars längd jittrar på icke-realtids-OS och gör att Td5:an
         # aldrig går in i diag-läge (03 7F 81 10 = generalReject).
+        already_high = 0.0
         pulse = getattr(self._t, "fast_init_low", None)
         if pulse is not None:
-            pulse(self.init_low)
+            already_high = pulse(self.init_low) or 0.0
         else:
             send_break = getattr(self._t, "send_break", None)
             if send_break is None:
@@ -108,10 +136,13 @@ class KLine:
                 )
             send_break(self.init_low)
         t1 = time.perf_counter()
-        time.sleep(self.init_high)  # K-line hög innan StartCommunication
+        # Dra av den tid linjen REDAN varit hög (UART-stoppbiten efter puls-byten),
+        # annars blir TiniH systematiskt för lång.
+        _precise_wait(max(0.0, self.init_high - already_high))
         t2 = time.perf_counter()
         self.last_pulse = {"low_ms": round((t1 - t0) * 1000, 1),
-                           "high_ms": round((t2 - t1) * 1000, 1)}
+                           "high_ms": round((t2 - t1) * 1000 + already_high * 1000, 1),
+                           "stopbit_ms": round(already_high * 1000, 1)}
 
     def fast_init(self, start_communication: bytes = DEFAULT_START_COMMUNICATION) -> bytes:
         """Kör fast init (adresserad StartCommunication) och returnerar svarets

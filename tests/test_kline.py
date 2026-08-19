@@ -116,3 +116,44 @@ def test_write_gap_sends_one_byte_at_a_time():
     kl2.open()
     kl2.converse(b"\x81", addressed=True)
     assert [len(f) for f in ecu2.sent] == [5]
+
+
+def test_init_high_compensates_for_the_uart_stop_bit():
+    # Låg-pulsen är en 0x00-byte vid ~360 baud. UART-ramen avslutas med en STOPPBIT
+    # som är hög (~2,8 ms), och flush() väntar tills den sänts — TiniH har alltså
+    # redan börjat när vi kommer tillbaka. Utan kompensation blir höga perioden
+    # 25 + 2,8 ms i stället för 25 (extern granskning 2026-08-19).
+    import time as _t
+    from d2diag.kline import KLine
+    from tests.fakes import FakeKLineEcu
+
+    class _Pulsing(FakeKLineEcu):
+        def fast_init_low(self, low_seconds=0.025):
+            return 0.010          # låtsas att linjen redan varit hög i 10 ms
+
+    ecu = _Pulsing({})
+    kl = KLine(ecu, target=0x29, timeout=0.01, init_high=0.025)
+    kl.open()
+    t0 = _t.perf_counter()
+    kl._fast_init_pulse()
+    slept = _t.perf_counter() - t0
+    assert slept < 0.025                       # sov ~15 ms, inte 25
+    assert kl.last_pulse["stopbit_ms"] == 10.0
+    # Rapporterad TiniH = stoppbit + faktisk sömn. Den ska ligga NÄRA 25 ms och
+    # under de 35 ms den blivit utan kompensation. (OS-sömn överskjuter alltid en
+    # aning — just det är varför pulsen måste mätas och inte antas.)
+    assert 25 <= kl.last_pulse["high_ms"] < 35
+
+
+def test_w5_bus_idle_is_off_by_default_and_configurable():
+    import time as _t
+    from d2diag.kline import KLine
+    from tests.fakes import FakeKLineEcu
+
+    kl = KLine(FakeKLineEcu({}), timeout=0.01)
+    assert kl.init_idle == 0.0                 # oförändrat beteende som default
+    kl2 = KLine(FakeKLineEcu({}), timeout=0.01, init_idle=0.05)
+    kl2.open()
+    t0 = _t.perf_counter()
+    kl2._fast_init_pulse()
+    assert _t.perf_counter() - t0 >= 0.05      # W5 respekteras

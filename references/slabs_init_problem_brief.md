@@ -55,7 +55,7 @@ Alla siffror är från kontrollerade körningar 2026-08-19 med slumpad ordning.
 | **Batterispänning** | träffar 12,11–13,91 V, missar 11,83–13,80 V | Ingen tröskel, intervallen överlappar helt. |
 | **Kvarlämnad session från annan modul** | `7F 81 10` (generalReject) förekom, kom från TD5 i öppen session | **Åtgärdat** — vi skickar `82` StopCommunication vid teardown och före init. Rejecten är borta sedan dess. |
 | **Dörr öppen/stängd** | 0 träffar på 2 körningar med öppen dörr | För litet för slutsats. |
-| **Kabel/buss/vår kod** | TD5 kopplar upp på första försöket sekunder före och efter varje misslyckat SLABS-försök, på samma kabel | **Uteslutet.** |
+| **Kabel/buss/vår kod** | TD5 kopplar upp på första försöket sekunder före och efter varje misslyckat SLABS-försök, på samma kabel | Grundläggande K-line-hårdvara och sessionskod **fungerar**, verifierat mot TD5. Men **modulberoende tolerans för fast-init-timing är fortfarande öppen** — TD5 (Lucas) kan mycket väl ha ett bredare fönster än SLABS (Wabco). Det är den hypotes som passar observationen bäst. |
 
 **Mönster som återstår:** träffarna klustrar i tiden. Ett fönster 13:29–13:47 gav
 4 träffar; därefter 54 raka tysta försök över 86 minuter under alla betingelser.
@@ -70,22 +70,36 @@ kommersiella verktyget timar den.
 ISO 14230-2 fast init: buss tyst ≥ 300 ms (W5) → K-line **låg 25 ms ± 1** (TiniL)
 → **hög 25 ms ± 1** → StartCommunication direkt.
 
-**Vår implementation:**
+**Vår implementation — och två fel som hittades 2026-08-19 vid extern granskning:**
 
 - Låg-pulsen är hårdvarutimad: vi sänker baudraten till ~360 och skickar en `0x00`
-  (startbit + 8 nollor = 9 låga bitar ≈ 25 ms). Bestäms av UART:ens bitklocka,
-  inte av OS:et.
-- **Den höga perioden är `time.sleep(0.025)`** — OS-timad.
-- Därefter en `flush()` och en USB-write innan byten når tråden. **FTDI:s latency
-  timer är 16 ms som default**, och USB-schemaläggningen lägger på ytterligare.
-- **Vi har inget explicit W5** (300 ms buss-idle) före pulsen.
+  (startbit + 8 nollor = 9 låga bitar ≈ 25 ms). Bestäms av UART:ens bitklocka.
+- 🐛 **Stoppbiten glömdes bort.** UART-ramen avslutas med en stoppbit som är HÖG —
+  vid 360 baud ≈ 2,8 ms — och `flush()` väntar tills den sänts. TiniH hade alltså
+  redan börjat innan vår väntan startade.
+- 🐛 **`time.sleep(0.025)` överskjuter grovt.** Uppmätt på maskinen i fråga:
+  `sleep(25 ms)` tar i verkligheten **25,3–32,0 ms, median 29,1**.
 
-Faktisk tid från pulsens slut till första byten kan därför vara 25–45 ms i stället
-för 25. Vi har precis lagt in mätning av detta (`low_ms`, `high_ms`,
-`to_frame_ms`) men har ännu inga siffror från bilen.
+  Summa: verklig TiniH var ≈ **32 ms** där ISO anger **25 ± 1**.
 
-Jämförelse: en ESP32 som bit-bangar pulsen (300 ms idle, 25 ms låg, 25 ms hög,
-sedan UART) har mikrosekundsnoggrannhet och ingen USB-buffert emellan.
+  **Åtgärdat:** stoppbitens längd dras nu av, och väntan görs med en spinnande
+  klocka i stället för `sleep` → uppmätt **25,00 ± 0,01 ms** i vår kod.
+- **W5 saknades helt** (ingen garanterad buss-idle före pulsen). Nu implementerat
+  som `init_idle`, avstängt som default, och avsett att köras på 0,3–1,0 s.
+
+⚠️ **Kvarstår omätt:** vi kan bara mäta vår egen mjukvarusida. Tiden från att
+`write()` returnerar tills byten fysiskt lämnar FT232:n — USB-schemaläggning och
+drivrutin — syns inte från Python. De verkliga elektriska flankerna är fortfarande
+okända.
+
+**Idé för att mäta dem:** vi har redan en ESP32 med RX-only-tapp på K-line. Den
+kan tidsstämpla flankerna (fallande → stigande → startbit) och därmed mäta vad vår
+USB-KKL faktiskt producerar — utan att behöva bygga om den till sändare.
+
+Jämförelse: samma ESP32 kan även bit-banga pulsen själv (300 ms idle, 25 ms låg,
+25 ms hög, sedan UART) med mikrosekundsnoggrannhet och ingen USB-buffert emellan.
+Den sketchen finns redan och sänder mot TD5; att rikta om den mot `0x29` är en
+konstantändring.
 
 ## Frågor vi vill ha hjälp med
 
@@ -100,8 +114,11 @@ sedan UART) har mikrosekundsnoggrannhet och ingen USB-buffert emellan.
 4. **Tidsklustringen** — 4 träffar på 18 minuter, sedan 0 på 86 minuter under
    identiska förutsättningar. Vilken mekanism i en ABS/SLS-ECU skulle ge det?
 5. Är det värt att gå till **ESP32 i master-läge** för deterministisk puls, eller
-   finns det något vi kan göra på USB-sidan först (latency timer, W5, annan
-   pulsmetod)?
+   finns det något mer att hämta på USB-sidan först?
+
+_Not: en tidigare version av det här dokumentet påstod att FTDI:s latency timer
+(16 ms) lägger till fördröjning på sändsidan. Det är fel — den styr hur snabbt
+MOTTAGNA data töms från chipets buffert till hosten. Påpekat och struket._
 
 ## Vad vi INTE söker hjälp med
 

@@ -93,13 +93,20 @@ class SerialTransport(Transport):
         time.sleep(duration)
         ser.break_condition = False
 
-    def fast_init_low(self, low_seconds: float = 0.025) -> None:
+    def fast_init_low(self, low_seconds: float = 0.025) -> float:
         """Deterministisk låg-puls för ISO 14230 fast init — utan OS-timad break.
 
         Sänk baudraten och skicka EN 0x00-byte: startbit + 8 nollor = 9 låga bitar
         i rad. Pulslängden bestäms av UART:ens bitklocka (hårdvara), inte av OS:ets
         schemaläggare, så den är stabil även över USB. 9 bitar / ``low_seconds``
         ger baudraten (≈360 baud för 25 ms).
+
+        **Returnerar hur länge linjen redan varit HÖG när vi kommer tillbaka.**
+        UART-ramen avslutas med en stoppbit, som är hög — vid 360 baud är den
+        ~2,8 ms lång, och ``flush()`` väntar tills den sänts. TiniH har alltså redan
+        börjat innan anroparen hinner sova. Utan den här kompensationen blir den
+        verkliga höga perioden 25 + 2,8 ms i stället för 25 (påpekat av extern
+        granskning 2026-08-19).
         """
         ser = self._require_open()
         baud = max(1, round(9 / low_seconds))
@@ -107,10 +114,11 @@ class SerialTransport(Transport):
         try:
             ser.baudrate = baud
             ser.write(b"\x00")
-            ser.flush()  # blockera tills byten är fysiskt utsänd
+            ser.flush()  # blockera tills byten är fysiskt utsänd (inkl. stoppbiten)
         finally:
             ser.baudrate = original
         ser.reset_input_buffer()  # kasta ekot av puls-byten
+        return 1.0 / baud  # stoppbitens längd = tid linjen redan varit hög
 
     @staticmethod
     def slow_init_bits(address: int) -> "list[int]":
