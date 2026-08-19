@@ -120,6 +120,18 @@ en variant i taget med 30 s tystnad emellan, kvittens via `1A 8A`):
 
 **Motorn igång: 3 träffar av 4. Motorn av: 1 av 4.**
 
+**Per FÖRSÖK (25 initförsök i 8 körningar), vilket är den bättre statistiken:**
+
+| Motor | Träffar | Andel |
+|---|---|---|
+| igång | 3 av 10 | 30 % |
+| av | 1 av 15 | 7 % |
+
+**Fishers exakta test: p = 0,27 — inte signifikant.** Skillnaden ser stor ut men
+materialet är för litet för att utesluta slump. Simulering säger att det krävs
+~50 försök per läge för 80 % chans att nå p < 0,05 om den sanna effekten är
+30 % mot 7 %.
+
 Konfidens: **KANDIDAT, inte belagt.** n=8 är för litet, intervallen överlappar
 (träffar 12,11–13,80 V, missar 11,83–13,66 V) och det finns motexempel åt båda
 håll — 13:25 misslyckades med motorn igång, 13:28 lyckades med motorn av. Vad vi
@@ -127,10 +139,15 @@ har är den starkaste korrelationen vi mätt, inte en fastställd orsak. Mekanis
 är helt öppen: det kan vara matningsspänning, men lika gärna att modulen är vaken
 och nivåreglerar när motorn går och går i viloläge när bilen står parkerad.
 
-**Så här blir det belagt:** kör proben ~10 gånger i varje motorläge i blandad
-ordning (så tid och temperatur inte sammanfaller med tillståndet), och mät
-helst SLABS egen matning på C0504 stift 1/2 samtidigt — TD5:s batterivärde är
-bara en proxy för vad modulen faktiskt ser.
+**Så här blir det belagt:** ~50 försök per läge (`tools/slabs_torture.py`, blandad
+ordning med loggad seed) i tre strömlägen — motorn igång / tändning med laddare /
+tändning utan laddare. **Laddarläget är nyckeln:** det ger hög spänning UTAN att
+motorn går och skiljer därmed spänning från motorstatus. Mät helst SLABS egen
+matning på C0504 stift 1/2 samtidigt; TD5:s batterivärde är bara en proxy för vad
+modulen faktiskt ser.
+
+**Ekot bekräftat som felkälla:** de fem falska `C1` som rapporterades 13:25–13:34
+försvann helt efter echo-fixen — noll i de fem körningarna därefter.
 
 ⚠️ **Adressläget är INTE avgörande.** Alla tre varianter har vunnit minst en gång,
 och vid 13,80 V tog reference tools egen fysiska init (`81 29 F7 81`) på första
