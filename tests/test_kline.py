@@ -118,11 +118,12 @@ def test_write_gap_sends_one_byte_at_a_time():
     assert [len(f) for f in ecu2.sent] == [5]
 
 
-def test_init_high_compensates_for_the_uart_stop_bit():
-    # Låg-pulsen är en 0x00-byte vid ~360 baud. UART-ramen avslutas med en STOPPBIT
-    # som är hög (~2,8 ms), och flush() väntar tills den sänts — TiniH har alltså
-    # redan börjat när vi kommer tillbaka. Utan kompensation blir höga perioden
-    # 25 + 2,8 ms i stället för 25 (extern granskning 2026-08-19).
+def test_init_high_compensates_for_time_already_spent_high():
+    # Efter låg-pulsen är linjen redan hög en stund innan vi börjar vänta: dels
+    # UART-ramens stoppbit (~2,8 ms vid 360 baud), dels baudrate-återställning och
+    # buffertrensning (10–20 ms över USB). fast_init_low() returnerar den totala
+    # tiden och KLine drar av den — annars blir TiniH systematiskt för lång, vilket
+    # höll oss utanför SLABS toleransfönster (bilen 2026-08-19: 9 % → 56 % träffar).
     import time as _t
     from d2diag.kline import KLine
     from tests.fakes import FakeKLineEcu
@@ -138,7 +139,7 @@ def test_init_high_compensates_for_the_uart_stop_bit():
     kl._fast_init_pulse()
     slept = _t.perf_counter() - t0
     assert slept < 0.025                       # sov ~15 ms, inte 25
-    assert kl.last_pulse["stopbit_ms"] == 10.0
+    assert kl.last_pulse["pre_high_ms"] == 10.0
     # Rapporterad TiniH = stoppbit + faktisk sömn. Den ska ligga NÄRA 25 ms och
     # under de 35 ms den blivit utan kompensation. (OS-sömn överskjuter alltid en
     # aning — just det är varför pulsen måste mätas och inte antas.)

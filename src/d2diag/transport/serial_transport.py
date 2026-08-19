@@ -117,8 +117,13 @@ class SerialTransport(Transport):
             ser.flush()  # blockera tills byten är fysiskt utsänd (inkl. stoppbiten)
         finally:
             ser.baudrate = original
+        # Allt HÄRIFRÅN är tid då linjen redan är hög: stoppbiten plus det som
+        # baudrate-återställning och buffertrensning kostar (mätt 10–20 ms över USB).
+        # Räknas det inte med blir TiniH systematiskt för lång — och det var precis
+        # vad som höll oss utanför SLABS toleransfönster.
+        t_high_started = time.perf_counter() - 1.0 / baud
         ser.reset_input_buffer()  # kasta ekot av puls-byten
-        return 1.0 / baud  # stoppbitens längd = tid linjen redan varit hög
+        return time.perf_counter() - t_high_started
 
     @staticmethod
     def slow_init_bits(address: int) -> "list[int]":

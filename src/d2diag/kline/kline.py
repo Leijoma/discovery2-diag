@@ -142,7 +142,7 @@ class KLine:
         t2 = time.perf_counter()
         self.last_pulse = {"low_ms": round((t1 - t0) * 1000, 1),
                            "high_ms": round((t2 - t1) * 1000 + already_high * 1000, 1),
-                           "stopbit_ms": round(already_high * 1000, 1)}
+                           "pre_high_ms": round(already_high * 1000, 1)}
 
     def fast_init(self, start_communication: bytes = DEFAULT_START_COMMUNICATION) -> bytes:
         """Kör fast init (adresserad StartCommunication) och returnerar svarets
@@ -173,8 +173,11 @@ class KLine:
                        addressed=True, functional=functional)
         raw = self.converse(start_communication, addressed=True,
                             functional=functional, source=source)
-        # Tiden från pulsens slut tills ramen är ute säger hur mycket USB/OS lade på.
-        self.last_pulse["to_frame_ms"] = round((time.perf_counter() - t_send) * 1000, 1)
+        # to_frame_ms = tiden från pulsens slut tills SÄNDNINGEN startade (inte hela
+        # konversationen — burst-läsningen ingår inte). send_ms = själva utskrivningen.
+        self.last_pulse["to_frame_ms"] = round(
+            (time.perf_counter() - t_send) * 1000 - getattr(self, "_last_send_ms", 0.0), 1)
+        self.last_pulse["send_ms"] = getattr(self, "_last_send_ms", 0.0)
         # HOPPA ÖVER EKOT innan vi söker C1. Halv-duplex ekar allt vi sänder, och
         # en FUNKTIONELL ram börjar själv på 0xC1 — utan detta hittar sökningen
         # vårt eget eko och rapporterar "session established" på tomma bussen
@@ -277,6 +280,13 @@ class KLine:
 
     def _send(self, frame: bytes) -> None:
         """Sänd en ram, med P4-mellanrum mellan byten om ``write_gap`` är satt."""
+        t0 = time.perf_counter()
+        try:
+            self._send_inner(frame)
+        finally:
+            self._last_send_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+    def _send_inner(self, frame: bytes) -> None:
         if self.write_gap <= 0:
             self._t.send(frame)
             return
