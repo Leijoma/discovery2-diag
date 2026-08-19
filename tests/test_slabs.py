@@ -160,3 +160,34 @@ def test_establish_reports_a_dead_session_but_does_not_raise():
         c1 = slabs.establish(sleep=lambda *_: None, progress=msgs.append)
     assert c1.startswith(b"\xc1\x57\x8f")               # etableringen står kvar
     assert any("no answer to 1A 8A" in m for m in msgs)
+
+
+def test_functional_init_frame_matches_the_address_hunt():
+    # Vår adressjakt 2026-08-05 fick svar från 0x29 ENBART i funktionellt läge med
+    # testar-adress 0xF1: C1 29 F1 81 5c. muki01-referensen initierar likadant
+    # (C1 33 F1 81 66). Ramen måste bli byte-identisk med den som fungerade.
+    from d2diag.kline import encode
+    from d2diag.slabs import SLABS_ADDRESS
+    f = encode(b"\x81", SLABS_ADDRESS, 0xF1, addressed=True, functional=True)
+    assert f.hex(" ") == "c1 29 f1 81 5c"
+
+
+def test_establish_alternates_physical_and_functional_init():
+    # Udda försök fysiskt (som reference tool), jämna funktionellt (som jakten och
+    # muki01). Annars provar vi bara den variant som bevisat är flakig.
+    from d2diag.kline import KLine, encode
+    from d2diag.kwp2000 import KWP2000, KWP2000Error
+    from d2diag.slabs import SLABS_ADDRESS, Slabs
+    from tests.fakes import FakeKLineEcu
+
+    functional = encode(b"\x81", SLABS_ADDRESS, 0xF1, addressed=True, functional=True)
+    ecu = FakeKLineEcu({functional: encode(b"\xc1\x57\x8f", addressed=False)})
+    slabs = Slabs(KWP2000(KLine(ecu, target=SLABS_ADDRESS, timeout=0.05), tolerant=True))
+    msgs = []
+    with slabs:
+        slabs.establish(attempts=2, sleep=lambda *_: None, progress=msgs.append)
+
+    physical = encode(b"\x81", SLABS_ADDRESS, 0xF7, addressed=True)
+    assert physical in ecu.sent and functional in ecu.sent      # båda provades
+    assert ecu.sent.index(physical) < ecu.sent.index(functional)  # fysisk först
+    assert any("[funktionell, F1]" in m for m in msgs)          # syns i loggen

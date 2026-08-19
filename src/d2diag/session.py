@@ -31,6 +31,10 @@ class EcuSession:
     # Har modulen en StartDiagnosticSession att avsluta rent? Td5 → True; SLABS och
     # Airbag kör tjänsterna direkt efter init och har ingen session att stänga.
     _has_session: bool = False
+    # Init-varianter att växla mellan mellan försöken: (funktionell, källadress).
+    # Standard är fysisk adressering med testar-adress 0xF7 (som reference tool).
+    # Moduler kan lägga till fler — se Slabs.
+    _init_variants: "tuple" = ((False, None),)
 
     def __init__(self, kwp: KWP2000) -> None:
         self._kwp = kwp
@@ -161,9 +165,12 @@ class EcuSession:
         sleep(idle)  # låt linjen vara tyst så en ev. öppen session hinner dö
         last: "Exception | None" = None
         for i in range(attempts):
-            _say(f"sending init (try {i + 1}/{attempts})")
+            functional, source = self._init_variants[i % len(self._init_variants)]
+            how = "" if not functional else " [funktionell, F1]"
+            _say(f"sending init (try {i + 1}/{attempts}){how}")
             try:
-                c1 = self._kwp.start_communication(tolerant=True)
+                c1 = self._kwp.start_communication(
+                    tolerant=True, functional=functional, source=source)
             except (KLineError, KWP2000Error) as exc:
                 last = exc
                 if after is None:

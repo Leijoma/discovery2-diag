@@ -93,6 +93,24 @@ före första initförsöket. Verktyget skickar **aldrig** `82` i någon sniff �
 litar på att länken timeoutar av sig själv. Vårt `82` löste TD5:s generalReject
 men är ovaliderat mot bilen.
 
+### 🔑 Adressläget: funktionell init (`C1 29 F1 81`) — outnyttjat spår
+Reference tool initierar **fysiskt** med testar-adress `0xF7` (`81 29 F7 81 22`),
+och det är vad vi kopierat. Men två oberoende källor pekar på ett annat läge:
+
+| Källa | Ram | SLABS |
+|---|---|---|
+| Vår adressjakt 2026-08-05, `func-f1` | `C1 29 F1 81 5c` | **`C1 57 8F`** ✅ |
+| Vår adressjakt, `fast-f1` | `81 29 F1 81 1c` | tyst |
+| Vår adressjakt, `func-f7` | `C1 29 F7 81 62` | tyst |
+| muki01 (bekräftad korrekt) | `C1 33 F1 81 66` | — (funktionell broadcast) |
+
+`0xC1` = funktionellt adressläge (bit 7-6 = 11) i stället för fysiskt `0x81`.
+Jakten fick svar **enbart** i funktionellt läge med `0xF1`, samma kombination som
+muki01-referensen använder. `Slabs._init_variants` växlar därför numera: udda
+försök fysiskt/F7, jämna funktionellt/F1. Testa systematiskt med
+`tools/slabs_probe.py`, som kör hela matrisen med tysta perioder emellan och
+loggar rå TX/RX.
+
 ## ReadEcuIdentification — `1A xx`
 | Req | Svar | Innehåll |
 |---|---|---|

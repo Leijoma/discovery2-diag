@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""SLABS-prob: testa init-varianter systematiskt och logga ALLT.
+
+Dashboarden är fel verktyg för att felsöka anslutningen — den kopplar om, byter
+modul och skriver över kontexten. Det här skriptet gör tvärtom: en kontrollerad
+sekvens, en variant i taget, med rå TX/RX till fil.
+
+Bakgrund (se references/slabs_protocol.md):
+  * Reference tool initierar FYSISKT med testar-adress 0xF7: ``81 29 F7 81 22``.
+  * Vår egen adressjakt 2026-08-05 fick svar från 0x29 ENBART i FUNKTIONELLT läge
+    med testar-adress 0xF1: ``C1 29 F1 81 5c`` → ``C1 57 8F``.
+  * muki01-referensen (bekräftad korrekt) initierar funktionellt: ``C1 33 F1 81 66``.
+  * Init lyckas i sniffen först efter 25–28 s UTAN trafik mot modulen.
+
+Skriptet mäter därför båda adresslägena med tysta perioder emellan, och läser
+motorkontext (varvtal/fart/batteri) före testet så ett tyst försök går att tolka
+i efterhand — SLABS vägrar comms >8–20 km/h.
+
+Kör stillastående med tändning på:
+
+    PYTHONPATH=src python3 tools/slabs_probe.py                  # autodetektera kabel
+    PYTHONPATH=src python3 tools/slabs_probe.py --quiet 30 --hold 120
+    PYTHONPATH=src python3 tools/slabs_probe.py --no-td5 --rounds 2
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+from d2diag.kline import KLine, encode  # noqa: E402
+from d2diag.kwp2000 import KWP2000  # noqa: E402
+from d2diag.slabs import SLABS_ADDRESS, Slabs  # noqa: E402
+from d2diag.td5 import Td5  # noqa: E402
+from d2diag.transport import LoggingTransport, SerialTransport  # noqa: E402
+from d2diag.web.sources import resolve_serial_port  # noqa: E402
+
+# (namn, funktionell, testar-adress) — ordningen är testordningen.
+VARIANTS = (
+    ("fysisk/F7  (reference tool)", False, 0xF7),
+    ("funktionell/F1 (jakt+muki01)", True, 0xF1),
+    ("funktionell/F7", True, 0xF7),
+    ("fysisk/F1", False, 0xF1),
+)
+
+_log_fh = None
+
+
+def say(msg: str) -> None:
+    line = f"{dt.datetime.now().strftime('%H:%M:%S')} {msg}"
+    print(line, flush=True)
+    if _log_fh:
+        _log_fh.write(line + "\n")
+        _log_fh.flush()
+
+
+def quiet(seconds: float, why: str = "tyst period") -> None:
+    """Vänta UTAN att skicka något. Varje byte nollställer modulens väntan."""
+    if seconds <= 0:
+        return
+    say(f"  … {why} {seconds:.0f}s")
+    time.sleep(seconds)
+
+
+def engine_context(transport, sleep_after: float) -> "dict | None":
+    """Läs rpm/fart/batteri ur TD5 och släpp sessionen rent (20 + 82).
+
+    Ger tolkningsbar kontext till ett tyst SLABS-försök: stod bilen stilla?
+    Gick motorn? Vad låg spänningen på?
+    """
+    td5 = Td5(KWP2000(KLine(transport, target=0x13), tolerant=True))
+    try:
+        td5.establish()
+    except Exception as exc:  # noqa: BLE001
+        say(f"  TD5 svarade inte ({type(exc).__name__}) — kabel/tändning?")
+        return None
+    try:
+        vals = td5.read_all()
+        ctx = {k: vals.get(k) for k in ("rpm", "speed", "battery")}
+        say(f"  TD5: rpm {ctx.get('rpm')}, fart {ctx.get('speed')} km/h, "
+            f"batteri {ctx.get('battery')} V")
+        return ctx
+    except Exception as exc:  # noqa: BLE001
+        say(f"  TD5 läsfel: {type(exc).__name__}: {exc}")
+        return None
+    finally:
+        try:
+            td5.release()  # 20 + 82: lämna inte en session som barkar 7F 81 10
+        except Exception:  # noqa: BLE001
+            pass
+        quiet(sleep_after, "låt bussen tystna efter TD5")
+
+
+def try_init(transport, name: str, functional: bool, source: int) -> "Slabs | None":
+    """Ett enda initförsök med en given variant. Returnerar en levande Slabs eller None."""
+    frame = encode(b"\x81", SLABS_ADDRESS, source, addressed=True, functional=functional)
+    say(f"  → {name}: {frame.hex(' ')}")
+    kwp = KWP2000(KLine(transport, target=SLABS_ADDRESS), tolerant=True)
+    slabs = Slabs(kwp)
+    try:
+        c1 = kwp.start_communication(tolerant=True, functional=functional, source=source)
+    except Exception as exc:  # noqa: BLE001
+        say(f"     tyst ({exc})")
+        return None
+    say(f"     C1! {c1[:4].hex(' ')}")
+    # Kvittens: reference tool skickar alltid 1A 8A först — och svaret skiljer en
+    # riktig session från ett C1 som bara låg i bruset.
+    try:
+        ident = slabs.read_ecu_id(0x8A)
+        say(f"     kvittens 1A 8A → {ident[:8].hex(' ')}")
+    except Exception as exc:  # noqa: BLE001
+        say(f"     INGEN kvittens på 1A 8A ({type(exc).__name__}) — troligen falskt positiv")
+        return None
+    return slabs
+
+
+def hold(slabs: Slabs, seconds: float) -> None:
+    """Håll sessionen på 1 Hz (reference tools takt) och logga varje läsning."""
+    say(f"  håller sessionen i {seconds:.0f}s på 1 Hz …")
+    t0 = time.monotonic()
+    reads = misses = 0
+    try:
+        faults = slabs.read_faults()
+        say(f"  felkoder: {faults}")
+    except Exception as exc:  # noqa: BLE001
+        say(f"  felkodsläsning misslyckades: {type(exc).__name__}")
+    while time.monotonic() - t0 < seconds:
+        time.sleep(1.0)
+        try:
+            slabs.tester_present()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            raw = slabs.read_data(0x54)
+        except Exception:  # noqa: BLE001
+            raw = b""
+        if raw:
+            reads += 1
+            if reads % 10 == 1 or misses:
+                say(f"   {time.monotonic() - t0:5.0f}s  höjder {raw[0]}/{raw[1]}"
+                    f"  ({reads} ok, {misses} tappade)")
+            misses = 0
+        else:
+            misses += 1
+            say(f"   {time.monotonic() - t0:5.0f}s  TYST ({misses} i rad)")
+            if misses >= 5:
+                say("  ✗ sessionen tappad")
+                return
+    say(f"  ✓ höll hela perioden: {reads} lyckade läsningar")
+
+
+def main() -> int:
+    global _log_fh
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--serial", default="auto", help="serieport (default: autodetektera)")
+    ap.add_argument("--quiet", type=float, default=30.0,
+                    help="tyst period mellan försöken i sekunder (default 30)")
+    ap.add_argument("--hold", type=float, default=120.0,
+                    help="håll sessionen så här länge vid träff (default 120 s)")
+    ap.add_argument("--rounds", type=int, default=1, help="antal varv genom matrisen")
+    ap.add_argument("--no-td5", action="store_true",
+                    help="hoppa över TD5-kontexten (ingen rpm/fart/batteri i loggen)")
+    args = ap.parse_args()
+
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    os.makedirs("logs", exist_ok=True)
+    raw_path = f"logs/slabs_probe-{stamp}.raw.log"
+    _log_fh = open(f"logs/slabs_probe-{stamp}.log", "w", encoding="utf-8")
+
+    try:
+        port = resolve_serial_port(args.serial)
+    except FileNotFoundError as exc:
+        say(f"ingen kabel hittad: {exc}")
+        return 1
+
+    say(f"SLABS-prob {stamp} — port {port}")
+    say(f"rå TX/RX → {raw_path}")
+    say("Kör STILLASTÅENDE med tändning på. SLABS vägrar comms >8–20 km/h.")
+
+    transport = LoggingTransport(SerialTransport(port, timeout=1.0), logfile=raw_path)
+    try:
+        transport.open()
+    except Exception as exc:  # noqa: BLE001 — trasig/upptagen port ska ge ett svar, inte en trace
+        say(f"kunde inte öppna {port}: {type(exc).__name__}: {exc}")
+        say("sitter kabeln i? kör någon annan (dashboarden) mot porten samtidigt?")
+        return 1
+    results: "list[tuple[str, str]]" = []
+    try:
+        if not args.no_td5:
+            say("\n[kontext] läser motorn först (och släpper sessionen rent)")
+            engine_context(transport, args.quiet)
+
+        for rnd in range(1, args.rounds + 1):
+            say(f"\n[matris] varv {rnd}/{args.rounds}")
+            for name, functional, source in VARIANTS:
+                slabs = try_init(transport, name, functional, source)
+                results.append((name, "TRÄFF" if slabs else "tyst"))
+                if slabs is not None:
+                    hold(slabs, args.hold)
+                    try:
+                        slabs.release()  # 82 — lämna inte länken öppen
+                    except Exception:  # noqa: BLE001
+                        pass
+                    say("\n=== SAMMANFATTNING ===")
+                    for n, r in results:
+                        say(f"  {r:6} {n}")
+                    return 0
+                quiet(args.quiet)
+    except KeyboardInterrupt:
+        say("\navbrutet")
+    finally:
+        try:
+            transport.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    say("\n=== SAMMANFATTNING ===")
+    for n, r in results:
+        say(f"  {r:6} {n}")
+    say("ingen variant gav kontakt — se rålogg för exakta burstar")
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

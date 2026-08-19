@@ -38,11 +38,18 @@ def encode(
     target: int = TD5_ECU_ADDRESS,
     source: int = TESTER_ADDRESS,
     addressed: bool = False,
+    functional: bool = False,
 ) -> bytes:
     """Bygg en komplett ram med checksumma.
 
     ``addressed=True`` ger den adresserade init-varianten (0x8n, med tgt/src),
     ``False`` den oadresserade sessionsvarianten (0x0n, bara längd).
+
+    ``functional=True`` sätter adressläget till **funktionellt** (0xCn) i stället
+    för fysiskt (0x8n). Det är läget muki01-referensen använder
+    (``C1 33 F1 81 66``), och det enda läge SLABS svarade på i vår egen
+    adressjakt 2026-08-05 (``C1 29 F1 81 5c`` → `C1 57 8F`, medan fysisk init mot
+    samma adress var tyst).
     """
     n = len(data)
     if n == 0:
@@ -50,10 +57,11 @@ def encode(
     if n > 0xFF:
         raise FrameError(f"för långt datafält: {n} bytes")
     if addressed:
+        mode = 0xC0 if functional else 0x80
         if n <= 0x3F:
-            header = bytes([0x80 | n, target, source])
+            header = bytes([mode | n, target, source])
         else:
-            header = bytes([0x80, target, source, n])
+            header = bytes([mode, target, source, n])
     else:
         if n <= 0x3F:
             header = bytes([n])

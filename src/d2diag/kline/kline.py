@@ -96,7 +96,10 @@ class KLine:
         return self.request(start_communication, addressed=True, retries=0)
 
     def fast_init_tolerant(
-        self, start_communication: bytes = DEFAULT_START_COMMUNICATION
+        self,
+        start_communication: bytes = DEFAULT_START_COMMUNICATION,
+        functional: bool = False,
+        source: "int | None" = None,
     ) -> bytes:
         """Fast init med tolerant burst-läsning: sök 0xC1 i hela svarsbursten.
 
@@ -107,7 +110,8 @@ class KLine:
         annars öppnar sessionen upprepat och låser ECU:n (``7F`` generalReject).
         """
         self._fast_init_pulse()
-        raw = self.converse(start_communication, addressed=True)
+        raw = self.converse(start_communication, addressed=True,
+                            functional=functional, source=source)
         i = raw.find(0xC1)
         if i < 0:
             raise KLineTimeout(f"ingen C1 i bursten: {raw.hex(' ') or 'tom'}")
@@ -158,6 +162,8 @@ class KLine:
         addressed: bool = False,
         gap: float = 0.06,
         overall: float = 1.0,
+        functional: bool = False,
+        source: "int | None" = None,
     ) -> bytes:
         """Skicka ett datafält och läs HELA svarsbursten rått (eko + svar +
         ev. glitchbytes) — utan checksum-avvisning.
@@ -166,7 +172,8 @@ class KLine:
         själv efter förväntad svarsbyte i bursten. Avsett för billiga KKL-kablar
         där turnaround-glitch shreddar enstaka ramar men rätt byte ändå finns med.
         """
-        frame = encode(data, self._target, self._source, addressed=addressed)
+        frame = encode(data, self._target, self._source if source is None else source,
+                       addressed=addressed, functional=functional)
         self._flush_input()
         self._t.send(frame)
         return self._burst_read(gap, overall)

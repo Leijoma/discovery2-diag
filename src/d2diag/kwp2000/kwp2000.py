@@ -147,13 +147,17 @@ class KWP2000:
         return resp
 
     # ---- tjänster ----------------------------------------------------- #
-    def start_communication(self, tolerant: "bool | None" = None) -> bytes:
+    def start_communication(self, tolerant: "bool | None" = None,
+                            functional: bool = False,
+                            source: "int | None" = None) -> bytes:
         """Fast init / StartCommunication. Returnerar svarets datafält (C1 …).
 
         ``tolerant`` styr burst- vs strikt läsning; ``None`` följer KWP2000:ans
         eget läge (satt i konstruktorn)."""
         use_tolerant = self._tolerant if tolerant is None else tolerant
-        return self._k.fast_init_tolerant() if use_tolerant else self._k.fast_init()
+        if use_tolerant:
+            return self._k.fast_init_tolerant(functional=functional, source=source)
+        return self._k.fast_init()
 
     def slow_init(self, address: int) -> "tuple[int, int]":
         """5-baud slow init mot en modul (SLABS m.fl.). Returnerar keybytes (KW1, KW2)."""
