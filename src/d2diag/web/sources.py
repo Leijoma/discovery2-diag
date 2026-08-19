@@ -310,6 +310,26 @@ def _slabs_sig(values: "dict[str, float]") -> "dict[str, dict]":
             for k, v in values.items()}
 
 
+def _slabs_decode_store(raws: "dict[int, bytes]") -> "dict[str, float]":
+    """Avkoda alla SLABS-store-fält vi har rå-bytes för → {namn: värde}.
+
+    Store-driven, så en ny bekräftad mappning i ``slabs.json`` dyker upp i UI:t
+    utan kodändring. Höjderna kompletteras med härledda mm-fält (SVG-bilen). Fält
+    med tillståndsetikett (any_door) tas INTE med här — de går som numeriskt
+    0/1 och etiketten sätts i UI-lagret om det behövs.
+    """
+    vals: "dict[str, float]" = {}
+    for sig in load_signals("slabs"):
+        raw = raws.get(sig.lid)
+        if raw is not None and sig.fits(raw):
+            vals[sig.name] = round(sig.decode(raw), 3)
+    if "height_left" in vals:
+        vals["height_left_mm"] = round(vals["height_left"] * 1.4, 1)
+    if "height_right" in vals:
+        vals["height_right_mm"] = round(vals["height_right"] * 1.4, 1)
+    return vals
+
+
 def _slabs_faults_flat(f: "dict[str, list]") -> "list[str]":
     """{"loggade":[…],"aktuella":[…]} → platt lista med (Logged)/(Current)-taggar."""
     return [x + " (Logged)" for x in f.get("loggade", [])] + \
@@ -429,6 +449,9 @@ class SlabsDataSource(DataSource):
         self._last_signals: "dict" = {}  # senaste avkodade signaler (visas under nåd-perioden)
         self._last_bus = 0.0    # monotonic-tid för senaste bussanrop (1 Hz-strypningen)
         self._last_fault = 0.0  # monotonic-tid för senaste felkodsläsning
+        self._raws: "dict[int, bytes]" = {}   # senast lästa rå-bytes per LID (store-avkodning)
+        self._extra_lids: "list[int]" = []    # övriga store-LID:er att rotera igenom
+        self._rot = 0                          # rotationsindex
 
     def is_connected(self) -> bool:
         return self._slabs is not None
@@ -446,6 +469,10 @@ class SlabsDataSource(DataSource):
                               tolerant=True))
         slabs.open()
         slabs.establish(progress=self.on_progress, **_sleep_kw(self.on_sleep))
+        # Övriga LID:er storen bryr sig om (höjderna 0x54 läses varje cykel; resten
+        # roteras EN per cykel så trafiken stannar på ~1 Hz). Ny mappning i
+        # slabs.json → nytt fält i UI:t utan kodändring.
+        self._extra_lids = sorted({sig.lid for sig in load_signals("slabs")} - {0x54})
         return slabs
 
     def disconnect(self) -> None:
@@ -475,14 +502,25 @@ class SlabsDataSource(DataSource):
                 self._slabs.tester_present()  # keepalive — bästa försök, inte livstecken
             except Exception:  # noqa: BLE001 — ett tappat 3E ska inte riva sessionen
                 pass
-            # LÄTT poll — bevisat stabilt (sniff 2026-08-07): bara höjder (21 54).
-            # SLABS tål inte att block-pollas med många LID:er i varje 0.5 s-cykel;
-            # reference tool körde ~1 Hz keepalive + enstaka läsningar. Store-driven
-            # block-läsning fanns här men destabiliserade sessionen (~7× busstrafik).
+            # LÄTT poll: höjder (21 54) VARJE cykel + EN roterande extra-LID ur
+            # storen. Det håller trafiken på ~1 Hz (3E + 2 läsningar) — långt under
+            # den block-läsning som dödade sessionen (5 LID:er × varje 0,5 s-cykel).
+            # Reference tool körde ~1 Hz keepalive + enstaka läsningar.
             try:
                 raw = self._slabs.read_data(0x54)  # byte0=vänster höjd, byte1=höger
             except Exception:  # noqa: BLE001 — en enstaka tappad läsning
                 raw = b""
+            if raw:
+                self._raws[0x54] = raw
+            if self._extra_lids:  # en extra LID per cykel, roterande
+                lid = self._extra_lids[self._rot % len(self._extra_lids)]
+                self._rot += 1
+                try:
+                    extra = self._slabs.read_data(lid)
+                    if extra:
+                        self._raws[lid] = extra
+                except Exception:  # noqa: BLE001 — en tappad extra-läsning är ofarlig
+                    pass
             if not raw:
                 # En full reconnect kostar ~20 s, så vi river inte sessionen direkt:
                 # SLABS tystnar ofta en cykel (bussglitch, eller bilen började rulla).
@@ -495,12 +533,7 @@ class SlabsDataSource(DataSource):
                 raise RuntimeError(
                     f"inget SLABS-svar på {self._empty_streak} pollar — tappad session")
             self._empty_streak = 0
-            hl = raw[0] if len(raw) > 0 else 0
-            hr = raw[1] if len(raw) > 1 else 0
-            signals = _slabs_sig({
-                "height_left": hl, "height_right": hr,
-                "height_left_mm": hl * 1.4, "height_right_mm": hr * 1.4,
-            })
+            signals = _slabs_sig(_slabs_decode_store(self._raws))
             self._last_signals = signals  # spara för nåd-perioden vid en tom cykel
             # Felkoder kostar två extra ramar (21 11 + 21 47) → egen, mycket långsam
             # kadens i SEKUNDER. Global fault-watch får inte snabba upp SLABS.

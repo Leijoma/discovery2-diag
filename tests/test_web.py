@@ -510,6 +510,46 @@ class _CountingSlabs(_FakeSlabs):
         return self._height
 
 
+def test_slabs_poll_reads_store_lids_by_rotation():
+    # Experimentläget ska visa mer än höjder: pollen läser 21 54 varje cykel och
+    # roterar EN extra store-LID per cykel (håller trafiken på ~1 Hz). Över flera
+    # cykler fylls alla store-fält i utan att någon enskild cykel block-läser.
+    from d2diag.kline import KLine, encode
+    from d2diag.kwp2000 import KWP2000
+    from d2diag.slabs import Slabs
+    from d2diag.web.sources import SlabsDataSource
+    from tests.fakes import FakeKLineEcu
+
+    def _f(d):
+        return encode(d, addressed=False)
+
+    resp = {
+        _f(b"\x3e"): _f(b"\x7e"),
+        _f(b"\x21\x54"): _f(b"\x61\x54\x95\xa4\x0f\x0f"),   # höjder 149/164
+        _f(b"\x21\x56"): _f(b"\x61\x56\x01\x0f\x0f\x0f"),   # any_door bit0=1
+        _f(b"\x21\x43"): _f(b"\x61\x43\x00\x7c\x00\x7c\x00\x7c\x00\x7c"),  # wheel_speed_fr u16=0x007c
+        _f(b"\x21\x50"): _f(b"\x61\x50\x72\x73\x73\x72"),   # abs_sensor_fr=0x72
+        _f(b"\x21\x44"): _f(b"\x61\x44" + bytes(12) + b"\xe0\xdc"),  # batteri 0xe0*0.0625=14.0
+    }
+    src = SlabsDataSource(port="x", read_faults=False)
+    src._slabs = Slabs(KWP2000(KLine(FakeKLineEcu(resp))))
+    src._extra_lids = [0x43, 0x44, 0x50, 0x56]   # som _connect skulle sätta
+
+    seen = {}
+    for _ in range(6):                # 6 cykler → alla 4 extra-LID:er hinner läsas
+        src._last_bus = 0.0           # öppna 1 Hz-strypningen
+        out = src.poll()
+        seen.update(out["signals"])
+    assert out["status"] == "connected"
+    assert seen["height_left"]["v"] == 149 and seen["height_right"]["v"] == 164
+    assert seen["any_door"]["v"] == 1.0
+    assert seen["wheel_speed_fr"]["v"] == 0x7c
+    assert round(seen["battery"]["v"], 1) == 14.0
+    # confidence flödar från storen
+    assert seen["height_left"]["c"] == "belagt"
+    assert seen["wheel_speed_fr"]["c"] == "kandidat"
+
+
 def test_slabs_poll_is_throttled_to_one_hz():
     # Servern pollar 2 Hz men SLABS tål inte det: reference tool körde ~1 Hz
     # (keepalive var ~1048:e ms). Extra pollar ska returnera cachade värden UTAN

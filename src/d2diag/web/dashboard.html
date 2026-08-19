@@ -368,6 +368,11 @@
         </div>
       </section>
 
+      <section>
+        <h2>Signals</h2>
+        <div id="slabs-signals" class="grid"><span class="none">—</span></div>
+      </section>
+
       <section class="adv-actuators">
         <h2>ABS block</h2>
         <div class="btns">
@@ -488,6 +493,9 @@
     balance_1:"Injector 1", balance_2:"Injector 2", balance_3:"Injector 3",
     balance_4:"Injector 4", balance_5:"Injector 5",
     height_left_mm:"Height left", height_right_mm:"Height right",
+    height_left:"Height left (raw)", height_right:"Height right (raw)",
+    any_door:"Door open", wheel_speed_fr:"Wheel speed FR", abs_sensor_fr:"ABS sensor FR",
+    ecu_supply:"ECU supply",
   };
   const HERO = ["rpm","speed","coolant_temp","battery"];
 
@@ -950,6 +958,19 @@
     }
     setT("c_h_l", sig.height_left ? fmt(sig.height_left.v) : "–");
     setT("c_h_r", sig.height_right ? fmt(sig.height_right.v) : "–");
+    // Generisk lista: varje mappat store-fält syns automatiskt (trust-filtrerat).
+    // Höjderna visas redan i SVG:n → hoppa dem här för att undvika dubblering.
+    const skip = new Set(["height_left","height_right","height_left_mm","height_right_mm"]);
+    const el = $("slabs-signals");
+    if (el) {
+      const rows = Object.keys(sig).filter(n => !skip.has(n) && shown(sig[n])).sort().map(n => {
+        const x = sig[n], badge = x.c==="kandidat" ? ' <span class="exp">exp</span>' : "";
+        const val = (n==="any_door") ? (x.v ? "open" : "closed") : fmt(x.v);
+        return `<div class="row"><span class="n">${LABELS[n]||n}${badge}</span>`
+             + `<span class="val">${val} <span class="u">${x.u||""}</span></span></div>`;
+      }).join("");
+      el.innerHTML = rows || '<span class="none">—</span>';
+    }
     const cur = faults.filter(f => /current/i.test(f)).length;
     setT("c_abs", !has ? "–" : (faults.length ? (cur ? cur+" active" : faults.length+" logged") : "OK"));
     $("s_faults").innerHTML = faultHtml(faults);
