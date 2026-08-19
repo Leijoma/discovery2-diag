@@ -47,17 +47,30 @@ from d2diag.td5 import Td5  # noqa: E402
 from d2diag.transport import LoggingTransport, SerialTransport  # noqa: E402
 from d2diag.web.sources import resolve_serial_port  # noqa: E402
 
+# (funktionellt läge, testar-adress, måladress). Init-ramen är
+# <fmt> <mål> <källa> 81 <cs>, där fmt = 0x81 fysiskt / 0xC1 funktionellt och
+# checksumman är summan av de fyra föregående. Frågan vi mäter: måste det vara
+# EN specifik följd, eller duger flera?
+#
+# Läget 2026-08-19: fysisk/F7, funktionell/F1 och funktionell/F7 har alla gett
+# kontakt minst en gång — alltså krävs ingen enda specifik följd. fysisk/F1 har
+# aldrig lyckats (0 av 8 försök), och broadcast till 0x33 är otestat: det är den
+# ram muki01-referensen använder (C1 33 F1 81 66) och den adresserar alla
+# OBD-moduler funktionellt i stället för SLABS fysiska adress 0x29.
 VARIANTS = {
-    "fysisk/F7": (False, 0xF7),
-    "funktionell/F1": (True, 0xF1),
-    "funktionell/F7": (True, 0xF7),
-    # Sista byten i initramen är CHECKSUMMAN (summa av de fyra föregående & 0xFF) —
-    # alltså helt bestämd av resten. ISO 14230-2 kräver att mottagaren validerar den.
-    # "-badcs" skickar samma ram med checksumman avsiktligt fel (+1) för att mäta om
-    # DEN HÄR modulen faktiskt bryr sig. Svarar den ändå är checksumman i praktiken
-    # frivillig vid init; tiger den är den obligatorisk. Ren läsning, inget skrivs.
-    "fysisk/F7-badcs": (False, 0xF7),
+    "fysisk/F7":          (False, 0xF7, SLABS_ADDRESS),
+    "funktionell/F1":     (True,  0xF1, SLABS_ADDRESS),
+    "funktionell/F7":     (True,  0xF7, SLABS_ADDRESS),
+    "fysisk/F1":          (False, 0xF1, SLABS_ADDRESS),
+    "broadcast/33/F1":    (True,  0xF1, 0x33),   # muki01: C1 33 F1 81 66
+    "broadcast/33/F7":    (True,  0xF7, 0x33),
 }
+
+
+def frame_for(variant: str) -> bytes:
+    functional, source, target = VARIANTS[variant]
+    return encode(b"\x81", target, source, addressed=True, functional=functional)
+
 
 _log_fh = None
 _jsonl = None
@@ -101,35 +114,15 @@ def td5_context(transport) -> "dict":
     return ctx
 
 
-def _init_with_bad_checksum(kline, functional: bool, source: int) -> None:
-    """Skicka StartCommunication med FEL checksumma (+1) och sök C1 efter ekot.
-
-    Går förbi ``encode()``, som alltid räknar rätt checksumma — hela poängen är att
-    bryta mot ISO 14230-2 och se om modulen ändå svarar.
-    """
-    frame = bytearray(encode(b"\x81", SLABS_ADDRESS, source,
-                             addressed=True, functional=functional))
-    frame[-1] = (frame[-1] + 1) & 0xFF  # trasig checksumma
-    kline._fast_init_pulse()
-    kline._flush_input()
-    kline._t.send(bytes(frame))
-    raw = kline._burst_read(0.06, 1.0)
-    i = raw.find(bytes(frame))
-    tail = raw[i + len(frame):] if i >= 0 else raw[len(frame):]
-    if tail.find(0xC1) < 0:
-        raise KLineTimeout(f"ingen C1 (trasig checksumma): {raw.hex(' ') or 'tom'}")
-
-
 def attempt(transport, variant: str, hold: float) -> "dict":
     """Ett initförsök + kort hållperiod. Returnerar mätresultatet som dict."""
-    functional, source = VARIANTS[variant]
-    kwp = KWP2000(KLine(transport, target=SLABS_ADDRESS), tolerant=True)
+    functional, source, target = VARIANTS[variant]
+    # Init går mot måladressen (0x29 eller broadcast 0x33); sessionen därefter är
+    # oadresserad, så SLABS-objektet pratar med den modul som svarade.
+    kwp = KWP2000(KLine(transport, target=target), tolerant=True)
     slabs = Slabs(kwp)
     try:
-        if variant.endswith("-badcs"):
-            _init_with_bad_checksum(kwp._k, functional, source)
-        else:
-            kwp.start_communication(tolerant=True, functional=functional, source=source)
+        kwp.start_communication(tolerant=True, functional=functional, source=source)
     except KLineTimeout:
         return {"result": "tyst"}
     except Exception as exc:  # noqa: BLE001
@@ -200,9 +193,6 @@ def summarise(paths: "list[str]") -> int:
             volt = f"   batteri {min(v):.2f}–{max(v):.2f} V" if v else ""
             print(f"    {str(k):16} {rate(groups[k])}{volt}")
         print()
-    bad = [r for r in rows if r.get("variant", "").endswith("-badcs")]
-    if bad:
-        print(f"  checksumma-test: {rate(bad)} svarade trots FEL checksumma")
     return 0
 
 
@@ -217,8 +207,7 @@ def main() -> int:
     ap.add_argument("--hold", type=float, default=15.0,
                     help="hållperiod vid träff, sekunder (default 15)")
     ap.add_argument("--variants", default="fysisk/F7,funktionell/F1,funktionell/F7",
-                    help="kommaseparerat; lägg till fysisk/F7-badcs för att mäta om "
-                         "modulen bryr sig om checksumman vid init")
+                    help=f"kommaseparerat. Tillgängliga: {', '.join(VARIANTS)}")
     ap.add_argument("--td5", choices=("never", "always", "both"), default="both",
                     help="TD5-session före SLABS: aldrig / alltid / båda (default both)")
     ap.add_argument("--seed", type=int, default=None, help="seed för ordningen")
