@@ -7,8 +7,8 @@ verklig trafik**, inte gissat.
 
 ## Grundläggande
 - **Adress `0x29`, FAST init:** `81 29 F7 81 22` → svar `C1 57 8F` (KWP2000, KW2=8F).
-  Init är **trögt** — i sniffen fick reference tools *första* försök inget svar,
-  andra lyckades ~25 s senare. Flera försök innan C1 är normalt, inte en bugg.
+  ✅ **Init fungerar sedan 2026-08-19** — se "Init-pulsen" nedan. Att det tidigare
+  krävdes många försök var VÅRT fel (TiniH ~32 ms i stället för 25), inte modulens.
 - **Session:** oadresserade, längd-prefixade ramar `<len> <SID> <data…> <cs>`
   (checksumma = byte-summa & 0xFF), samma stil som Td5-sessionen.
 - **Keepalive:** `01 3E` → `7E` (TesterPresent), ~1 s. **OBS: bar `3E` utan
@@ -47,8 +47,10 @@ nollställer väntan. Att hamra är aktivt skadligt: det var precis det som höl
 ute i ~2 min 2026-08-18 (och tolkningen "flera försök är normalt" i den här filen
 var en feltolkning av samma sniff).
 
-- **`establish`: `idle=0.3 s`, `attempts=3`, `retry_sleep=28 s`** — och pausen är
-  strikt tyst: `82` skickas EN gång före tystnaden, aldrig mellan försöken.
+- **`establish`: `idle=0.3 s`, `attempts=3`, `retry_sleep=28 s`.** Den långa pausen
+  behövs sannolikt inte längre — den infördes när init misslyckades av
+  timing-skäl. Sänk den gärna och mät (`tools/slabs_probe.py --quiet 5` ger numera
+  träff på första eller andra försöket).
 - Bilen 2026-08-18 bekräftade den andra halvan: väl uppkopplad satt SLABS
   **stabilt i 2 min 25 s** med data (4 signaler, ingen reconnect). Den lätta
   pollen håller — problemet var bara att komma in.
@@ -113,7 +115,45 @@ behöver flera, och det förklarar också varför TD5 (Lucas) fungerar medan SLA
 för någon modul** — testa först med `tools/slabs_probe.py --write-gaps 0,5`, som
 kör P4 = 0 och 5 ms som separata celler i den blandade matrisen.
 
-### Fast-init-PULSEN är den andra luckan
+### 🔑 INIT-PULSEN var hela problemet (löst 2026-08-19)
+Vår TiniH — höga perioden mellan låg-pulsen och StartCommunication — var **~32 ms
+i stället för ISO:s 25 ± 1**, av två skäl:
+
+1. **UART-stoppbiten räknades inte.** Låg-pulsen är en `0x00` vid ~360 baud;
+   ramen avslutas med en stoppbit som är HÖG (~2,8 ms) och `flush()` väntar tills
+   den sänts. TiniH hade alltså redan börjat.
+2. **`time.sleep(25 ms)` överskjuter.** Uppmätt på macOS: 25,3–32,0 ms, median 29,1.
+
+Åtgärd: `fast_init_low()` returnerar tiden linjen redan varit hög, och `KLine`
+väntar med `_precise_wait()` (spinnande klocka) i stället för `sleep` → uppmätt
+**25,00 ± 0,01 ms**.
+
+| | Träffkvot per initförsök |
+|---|---|
+| Före | 3/32 = **9 %** |
+| Efter | 6/11 = **55 %**, och dashboarden kopplar upp på FÖRSTA försöket |
+
+Fishers exakta test **p = 0,007**. Tre av träffarna kom på `81 29 F7 81 22` —
+adressläget var aldrig problemet, och alla hypoteser om spänning, motorstatus,
+tyst period och dörrar var återvändsgränder.
+
+**Lärdomen:** TD5 (Lucas) accepterade vår felaktiga puls utan protest i månader.
+SLABS (Wabco) har ett smalare toleransfönster och avslöjade felet. En modul som
+är "nyckfull" medan en annan fungerar betyder inte att modulen är trasig — det
+kan vara vi som ligger på kanten av specen.
+
+⚠️ Kvar att mäta: de **fysiska** flankerna. Vi mäter bara vår mjukvarusida; tiden
+från `write()` till att byten lämnar FT232:n syns inte från Python. ESP32-tappen
+kan tidsstämpla flankerna om det behövs.
+
+### W5 och P4 — implementerade, ej bevisade
+- `KLine(init_idle=…)` ger garanterad buss-idle före pulsen (ISO: 300 ms). Av som
+  default. Proben: `--init-idle 1000`.
+- `KLine(write_gap=…)` ger P4, inter-byte-tid vid sändning (ISO 5–20 ms, muki01
+  använder 5). Av som default. Mätningen 0 mot 5 ms gav inget utslag — men den
+  gjordes innan P4-väntan blev exakt, så siffran mätte snarare 8–9 ms.
+
+### Fast-init-pulsens fysiska flanker
 Sniffen är RX-only och ser bara UART-data — den elektriska init-pulsen (hur länge
 K-line dras låg/hög före `81 29 F7 81 22`) syns inte i något capture. Allt på
 applikationsnivå är därmed belagt och implementerat, medan pulstajmingen är

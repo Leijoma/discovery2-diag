@@ -40,42 +40,56 @@ SLABS (Wabco ABS+luftfjädring, adress `0x29`) kopplade upp men **dog efter
    höjder (`21 54`); felkoder högst var 10:e poll. `establish` tillbaka till
    `idle=0.3, attempts=3`.
 
-### Bilsession 2026-08-18 kväll — vad som mättes
-- ✅ **Lätt poll håller.** SLABS satt uppkopplad **2 min 25 s** med data
-  (17:27:41 → 17:30:06, 4 signaler, ingen reconnect). Gamla brytpunkten var ~15 s.
-- ✅ **`7F 81 10` är borta** sedan `82` (StopCommunication) infördes. Rejecten kommer
-  från en ANNAN modul (TD5 i session) — belagt både i sniffen och i bilen.
-- ⚠️ **Init är fortfarande opålitligt.** SLABS svarar ibland på första försöket,
-  ibland inte alls på elva försök över fyra minuter. Alla misslyckanden är TYSTA
-  (bara vårt eko i bursten) medan TD5 kopplar upp på första försöket sekunder
-  senare på samma kabel → kabel/buss/init-timing är uteslutna.
-- 📉 **Batteriet är en öppen kandidat.** 11,65 V på eftermiddagen, 12,43 V kl 23
-  (tändning på, motorn av — alltså INGEN laddspänning; laddare ger >13 V). SLABS
-  drar kompressor/ventiler och har underspänningsskydd; TD5 har lägre tröskel.
-  Korrelationen finns men är OBEVISAD — vi mätte aldrig spänningen i det ögonblick
-  SLABS tystnade.
+### ✅ LÖST 2026-08-19 — orsaken var vår egen init-puls
 
-### Kodändringar 2026-08-18 kväll (alla committade, 207 tester gröna)
-`60e7bce` TD5-sessionsstädning vid modulbyte · `cd13085` CSV-loggning svarar direkt
-(inline-kommandon) · `56c56d7` StopCommunication `82` (release + före varje etablering)
-· `97e43b6` tyst period 28 s istället för att hamra (mätt ur sniffarna) · `baea354`
-avbrytbar väntan så modulbyte inte fastnar bakom en etablering · `36d7d2a` SLABS-trafik
-strypt till 1 Hz på klockan · `ec5440f` anslutningsloggen nycklad på (modul, status) —
-dolde en lyckad SLABS-session · progress-rader dedupas (1,9 MB brus på en kväll).
+Efter en dags mätande: **TiniH (höga perioden mellan låg-pulsen och
+StartCommunication) var ~32 ms i stället för ISO:s 25 ± 1.** Två orsaker —
+UART-stoppbiten efter puls-byten (~2,8 ms) räknades inte, och `time.sleep(25 ms)`
+överskjuter till 25,3–32,0 ms (median 29,1) på macOS.
 
-### Vad som återstår (NÄSTA STEG)
-1. **Lamptestet (utan verktyg, gör först).** Verkstadsmanualen: vid tändning läge II
-   gör SLABS-ECU:n en 3-sekunders lamptest av SLS- och ORM-lamporna. Sker det lever
-   modulen och felet sitter i K-line-kommunikationen; sker det inte är den strömlös
-   eller i skyddsläge → säkring och matning, inte mer kod.
-2. **Mät spänningen under testet.** Ladda/kör motorn (~14 V) och kör med `--csv` så
-   batterikurvan finns bredvid `logs/connection.log`. TD5:s batterivärde är proxyn —
-   SLABS egen matning (`21 53` byte0) är oavkodad.
-3. **Testa "TD5 först"-hypotesen.** Båda de lyckade SLABS-initarna 2026-08-18 kväll
-   kom strax efter en TD5-session (23:08:42 motor → 23:08:54 SLABS, första försöket),
-   och sniffen har samma mönster (`t=403982`: C1 bara 2,9 s efter TD5-keepalive) medan
-   alla andra lyckade initar krävde 25–28 s tystnad. Om det upprepar sig ska
-   TD5-kontakt byggas in som uppvärmning före SLABS.
+| | Träffkvot per initförsök |
+|---|---|
+| Före | 3/32 = **9 %** |
+| Efter | 6/11 = **55 %** |
+
+Fishers exakta test **p = 0,007**. Dashboarden kopplar nu upp SLABS på **första
+försöket**, en sekund efter start, och sessionen är stabil (1 Hz-strypningen från
+i går håller: 95/95 läsningar i tvåminuterstester).
+
+**Alla andra hypoteser var återvändsgränder** — och flera av dem var mätfel:
+adressläge (sammanblandat med försöksnummer), tyst period (sammanblandad med
+tidpunkt), batterispänning (överlappande intervall), motorstatus (p=0,27), dörr
+(n=2). Se `references/slabs_init_problem_brief.md` för hela genomgången.
+
+**Lärdomen:** TD5 (Lucas) accepterade den felaktiga pulsen i månader. SLABS
+(Wabco) har ett smalare toleransfönster och avslöjade felet. Att en modul är
+nyckfull medan en annan fungerar betyder inte att modulen är trasig.
+
+**Metodlärdomar värda att minnas:** lås aldrig ett experiment till en variant
+innan frågan är avgjord (ett tortyrpass låst till `fysisk/F7` gav 0/50 och såg ut
+som att modulen dött); blanda ordningen, annars mäter man positionen; och kör inte
+betingelser som separata tidsblock — då mäter man klockan.
+
+### Kodändringar 2026-08-18/19 (alla committade, 220 tester gröna)
+`60e7bce` TD5-sessionsstädning vid modulbyte · `cd13085` CSV svarar direkt
+(inline-kommandon) · `56c56d7` StopCommunication `82` · `36d7d2a` SLABS-trafik
+strypt till 1 Hz på klockan · `ec5440f` anslutningsloggen nycklad på (modul, status)
+· `261fe9d` `1A 8A` som sessionskvittens · `7c31c2c` hoppa över ekot vid C1-sökning
+· `144210e` + `acf7eb5` **init-pulsen: stoppbit + exakt väntan** ← den avgörande
+· `11e17e5` P4 och to_frame_ms mäter rätt sak.
+
+Nya verktyg: `tools/slabs_probe.py` (kontrollerad init-matris med rå TX/RX och
+pulsmätning) och `tools/slabs_torture.py` (statistiskt experiment över tyst
+period, TD5-före och strömläge, blandad ordning med loggad seed).
+
+### Vad som återstår
+- **Verifiera i drift** över flera dagar och kalla starter — vi har mätt en
+  eftermiddag.
+- **W5 och P4** är implementerade (`init_idle`, `write_gap`) men avstängda och
+  obevisade. P4-mätningen gjordes dessutom innan väntan blev exakt.
+- **Fysiska flanker** är fortfarande omätta — vi ser bara vår mjukvarusida.
+  ESP32-tappen kan tidsstämpla dem om det behövs.
+- **Övrigt oförändrat:** ACE/EAT/BCU ej implementerade, airbag experimentell.
 
 ### Kör dashboarden
 ```bash
