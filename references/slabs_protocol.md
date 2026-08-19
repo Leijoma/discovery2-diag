@@ -104,18 +104,41 @@ och det är vad vi kopierat. Men två oberoende källor pekar på ett annat läg
 | Vår adressjakt, `func-f7` | `C1 29 F7 81 62` | tyst |
 | muki01 (bekräftad korrekt) | `C1 33 F1 81 66` | — (funktionell broadcast) |
 
-**BEKRÄFTAT I BILEN 2026-08-19 13:29:** `C1 29 F7 81 62` (funktionellt läge,
-testar-adress **0xF7**) gav en riktig session — kvittens `1A 8A → 00 37 44 60 44
-03 10 ff` (identisk med sniffen) och sedan 90+ s på 1 Hz med **noll tappade
-läsningar**, höjder 149/162, felkod `027 shuttle valve` läst. I samma körning var
-fysisk init (`81 29 F7 81`) tyst båda gångerna. Motorn var AV och batteriet på
-12,11 V — så adressläget, inte spänningen, var skillnaden.
+**MÄTT I BILEN 2026-08-19, 8 kontrollerade körningar** (`tools/slabs_probe.py`,
+en variant i taget med 30 s tystnad emellan, kvittens via `1A 8A`):
+
+| Tid | Batteri | Motor | Utfall |
+|---|---|---|---|
+| 13:25 | 13,66 V | igång | tyst (alla 4) |
+| 13:28 | 12,11 V | av | TRÄFF → funktionell/F7 |
+| 13:32 | 11,89 V | av | tyst |
+| 13:36 | 11,83 V | av | tyst |
+| 13:38 | 13,71 V | igång | TRÄFF → funktionell/F1 |
+| 13:42 | 13,77 V | igång | TRÄFF → funktionell/F7 |
+| 13:46 | 13,80 V | igång | TRÄFF → **fysisk/F7** (första försöket) |
+| 13:47 | 12,28 V | av | tyst |
+
+**Motorn igång: 3 träffar av 4. Motorn av: 1 av 4.** Spänningen överlappar
+(träffar 12,11–13,80 V, missar 11,83–13,66 V) så det är ingen skarp tröskel — men
+motorstatus är den klart starkaste faktorn vi mätt.
+
+⚠️ **Adressläget är INTE avgörande.** Alla tre varianter har vunnit minst en gång,
+och vid 13,80 V tog reference tools egen fysiska init (`81 29 F7 81`) på första
+försöket. En tidigare notering här hävdade att adressläget var skillnaden — den
+byggde på en enda körning och var fel. `_init_variants` växlar ändå mellan
+lägena: det kostar inget och ger fler chanser per cykel.
+
+**Praktisk regel: kör motorn när du pratar med SLABS.** Det är också modulens
+normala driftfall (SLS nivåreglerar med motorn igång).
 
 ⚠️ **Ekot ser ut som ett svar i funktionellt läge.** Ramen börjar själv på `0xC1`,
 och halv-duplex ekar allt vi sänder. En naiv sökning efter `0xC1` i bursten hittar
 vårt eget eko och rapporterar uppkoppling på tom buss (`C1! c1 29 f1 81`).
 `fast_init_tolerant` hoppar därför över ekot innan den söker — och `1A 8A`-
 kvittensen fångar resten.
+
+**Stabiliteten är löst.** Båda 120-sekundersperioderna gav 95/95 lyckade
+läsningar, noll tappade, på 1 Hz.
 
 `0xC1` = funktionellt adressläge (bit 7-6 = 11) i stället för fysiskt `0x81`.
 Jakten fick svar **enbart** i funktionellt läge med `0xF1`, samma kombination som

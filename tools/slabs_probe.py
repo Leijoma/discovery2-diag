@@ -84,6 +84,13 @@ def engine_context(transport, sleep_after: float) -> "dict | None":
         ctx = {k: vals.get(k) for k in ("rpm", "speed", "battery")}
         say(f"  TD5: rpm {ctx.get('rpm')}, fart {ctx.get('speed')} km/h, "
             f"batteri {ctx.get('battery')} V")
+        # Mätt 2026-08-19 (8 körningar): motorn igång gav 3 träffar av 4, motorn av
+        # bara 1 av 4. Ingen skarp spänningströskel, men klart starkaste faktorn.
+        if not ctx.get("rpm"):
+            say("  ⚠️  MOTORN ÄR AV. SLABS svarade bara i 1 av 4 körningar så — "
+                "starta motorn för bästa chans (SLS:s normala driftfall).")
+        if (ctx.get("speed") or 0) > 5:
+            say("  ⚠️  BILEN RULLAR. SLABS vägrar comms >8–20 km/h — stanna först.")
         return ctx
     except Exception as exc:  # noqa: BLE001
         say(f"  TD5 läsfel: {type(exc).__name__}: {exc}")
