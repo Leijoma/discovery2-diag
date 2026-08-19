@@ -66,7 +66,7 @@ def _conf_of(module: str, name: str, conf: "dict[str, str]") -> str:
     if module == "slabs":
         if name.startswith("height_"):
             return "belagt"          # härledd ur belagd höjd
-        if name.startswith(("speed_", "volt_")):
+        if name.startswith(("wheel_speed_", "abs_sensor_")):
             return "kandidat"        # hjulhastighet/spänning: skala ej bekräftad
     return "belagt"
 
@@ -393,9 +393,9 @@ class MockSlabsDataSource(DataSource):
             "height_left": hl, "height_right": hr,
             "height_left_mm": hl * 1.4, "height_right_mm": hr * 1.4,
         }
-        for w in ("fl", "fr", "rl", "rr"):  # hjul: hastighet (0 stillastående) + givarspänning
-            vals[f"speed_{w}"] = 0.0
-            vals[f"volt_{w}"] = round(2.2 + random.uniform(-0.05, 0.05), 2)
+        for w in ("fl", "fr", "rl", "rr"):  # hjul: hastighet (~124 råvärde stilla) + givarspänning
+            vals[f"wheel_speed_{w}"] = 124.0
+            vals[f"abs_sensor_{w}"] = round(2.3 + random.uniform(-0.05, 0.05), 2)
         signals = _slabs_sig(vals)
         if self._cleared > 0:
             self._cleared -= 1

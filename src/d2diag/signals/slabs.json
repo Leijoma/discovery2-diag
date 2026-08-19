@@ -41,30 +41,6 @@
     "source": "21 56 byte0 bit0 = any-door; BELAGT via differential 2026-08-08 (00 stängd/01 öppen)"
   },
   {
-    "name": "wheel_speed_fr",
-    "lid": "43",
-    "offset": 0,
-    "kind": "u16",
-    "scale": 1.0,
-    "bias": 0.0,
-    "unit": "",
-    "confidence": "kandidat",
-    "limits": null,
-    "source": "21 43 = 4×hjulhastighet (2 byte/hjul). reference tool: 0 km/h stilla, alla fyra lika vid rakkörning; fladder/0 under körning → Three Amigos. Råvärde ~124 baseline stilla (≠ km/h) → skala okänd. KANDIDAT."
-  },
-  {
-    "name": "abs_sensor_fr",
-    "lid": "50",
-    "offset": 0,
-    "kind": "u8",
-    "scale": 1.0,
-    "bias": 0.0,
-    "unit": "",
-    "confidence": "kandidat",
-    "limits": null,
-    "source": "21 50 = 4x ABS-sensorspänning (1 byte/hjul); FR byte0 ~0x72. Skala ~x0.019 V EJ bekräftad."
-  },
-  {
     "name": "battery",
     "lid": "44",
     "offset": 12,
@@ -93,5 +69,113 @@
       15.0
     ],
     "source": "21 44 byte13 = ECU-supply (~0xb1 -> x1/16 ~11.5 V); varierar & matchar men skala EJ bekräftad"
+  },
+  {
+    "name": "wheel_speed_fl",
+    "lid": "43",
+    "offset": 0,
+    "kind": "u16le",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": null,
+    "source": "21 43@0 u16le = hjulhastighet FL (råvärde ~124 stilla, ≠ km/h). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+  },
+  {
+    "name": "wheel_speed_fr",
+    "lid": "43",
+    "offset": 2,
+    "kind": "u16le",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": null,
+    "source": "21 43@2 u16le = hjulhastighet FR (råvärde ~124 stilla, ≠ km/h). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+  },
+  {
+    "name": "wheel_speed_rl",
+    "lid": "43",
+    "offset": 4,
+    "kind": "u16le",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": null,
+    "source": "21 43@4 u16le = hjulhastighet RL (råvärde ~124 stilla, ≠ km/h). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+  },
+  {
+    "name": "wheel_speed_rr",
+    "lid": "43",
+    "offset": 6,
+    "kind": "u16le",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "limits": null,
+    "source": "21 43@6 u16le = hjulhastighet RR (råvärde ~124 stilla, ≠ km/h). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+  },
+  {
+    "name": "abs_sensor_fl",
+    "lid": "50",
+    "offset": 0,
+    "kind": "u8",
+    "scale": 0.02,
+    "bias": 0.0,
+    "unit": "V",
+    "confidence": "kandidat",
+    "limits": [
+      1.5,
+      3.0
+    ],
+    "source": "21 50@0 u8×0.02 V = ABS-sensorspänning FL (~2,3 V). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+  },
+  {
+    "name": "abs_sensor_fr",
+    "lid": "50",
+    "offset": 1,
+    "kind": "u8",
+    "scale": 0.02,
+    "bias": 0.0,
+    "unit": "V",
+    "confidence": "kandidat",
+    "limits": [
+      1.5,
+      3.0
+    ],
+    "source": "21 50@1 u8×0.02 V = ABS-sensorspänning FR (~2,3 V). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+  },
+  {
+    "name": "abs_sensor_rl",
+    "lid": "50",
+    "offset": 2,
+    "kind": "u8",
+    "scale": 0.02,
+    "bias": 0.0,
+    "unit": "V",
+    "confidence": "kandidat",
+    "limits": [
+      1.5,
+      3.0
+    ],
+    "source": "21 50@2 u8×0.02 V = ABS-sensorspänning RL (~2,3 V). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+  },
+  {
+    "name": "abs_sensor_rr",
+    "lid": "50",
+    "offset": 3,
+    "kind": "u8",
+    "scale": 0.02,
+    "bias": 0.0,
+    "unit": "V",
+    "confidence": "kandidat",
+    "limits": [
+      1.5,
+      3.0
+    ],
+    "source": "21 50@3 u8×0.02 V = ABS-sensorspänning RR (~2,3 V). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
   }
 ]

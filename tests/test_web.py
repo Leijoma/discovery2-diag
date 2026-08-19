@@ -531,7 +531,7 @@ def test_slabs_poll_reads_store_lids_by_rotation():
         _f(b"\x3e"): _f(b"\x7e"),
         _f(b"\x21\x54"): _f(b"\x61\x54\x95\xa4\x0f\x0f"),   # höjder 149/164
         _f(b"\x21\x56"): _f(b"\x61\x56\x01\x0f\x0f\x0f"),   # any_door bit0=1
-        _f(b"\x21\x43"): _f(b"\x61\x43\x00\x7c\x00\x7c\x00\x7c\x00\x7c"),  # wheel_speed_fr u16=0x007c
+        _f(b"\x21\x43"): _f(b"\x61\x43\x7c\x00\x7c\x00\x7c\x00\x7c\x00"),  # 4×hjul u16le=124
         _f(b"\x21\x50"): _f(b"\x61\x50\x72\x73\x73\x72"),   # abs_sensor_fr=0x72
         _f(b"\x21\x44"): _f(b"\x61\x44" + bytes(12) + b"\xe0\xdc"),  # batteri 0xe0*0.0625=14.0
     }
@@ -547,7 +547,7 @@ def test_slabs_poll_reads_store_lids_by_rotation():
     assert out["status"] == "connected"
     assert seen["height_left"]["v"] == 149 and seen["height_right"]["v"] == 164
     assert seen["any_door"]["v"] == 1.0
-    assert seen["wheel_speed_fr"]["v"] == 0x7c
+    assert seen["wheel_speed_fr"]["v"] == 124   # u16le av 7c 00
     assert round(seen["battery"]["v"], 1) == 14.0
     # confidence flödar från storen
     assert seen["height_left"]["c"] == "belagt"

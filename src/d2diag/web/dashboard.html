@@ -537,14 +537,14 @@
     wheel_speed_fr:{g:"Wheels",d:"Front-right wheel speed. Raw ~124 baseline stationary (not km/h). Driving straight all four should read equal; flutter or 0 while moving trips the Three Amigos (ABS/TC/HDC)."},
     abs_sensor_fr:{g:"Wheels",d:"Front-right ABS wheel-sensor voltage."},
     ecu_supply:{g:"Electrical",d:"Internal SLABS ECU supply voltage."},
-    speed_fl:{g:"Wheels",d:"Front-left wheel speed."},
-    speed_fr:{g:"Wheels",d:"Front-right wheel speed."},
-    speed_rl:{g:"Wheels",d:"Rear-left wheel speed."},
-    speed_rr:{g:"Wheels",d:"Rear-right wheel speed."},
-    volt_fl:{g:"Wheels",d:"Front-left ABS sensor voltage."},
-    volt_fr:{g:"Wheels",d:"Front-right ABS sensor voltage."},
-    volt_rl:{g:"Wheels",d:"Rear-left ABS sensor voltage."},
-    volt_rr:{g:"Wheels",d:"Rear-right ABS sensor voltage."},
+    wheel_speed_fl:{g:"Wheels",d:"Front-left wheel speed. Raw ~124 baseline stationary (not km/h); all four equal driving straight. ⚠ Wheel-to-field order is an unconfirmed guess."},
+    wheel_speed_fr:{g:"Wheels",d:"Front-right wheel speed. Raw ~124 baseline stationary (not km/h). ⚠ Wheel-to-field order unconfirmed."},
+    wheel_speed_rl:{g:"Wheels",d:"Rear-left wheel speed. Raw ~124 baseline stationary. ⚠ Wheel-to-field order unconfirmed."},
+    wheel_speed_rr:{g:"Wheels",d:"Rear-right wheel speed. Raw ~124 baseline stationary. ⚠ Wheel-to-field order unconfirmed."},
+    abs_sensor_fl:{g:"Wheels",d:"Front-left ABS sensor voltage (~2.3 V). ⚠ Wheel-to-field order unconfirmed."},
+    abs_sensor_fr:{g:"Wheels",d:"Front-right ABS sensor voltage (~2.3 V). ⚠ Wheel-to-field order unconfirmed."},
+    abs_sensor_rl:{g:"Wheels",d:"Rear-left ABS sensor voltage (~2.3 V). ⚠ Wheel-to-field order unconfirmed."},
+    abs_sensor_rr:{g:"Wheels",d:"Rear-right ABS sensor voltage (~2.3 V). ⚠ Wheel-to-field order unconfirmed."},
   };
   function groupOf(n){ return (META[n]&&META[n].g) || "Other"; }
   // Bygg tooltip-text: beskrivning + normalintervall (ur limits) + confidence.
@@ -595,8 +595,11 @@
     balance_4:"Injector 4", balance_5:"Injector 5",
     height_left_mm:"Height left", height_right_mm:"Height right",
     height_left:"Height left (raw)", height_right:"Height right (raw)",
-    any_door:"Door open", wheel_speed_fr:"Wheel speed FR", abs_sensor_fr:"ABS sensor FR",
-    ecu_supply:"ECU supply",
+    any_door:"Door open", ecu_supply:"ECU supply",
+    wheel_speed_fl:"Wheel speed FL", wheel_speed_fr:"Wheel speed FR",
+    wheel_speed_rl:"Wheel speed RL", wheel_speed_rr:"Wheel speed RR",
+    abs_sensor_fl:"ABS sensor FL", abs_sensor_fr:"ABS sensor FR",
+    abs_sensor_rl:"ABS sensor RL", abs_sensor_rr:"ABS sensor RR",
   };
   const HERO = ["rpm","speed","coolant_temp","battery"];
 
@@ -1048,7 +1051,7 @@
     $("slabs-body").style.display = "";
     const has = Object.keys(sig).length;
     for (const w of ["fl","fr","rl","rr"]) {
-      const s = sig["speed_"+w], v = sig["volt_"+w];   // kandidat → hidden in Verified
+      const s = sig["wheel_speed_"+w], v = sig["abs_sensor_"+w];  // kandidat → hidden in Verified
       setT("c_"+w+"_s", (s && shown(s)) ? fmt(s.v)+"" : "–");
       setT("c_"+w+"_v", (v && shown(v)) ? v.v.toFixed(2)+"V" : "–");
     }
