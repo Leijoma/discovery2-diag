@@ -43,8 +43,14 @@
   .ghead { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px;
            margin:12px 2px 6px; }
   .siggroup .row { margin-bottom:6px; }
+  .card[data-tip] { cursor:help; }
   .row .info { color:var(--muted); font-size:11px; cursor:help; opacity:.6; }
-  .row[title]:hover .info { opacity:1; color:var(--accent); }
+  .row[data-tip]:hover .info { opacity:1; color:var(--accent); }
+  #tt { position:fixed; z-index:9999; max-width:320px; padding:9px 11px; border-radius:8px;
+        background:var(--fg); color:var(--bg); font-size:12px; line-height:1.4;
+        white-space:pre-line; box-shadow:0 6px 24px rgba(0,0,0,.35); pointer-events:none;
+        opacity:0; transition:opacity .1s; }
+  #tt.show { opacity:1; }
   /* buttons */
   .btns { display:flex; flex-wrap:wrap; gap:8px; }
   .btn { flex:1; min-width:calc(50% - 4px); padding:13px 10px; border-radius:11px; border:1px solid var(--line);
@@ -465,6 +471,7 @@
   <div id="cmdResult" class="cmd"></div>
   <div class="err" id="error"></div>
 </main>
+<div id="tt"></div>
 
 <div id="consent" class="modal" style="display:none">
   <div class="modalbox">
@@ -568,8 +575,8 @@
         let val = "–";
         if(reveal && s) val = (n==="any_door") ? (s.v?"open":"closed") : fmt(s.v);
         const unit = (n==="any_door") ? "" : (reveal ? (s?(s.u||""):(f.u||"")) : "");
-        const tip = tipFor(n, s, f).replace(/"/g,"&quot;");
-        return `<div class="row" title="${tip}"><span class="n">${LABELS[n]||n}${badge}`
+        const tip = tipFor(n, s, f).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/\n/g,"&#10;");
+        return `<div class="row" data-tip="${tip}"><span class="n">${LABELS[n]||n}${badge}`
              + ` <span class="info">ⓘ</span></span>`
              + `<span class="val${cls}">${val} <span class="u">${unit}</span></span></div>`;
       }).join("");
@@ -1022,8 +1029,10 @@
   function renderMotor(sig, faults) {
     $("motor-hint").style.display = "none";           // always show the layout
     $("motor-body").style.display = "";
+    const hmap = _fields.motor || {};
     $("hero").innerHTML = HERO.map(k => { const s = sig[k];
-      return `<div class="card"><div class="k">${LABELS[k]||k}</div><div class="v">${s?fmt(s.v):"–"}<span class="u"> ${s&&s.u?s.u:""}</span></div></div>`; }).join("");
+      const tip = tipFor(k, s, hmap[k]).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/\n/g,"&#10;");
+      return `<div class="card" data-tip="${tip}"><div class="k">${LABELS[k]||k}</div><div class="v">${s?fmt(s.v):"–"}<span class="u"> ${s&&s.u?s.u:""}</span></div></div>`; }).join("");
     const fmap = _fields.motor || {};
     const names = Array.from(new Set([...Object.keys(fmap), ...Object.keys(sig)]));
     renderRows($("signals"), names, sig, fmap, new Set(HERO));  // hero-fälten visas redan ovan
@@ -1196,6 +1205,32 @@
   $("consent-save").onclick = ()=>saveConsent($("consent-cb").checked);
   $("consent-skip").onclick = closeConsent;
   loadCommunity();
+  // Egen tooltip (native title är opålitlig i webviews). Delegerad hover på rader
+  // med data-tip; följer musen och håller sig innanför fönstret.
+  (function(){
+    const tt = document.getElementById("tt");
+    function place(e){
+      const pad = 14, w = tt.offsetWidth, h = tt.offsetHeight;
+      let x = e.clientX + pad, y = e.clientY + pad;
+      if(x + w > innerWidth - 8) x = e.clientX - w - pad;
+      if(y + h > innerHeight - 8) y = e.clientY - h - pad;
+      tt.style.left = Math.max(8,x) + "px"; tt.style.top = Math.max(8,y) + "px";
+    }
+    document.addEventListener("mouseover", e => {
+      const row = e.target.closest && e.target.closest("[data-tip]");
+      if(!row){ return; }
+      tt.textContent = row.getAttribute("data-tip");
+      tt.classList.add("show"); place(e);
+    });
+    document.addEventListener("mousemove", e => {
+      if(tt.classList.contains("show") && e.target.closest && e.target.closest("[data-tip]")) place(e);
+    });
+    document.addEventListener("mouseout", e => {
+      const row = e.target.closest && e.target.closest("[data-tip]");
+      if(row && !(e.relatedTarget && row.contains(e.relatedTarget))) tt.classList.remove("show");
+    });
+  })();
+
   loadFields("motor");   // so the Engine layout shows even before a cable is connected
   loadFields("slabs");   // samma för SLABS-vyns signallista
 
