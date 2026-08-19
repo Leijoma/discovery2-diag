@@ -173,10 +173,12 @@ class KLine:
                        addressed=True, functional=functional)
         raw = self.converse(start_communication, addressed=True,
                             functional=functional, source=source)
-        # to_frame_ms = tiden från pulsens slut tills SÄNDNINGEN startade (inte hela
-        # konversationen — burst-läsningen ingår inte). send_ms = själva utskrivningen.
-        self.last_pulse["to_frame_ms"] = round(
-            (time.perf_counter() - t_send) * 1000 - getattr(self, "_last_send_ms", 0.0), 1)
+        # to_frame_ms = tiden från pulsens slut tills sändningen FAKTISKT startade.
+        # (Ett tidigare försök drog av send_ms från hela converse() och mätte därför
+        # burst-läsningen — därav orimliga 130–170 ms.)
+        start = getattr(self, "_last_send_start", None)
+        if start is not None:
+            self.last_pulse["to_frame_ms"] = round((start - t_send) * 1000, 2)
         self.last_pulse["send_ms"] = getattr(self, "_last_send_ms", 0.0)
         # HOPPA ÖVER EKOT innan vi söker C1. Halv-duplex ekar allt vi sänder, och
         # en FUNKTIONELL ram börjar själv på 0xC1 — utan detta hittar sökningen
@@ -281,6 +283,7 @@ class KLine:
     def _send(self, frame: bytes) -> None:
         """Sänd en ram, med P4-mellanrum mellan byten om ``write_gap`` är satt."""
         t0 = time.perf_counter()
+        self._last_send_start = t0
         try:
             self._send_inner(frame)
         finally:
@@ -293,7 +296,7 @@ class KLine:
         for i, b in enumerate(frame):
             self._t.send(bytes([b]))
             if i + 1 < len(frame):
-                time.sleep(self.write_gap)
+                _precise_wait(self.write_gap)  # sleep(5 ms) överskjuter grovt
 
     def read_frame(self, timeout: "float | None" = None) -> DecodedFrame:
         """Läs och avkoda en ram — robust mot skräp i början.
