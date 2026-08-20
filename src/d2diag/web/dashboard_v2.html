@@ -216,6 +216,8 @@ const MODULE_NAME = {motor:"TD5 (engine)", slabs:"SLABS (ABS + air suspension)"}
 // ---- state ----
 let SNAP = null, FIELDS = {}, MODULE = "motor";
 const HISTORY = {};           // namn → array av {t, v} (ring-buffert ~60 s)
+let SEQ = [];                 // anslutningssekvens: {phase, t} — ackumulerad connect_phase
+let SEQ_DONE = false;
 const PLOT = new Set();       // valda kanaler för trendgrafen
 const HISTLEN = 60;
 let recording = false;
@@ -237,7 +239,12 @@ function pushHistory(sig){
 }
 function onSnap(d){
   const mod = d.module || MODULE;
-  if(mod !== MODULE){ MODULE = mod; for(const k in HISTORY) delete HISTORY[k]; PLOT.clear(); }  // ny modul → ny historik
+  if(mod !== MODULE){ MODULE = mod; for(const k in HISTORY) delete HISTORY[k]; PLOT.clear(); SEQ=[]; SEQ_DONE=false; }  // ny modul → ny historik + sekvens
+  // Anslutningssekvens: fånga varje ny connect_phase medan vi kopplar upp.
+  const ph = d.connect_phase;
+  if(ph && (!SEQ.length || SEQ[SEQ.length-1].phase!==ph)){ SEQ.push({phase:ph, t:Date.now()}); SEQ_DONE=false; }
+  if(d.status==="connected" && SEQ.length && !SEQ_DONE){ SEQ.push({phase:"session established", t:Date.now(), ok:true}); SEQ_DONE=true; }
+  if(d.status==="error"){ SEQ_DONE=false; }
   SNAP = d;
   if(d.signals) pushHistory(d.signals);
   if(d.logging) recording = !!d.logging.recording;
@@ -284,8 +291,16 @@ function trendSvg(){
     }).join(" ");
     lines += `<polyline fill="none" stroke="${colors[i]}" stroke-width="2" points="${pts}"></polyline>`;
   });
-  const legend = chans.slice(0,3).map((n,i)=>
-    `<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg2)"><span style="width:14px;height:2px;background:${colors[i]}"></span>${LABELS[n]||n}</span>`).join("");
+  const legend = chans.slice(0,3).map((n,i)=>{
+    const h=HISTORY[n]||[], vs=h.map(p=>p.v);
+    const cur = vs.length? vs[vs.length-1] : null;
+    const rng = vs.length? `${Math.min(...vs).toFixed(1)}–${Math.max(...vs).toFixed(1)}` : "";
+    const u = (SNAP&&SNAP.signals&&SNAP.signals[n]&&SNAP.signals[n].u)||"";
+    return `<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg2)">
+      <span style="width:14px;height:2px;background:${colors[i]}"></span>${LABELS[n]||n}
+      <b style="color:var(--fg)">${cur!=null?cur.toFixed(1):"–"}${u}</b>
+      <span style="color:var(--fg-dis)">(${rng})</span></span>`;
+  }).join("");
   return `<div class="card">
     ${legend?`<div class="row" style="gap:14px;flex-wrap:wrap;margin-bottom:6px">${legend}</div>`:''}
     <svg viewBox="0 0 640 160" preserveAspectRatio="none" style="width:100%;height:150px;display:block">
@@ -343,6 +358,7 @@ function renderInputs(){
     <div><div class="row" style="margin:0 2px 8px"><span class="kicker">Trend · 60 s</span>
       <span style="margin-left:auto;font-size:12px;color:var(--fg-dis)">tap a channel below to plot</span></div>
       ${trendSvg()}
+      <div style="font-size:11px;color:var(--fg-dis);text-wrap:pretty;margin:6px 2px 0">History is held in this session only — switching module or reloading discards it. Log to CSV to keep it.</div>
       <div class="chanwrap" style="margin-top:8px">${chan||'<span style="color:var(--fg-dis)">waiting for live values…</span>'}</div></div>` : "";
   return `
     <div class="row"><h2>Inputs</h2>
@@ -580,10 +596,18 @@ function renderConnect(){
         <div>— Ignition on, vehicle stationary.</div><div>— Check the KKL cable and OBD pin 7.</div>
         <div>— SLABS answers best with the engine running.</div></div>
       <button class="btn accent" id="retry" style="margin-top:10px">Retry</button></div>`;
-  } else if(st!=="connected" || phase){
-    seq = `<div class="card"><span class="kicker">Connection sequence</span>
-      <div class="row" style="gap:10px;margin-top:8px"><span class="pdot" style="background:var(--ic-yellow);animation:blink 1s infinite"></span>
-      <span style="font-weight:700">${phase||"connecting…"}</span></div></div>`;
+  } else if(SEQ.length){
+    const t0 = SEQ[0].t;
+    const rows = SEQ.map((s,i)=>{
+      const last = i===SEQ.length-1, active = last && !SEQ_DONE && st!=="connected";
+      const dot = s.ok ? "var(--ic-green)" : active ? "var(--ic-yellow)" : "var(--fg-dis)";
+      const ms = i? `+${((s.t-SEQ[i-1].t))|0} ms` : "0 ms";
+      return `<div class="row" style="gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span class="pdot" style="background:${dot};${active?'animation:blink 1s infinite':''}"></span>
+        <span style="flex:1;min-width:0;font-weight:${s.ok?700:600};color:${s.ok?'var(--ic-green)':'var(--fg)'}">${s.phase}</span>
+        <span style="font-size:12px;color:var(--fg-dis);font-variant-numeric:tabular-nums">${ms}</span></div>`;
+    }).join("");
+    seq = `<div class="card"><span class="kicker">Connection sequence</span><div style="margin-top:4px">${rows}</div></div>`;
   }
   return `<h2>Connect</h2><div style="font-size:12px;color:var(--fg2)">One session at a time — the K-line is shared.</div>
     <div style="height:8px"></div>${iface}
