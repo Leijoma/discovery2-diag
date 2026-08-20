@@ -92,3 +92,40 @@ seed via `27 01` så vi har data.
 **Sniffat par (en session, seed roterar per session så det låser inte upp en ny):**
 `27 01` → svar med seed, `27 02 4b 5c d4 82 f7 82` = nyckel (6 byte). Ligger i
 `logs/faultread-20260809-2.log` t≈60 s.
+
+## SecurityAccess-research 2026-08-20 (BELAGT protokoll, BLOCKERAD algoritm)
+
+**Protokollet är löst och verifierat mot loggarna.** BCU:n använder standard KWP2000
+SecurityAccess (0x27), gated framför EKA-läsning:
+
+| Steg | Byte | Källa |
+|---|---|---|
+| Begär seed | `02 27 01 2a` | `faultread-20260809-4.log` @574038 |
+| Seed-svar | `04 67 01 EB CD a4` (seed = `EB CD`) | samma |
+| Skicka key | `04 27 02 C0 10 fd` (key = `C0 10`) | @574168 |
+| **NEKAD** | `7F 27 83` (NRC 0x83) | samma |
+| Lyckad key (annan session) | `27 02 4B 5C` → läste sedan `21 D8…` | `-2.log` @60031 |
+| Key (annan session) | `27 02 4A 8A` | `-4.log` @621153 |
+
+**Algoritmen `key = f(seed)` är okänd och kan INTE reverse-engineeras ur vårt data:**
+- Td5-keygenen matchar inte: `td5keygen(EB CD) = 04 2f`, inte `C0 10`. Annan algoritm.
+- Ingen publik Valeo/Discovery-2 BCU-algoritm hittad (reference tools guide dokumenterar
+  funktioner, inte lågnivå-SA; inget github-keygen likt td5keygen finns).
+- **Alla seed→key-par vi har är korrupta eller ofullständiga:**
+  - `4A 8A`: seed-svaret fångades aldrig (passiva tappen tappade ramen).
+  - `4B 5C`: seed = `86 f7 81 f0 86 f8`, inte ens giltig `04 67 01`-ram (mer än bit-7-fel).
+  - `EB CD → C0 10`: seed-ramens cs är bit-7-korrupt (`a4` ska vara `24`), och nekad.
+- Den passiva KKL-tappen lastar bussen → BCU:s RX-ramar bit-7-flippas och tappas.
+  **Rena par kräver att VI är master** (som vår slow-init-capture) — men vi kan bara
+  skicka seeds, inte beräkna keys. Att generera rena par kräver ett verktyg som KAN
+  algoritmen (reference tool), vilket vi inte har.
+
+**Slutsats:** EKA via SecurityAccess är blockerad tills antingen (a) algoritmen
+hittas publikt, eller (b) rena seed→key-par kan genereras med ett fungerande verktyg.
+Vi BEHÖVER inte läsa EKA — koden är redan känd och lagrad i systerprojektet. Ren
+protokoll-scaffolding (`request_seed` finns i KWP2000; en `security_access(key_fn)`
+kan läggas till) är billig att ha redo om algoritmen dyker upp.
+
+**Read-only nästa gång i bilen (säkert, utan att gissa keys):** kör `27 01` upprepat
+och notera om seeden ändras per request / per tändningscykel / om en redan upplåst
+BCU ger en fast seed. Karakteriserar SA utan att röra skyddade skrivningar.
