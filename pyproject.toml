@@ -18,7 +18,7 @@ dev = ["pytest>=7"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"d2diag.web" = ["dashboard.html"]
+"d2diag.web" = ["dashboard.html", "dashboard_v2.html"]
 "d2diag.signals" = ["*.json"]
 
 [tool.pytest.ini_options]

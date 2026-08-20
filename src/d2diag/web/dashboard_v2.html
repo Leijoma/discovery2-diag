@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D2 Diag</title>
+<style>
+/* Astryx neutral theme (facebook/astryx) — inbäddat som rena CSS-variabler.
+   Figtree via CDN med systemfont-fallback (garage utan nät → fallbacken gäller). */
+@import url("https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap");
+:root{
+  --font-base:Figtree,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --radius-md:10px; --radius-sm:4px;
+  --bg-surface:#fff; --bg-body:#f1f1f1; --bg-card:#fff; --bg-muted:#f1f1f1;
+  --accent:#262626; --on-accent:#fff;
+  --fg:#171717; --fg2:#525252; --fg-dis:#a3a3a3;
+  --border:#00000014; --border-emph:#d4d4d4;
+  --success:#007004; --error:#a50c25; --warning:#745b00;
+  --bg-red:#facecb; --bd-red:#e6bab8; --ic-red:#89001a;
+  --bg-yellow:#f8da9d; --bd-yellow:#e4c279; --ic-yellow:#584400;
+  --bg-green:#c5e5c0; --bd-green:#b2d1ac; --ic-green:#0c5700;
+  --bg-blue:#c4ddfb; --bd-blue:#b1c9e7; --ic-blue:#00458c;
+}
+:root[data-theme="dark"]{
+  --bg-surface:#262626; --bg-body:#1b1b1b; --bg-card:#1b1b1b; --bg-muted:#1b1b1b;
+  --accent:#ebebeb; --on-accent:#171717;
+  --fg:#fafafa; --fg2:#a3a3a3; --fg-dis:#525252;
+  --border:#ffffff1a; --border-emph:#525252;
+  --success:#9fe59b; --error:#ffc6c1; --warning:#fdcf4f;
+  --bg-red:#ff9e973d; --bd-red:#ff6f6c; --ic-red:#ff9e97;
+  --bg-yellow:#deb4333d; --bd-yellow:#c0990e; --ic-yellow:#deb433;
+  --bg-green:#84c9803d; --bd-green:#69ad67; --ic-green:#84c980;
+  --bg-blue:#9eb7ff3d; --bd-blue:#6d9cfe; --ic-blue:#9eb7ff;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg-body)}
+::-webkit-scrollbar{width:0;height:0}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.3}}
+body{font-family:var(--font-base);color:var(--fg);font-size:14px;line-height:20px;font-variant-numeric:tabular-nums}
+.app{display:flex;flex-direction:column;height:100vh;min-height:640px;max-width:900px;margin:0 auto;background:var(--bg-body);overflow:hidden}
+header{display:flex;align-items:center;gap:12px;padding:8px 16px;min-height:56px;background:var(--bg-surface);border-bottom:1px solid var(--border)}
+.htitle{font-size:12px;font-weight:700}
+.hsub{font-size:12px;color:var(--fg-dis)}
+.pill{display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:10px;border:1px solid var(--border-emph);background:var(--bg-surface)}
+.pdot{width:8px;height:8px;border-radius:9999px;background:var(--fg-dis)}
+.chip{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-emph);border-radius:10px;background:var(--bg-surface);color:var(--fg);cursor:pointer}
+main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+h2{font-size:20px;line-height:28px;font-weight:700;margin:0}
+.card{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-card);padding:12px 16px}
+.kicker{font-size:12px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--fg2)}
+.btn{min-height:48px;padding:0 16px;border:1px solid var(--border-emph);border-radius:10px;background:var(--bg-surface);color:var(--fg);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.btn.accent{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
+.btn.rec{border-color:var(--bd-red);color:var(--ic-red)}
+.row{display:flex;align-items:center;gap:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;align-items:start}
+.flag{display:inline-flex;align-items:center;height:16px;padding:0 5px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.3px}
+.flag.ok{background:var(--bg-green);color:var(--ic-green)}
+.flag.exp{background:var(--bg-yellow);color:var(--ic-yellow)}
+.flag.lo,.flag.hi{background:var(--bg-red);color:var(--ic-red)}
+.ro{border:1px solid var(--border);border-radius:10px;background:var(--bg-card);overflow:hidden}
+.ro.dim{opacity:.5}
+.ro-top{display:flex;align-items:center;gap:10px;padding:8px 14px}
+.ro-lbl{font-size:12px;font-weight:600;color:var(--fg2);flex:1;min-width:0}
+.ro-val{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.ro-u{font-size:12px;color:var(--fg2);font-weight:600}
+.ro-meta{padding:0 14px 10px;font-size:12px;color:var(--fg-dis);text-wrap:pretty}
+.ro-bar{height:4px;background:var(--bg-muted);position:relative}
+.ro-bar>i{position:absolute;top:0;bottom:0;width:2px;background:var(--fg2)}
+.ro-bar>.rng{position:absolute;top:0;bottom:0;background:var(--bg-green);opacity:.35}
+.chanwrap{display:flex;flex-wrap:wrap;gap:8px}
+.chan{min-height:40px;padding:0 12px;display:flex;align-items:center;gap:8px;border:1px solid var(--border-emph);border-radius:10px;background:var(--bg-surface);color:var(--fg2);font-size:12px;font-weight:600;cursor:pointer}
+.chan.on{color:var(--fg);border-color:var(--accent)}
+nav{display:flex;background:var(--bg-surface);border-top:1px solid var(--border)}
+nav button{flex:1;min-height:56px;border:0;background:transparent;color:var(--fg-dis);font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0}
+nav button.on{color:var(--fg)}
+nav .nd{width:5px;height:5px;border-radius:9999px;background:currentColor}
+.empty{padding:40px 16px;text-align:center;color:var(--fg2);display:flex;flex-direction:column;gap:8px;align-items:center}
+.pretty{text-wrap:pretty;max-width:40ch}
+.comingrow{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px dashed var(--border-emph);border-radius:10px;color:var(--fg-dis)}
+.comingrow .tag{margin-left:auto;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div style="min-width:0">
+      <div class="htitle" id="h-title">D2 Diag</div>
+      <div class="hsub" id="h-sub">—</div>
+    </div>
+    <div class="row" style="margin-left:auto">
+      <div class="pill"><span class="pdot" id="pill-dot"></span><span id="pill-label" style="font-size:12px;font-weight:700">—</span></div>
+      <button class="chip" id="themebtn" title="Ljus/mörk">◐</button>
+    </div>
+  </header>
+
+  <main id="view"></main>
+
+  <nav id="nav"></nav>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const TABS = [
+  {id:"connect", label:"Connect"},
+  {id:"faults",  label:"Faults"},
+  {id:"inputs",  label:"Inputs"},
+  {id:"outputs", label:"Outputs"},
+  {id:"utils",   label:"Utilities"},
+];
+let TAB = "inputs";
+
+// ---- signal-metadata (grupp + beskrivning). Speglar dashboard.html:s META. ----
+const GROUPS = ["Engine","Temperatures","Fuelling","Pressures","Accelerator","Ride height","Wheels","Electrical","Inputs","Other"];
+const META = {
+  rpm:{g:"Engine",d:"Engine speed."},
+  rpm_error:{g:"Engine",d:"Idle-speed error: target minus actual idle rpm."},
+  speed:{g:"Engine",d:"Road speed from the ECU."},
+  coolant_temp:{g:"Temperatures",d:"Coolant temperature. Normal 86–95 °C; above 105 = overheating."},
+  air_temp:{g:"Temperatures",d:"Intake air temperature."},
+  fuel_temp:{g:"Temperatures",d:"Fuel temperature — ~70–80 °C warm, 10–15 below coolant."},
+  ext_temp:{g:"Temperatures",d:"External temp sensor — not fitted; phantom constant. Ignore."},
+  balance_1:{g:"Fuelling",d:"Cylinder 1 fuelling correction. ±4 healthy; +6…+15 = weak cylinder."},
+  balance_2:{g:"Fuelling",d:"Cylinder 2 fuelling correction. ±4 healthy."},
+  balance_3:{g:"Fuelling",d:"Cylinder 3 fuelling correction. ±4 healthy."},
+  balance_4:{g:"Fuelling",d:"Cylinder 4 fuelling correction. ±4 healthy."},
+  balance_5:{g:"Fuelling",d:"Cylinder 5 fuelling correction. ±4 healthy."},
+  manifold_press:{g:"Pressures",d:"Turbo / boost pressure. Idle ~1.0 bar; full load 2.0–2.2; overboost-cut >2.42."},
+  ambient_press_1:{g:"Pressures",d:"Atmospheric pressure — ~1.0 bar at sea level."},
+  ambient_press_2:{g:"Pressures",d:"Atmospheric pressure (second reading)."},
+  maf_raw:{g:"Engine",d:"Air-flow meter (MAF). Idle 55–65 kg/hr; stuck 0 or 4.00 = dead sensor. Raw units, scale TBD."},
+  accel_way1:{g:"Accelerator",d:"Pedal track 1: ~0.3 V idle → ~4.7 V full."},
+  accel_way2:{g:"Accelerator",d:"Pedal track 2: mirror of track 1 — ~4.7 V idle → ~0.3 V full."},
+  accel_way3:{g:"Accelerator",d:"Pedal track 3 — Euro 3 only; reads 0 on Euro 2."},
+  accel_supply:{g:"Accelerator",d:"5 V reference — rock-solid 5.0 V ±0.1."},
+  battery:{g:"Electrical",d:"System voltage. 13.8–14.4 V running; below 13 = charging fault."},
+  height_left:{g:"Ride height",d:"Left ride-height sensor (raw 0–255). Normal ~110–135; L≈R on level ground."},
+  height_right:{g:"Ride height",d:"Right ride-height sensor (raw 0–255). Normal ~110–135."},
+  height_left_mm:{g:"Ride height",d:"Left ride height in mm (derived)."},
+  height_right_mm:{g:"Ride height",d:"Right ride height in mm (derived)."},
+  any_door:{g:"Inputs",d:"Any door open. SLABS won't adjust suspension with a door open. Normal: closed."},
+  ecu_supply:{g:"Electrical",d:"Internal SLABS ECU supply voltage."},
+  wheel_speed_fl:{g:"Wheels",d:"Front-left wheel speed (raw ~124 stationary). ⚠ Wheel order unconfirmed."},
+  wheel_speed_fr:{g:"Wheels",d:"Front-right wheel speed (raw ~124 stationary). ⚠ Wheel order unconfirmed."},
+  wheel_speed_rl:{g:"Wheels",d:"Rear-left wheel speed. ⚠ Wheel order unconfirmed."},
+  wheel_speed_rr:{g:"Wheels",d:"Rear-right wheel speed. ⚠ Wheel order unconfirmed."},
+  abs_sensor_fl:{g:"Wheels",d:"Front-left ABS sensor voltage (~2.3 V). ⚠ Order unconfirmed."},
+  abs_sensor_fr:{g:"Wheels",d:"Front-right ABS sensor voltage (~2.3 V). ⚠ Order unconfirmed."},
+  abs_sensor_rl:{g:"Wheels",d:"Rear-left ABS sensor voltage. ⚠ Order unconfirmed."},
+  abs_sensor_rr:{g:"Wheels",d:"Rear-right ABS sensor voltage. ⚠ Order unconfirmed."},
+};
+const LABELS = {
+  rpm:"RPM",speed:"Speed",battery:"Battery",coolant_temp:"Coolant",air_temp:"Intake air",
+  fuel_temp:"Fuel",ext_temp:"External temp",manifold_press:"Turbo pressure",maf_raw:"Air flow (MAF)",
+  ambient_press_1:"Ambient pressure",ambient_press_2:"Ambient pressure 2",rpm_error:"RPM error",
+  balance_1:"Injector 1",balance_2:"Injector 2",balance_3:"Injector 3",balance_4:"Injector 4",balance_5:"Injector 5",
+  accel_way1:"Pedal track 1",accel_way2:"Pedal track 2",accel_way3:"Pedal track 3",accel_supply:"Pedal supply",
+  height_left:"Height left (raw)",height_right:"Height right (raw)",height_left_mm:"Height left",height_right_mm:"Height right",
+  any_door:"Door open",ecu_supply:"ECU supply",
+  wheel_speed_fl:"Wheel speed FL",wheel_speed_fr:"Wheel speed FR",wheel_speed_rl:"Wheel speed RL",wheel_speed_rr:"Wheel speed RR",
+  abs_sensor_fl:"ABS sensor FL",abs_sensor_fr:"ABS sensor FR",abs_sensor_rl:"ABS sensor RL",abs_sensor_rr:"ABS sensor RR",
+};
+const groupOf = n => (META[n]&&META[n].g) || "Other";
+const MODULE_NAME = {motor:"TD5 (engine)", slabs:"SLABS (ABS + air suspension)"};
+
+// ---- state ----
+let SNAP = null, FIELDS = {}, MODULE = "motor";
+const HISTORY = {};           // namn → array av {t, v} (ring-buffert ~60 s)
+const PLOT = new Set();       // valda kanaler för trendgrafen
+const HISTLEN = 60;
+let recording = false;
+
+// ---- data ----
+function loadFields(mod){
+  fetch("/fields?module="+mod).then(r=>r.json()).then(d=>{
+    FIELDS[mod] = {}; (d.fields||[]).forEach(f=>{ FIELDS[mod][f.name]={u:f.unit,c:f.c,limits:f.limits}; });
+    if(TAB==="inputs") render();
+  }).catch(()=>{});
+}
+function pushHistory(sig){
+  const t = Date.now();
+  for(const [n,s] of Object.entries(sig||{})){
+    if(typeof s.v !== "number") continue;
+    (HISTORY[n] ||= []).push({t,v:s.v});
+    if(HISTORY[n].length > HISTLEN) HISTORY[n].shift();
+  }
+}
+function onSnap(d){
+  const mod = d.module || MODULE;
+  if(mod !== MODULE){ MODULE = mod; for(const k in HISTORY) delete HISTORY[k]; PLOT.clear(); }  // ny modul → ny historik
+  SNAP = d;
+  if(d.signals) pushHistory(d.signals);
+  if(d.logging) recording = !!d.logging.recording;
+  if(!FIELDS[mod]) loadFields(mod);
+  renderHeader();
+  if(TAB==="inputs") render();
+}
+const es = new EventSource("/events");
+es.onmessage = e => { try{ onSnap(JSON.parse(e.data)); }catch(_){} };
+fetch("/snapshot").then(r=>r.json()).then(onSnap).catch(()=>{});
+
+// ---- confidence / status helpers ----
+function flagFor(n, s, f){
+  const st = s && s.s;
+  if(st==="low") return {cls:"lo",txt:"LOW"};
+  if(st==="high") return {cls:"hi",txt:"HIGH"};
+  const c = (s&&s.c) || (f&&f.c);
+  if(c==="kandidat") return {cls:"exp",txt:"EXP"};
+  return {cls:"ok",txt:"OK"};
+}
+function fmt(v){ return (typeof v==="number") ? (Math.abs(v)>=100?v.toFixed(0):v.toFixed(1)) : "–"; }
+
+// ---- render ----
+function renderHeader(){
+  $("#h-sub").textContent = SNAP ? (MODULE_NAME[MODULE]||MODULE) : "—";
+  const st = SNAP && SNAP.status;
+  const dot = $("#pill-dot"), lab = $("#pill-label");
+  if(st==="connected"){ dot.style.background="var(--ic-green)"; dot.style.animation=""; lab.textContent="Connected"; }
+  else if(st==="error"){ dot.style.background="var(--ic-red)"; dot.style.animation=""; lab.textContent="No cable"; }
+  else{ dot.style.background="var(--ic-yellow)"; dot.style.animation="blink 1s infinite"; lab.textContent="Connecting"; }
+}
+function trendSvg(){
+  const chans = [...PLOT];
+  const colors = ["var(--ic-blue)","var(--ic-green)","var(--ic-yellow)"];
+  let lines = "";
+  chans.slice(0,3).forEach((n,i)=>{
+    const h = HISTORY[n]||[];
+    if(h.length<2) return;
+    const vs = h.map(p=>p.v), lo=Math.min(...vs), hi=Math.max(...vs), span=(hi-lo)||1;
+    const pts = h.map((p,j)=>{
+      const x = (j/(HISTLEN-1))*640;
+      const y = 150 - ((p.v-lo)/span)*140;
+      return x.toFixed(1)+","+y.toFixed(1);
+    }).join(" ");
+    lines += `<polyline fill="none" stroke="${colors[i]}" stroke-width="2" points="${pts}"></polyline>`;
+  });
+  const legend = chans.slice(0,3).map((n,i)=>
+    `<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg2)"><span style="width:14px;height:2px;background:${colors[i]}"></span>${LABELS[n]||n}</span>`).join("");
+  return `<div class="card">
+    <div class="row" style="flex-wrap:wrap"><span class="kicker">Trend · 60 s</span>
+      <div class="row" style="margin-left:auto;gap:14px;flex-wrap:wrap">${legend||'<span style="font-size:12px;color:var(--fg-dis)">pick channels below</span>'}</div></div>
+    <svg viewBox="0 0 640 160" preserveAspectRatio="none" style="width:100%;height:170px;display:block;margin-top:8px">
+      <line x1="0" y1="40" x2="640" y2="40" stroke="var(--border)"/><line x1="0" y1="80" x2="640" y2="80" stroke="var(--border)"/><line x1="0" y1="120" x2="640" y2="120" stroke="var(--border)"/>
+      ${lines}
+    </svg>
+    <div class="row" style="justify-content:space-between;font-size:12px;color:var(--fg-dis)"><span>−60 s</span><span>−30 s</span><span>NOW</span></div>
+  </div>`;
+}
+function readoutCard(n, s, f){
+  const c = (s&&s.c)||(f&&f.c), dim = (c==="kandidat" && !EXPERIMENTAL);
+  const flag = flagFor(n,s,f);
+  const val = (n==="any_door") ? (s? (s.v?"open":"closed"):"–") : (dim? "–" : fmt(s&&s.v));
+  const unit = (n==="any_door")? "" : (dim? "" : (s?(s.u||""):(f&&f.u||"")));
+  const lim = f&&f.limits;
+  const m = META[n]||{};
+  let bar = "";
+  if(lim && !dim && s && typeof s.v==="number"){
+    const [lo,hi]=lim, span=(hi-lo)||1;
+    const pos = Math.max(0,Math.min(100,((s.v-lo)/span)*100));
+    bar = `<div class="ro-bar"><span class="rng" style="left:0;right:0"></span><i style="left:${pos.toFixed(0)}%"></i></div>`;
+  }
+  const range = lim ? `Normal ${lim[0]}–${lim[1]}${(s&&s.u)||(f&&f.u)||""}` : "";
+  const meta = [m.d, range].filter(Boolean).join(" · ");
+  return `<div class="ro${dim?' dim':''}">
+    <div class="ro-top">
+      <div class="ro-lbl">${LABELS[n]||n}</div>
+      <span class="flag ${flag.cls}">${dim?'EXP':flag.txt}</span>
+    </div>
+    <div class="ro-top" style="padding-top:0">
+      <div class="ro-val">${val}<span class="ro-u"> ${unit}</span></div>
+    </div>
+    ${bar}
+    <div class="ro-meta">${meta}</div>
+  </div>`;
+}
+let EXPERIMENTAL = true;  // POC: visa allt; togglas i Settings i den riktiga appen
+function renderInputs(){
+  const sig = (SNAP&&SNAP.signals)||{}, fmap = FIELDS[MODULE]||{};
+  const names = [...new Set([...Object.keys(fmap), ...Object.keys(sig)])].filter(n=>!n.endsWith("_mm"));
+  // kanalväljare (bara numeriska, live)
+  const chan = names.filter(n=>sig[n] && typeof sig[n].v==="number").sort().map(n=>{
+    const on = PLOT.has(n);
+    return `<button class="chan${on?' on':''}" data-chan="${n}"><span class="pdot" style="background:${on?'var(--ic-blue)':'var(--fg-dis)'}"></span>${LABELS[n]||n}</button>`;
+  }).join("");
+  // grupperade readouts
+  const byG = {}; names.forEach(n=>{ (byG[groupOf(n)] ||= []).push(n); });
+  const order = GROUPS.filter(g=>byG[g]).concat(Object.keys(byG).filter(g=>!GROUPS.includes(g)));
+  const groups = order.map(g=>{
+    const cards = byG[g].sort().map(n=>readoutCard(n, sig[n], fmap[n])).join("");
+    return `<div><div class="kicker" style="margin:4px 2px 8px">${g}</div><div class="grid">${cards}</div></div>`;
+  }).join("");
+  const live = SNAP && SNAP.status==="connected";
+  return `
+    <div class="row"><h2>Inputs</h2>
+      <span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${MODULE_NAME[MODULE]||MODULE}</span>
+      <button class="btn ${recording?'rec':''}" id="reclog" style="margin-left:auto">${recording?'■ Stop log':'● Log CSV'}</button>
+    </div>
+    ${names.length? trendSvg() : ""}
+    ${names.length? `<div><div class="kicker" style="margin:0 2px 8px">Channels · tap to plot</div><div class="chanwrap">${chan||'<span style="color:var(--fg-dis)">waiting for live values…</span>'}</div></div>` : ""}
+    ${names.length? groups : `<div class="empty"><div style="font-size:18px;font-weight:700">No live inputs yet</div><div class="pretty">Connect ${MODULE_NAME[MODULE]||MODULE} on the Connect tab. The K-line carries one session at a time.</div></div>`}
+  `;
+}
+function comingCard(title, items){
+  return `<div class="card"><div class="kicker" style="margin-bottom:10px">${title}</div>
+    <div style="display:flex;flex-direction:column;gap:8px">${items.map(i=>
+      `<div class="comingrow"><span class="pdot"></span>${i.name}<span class="tag">${i.tag}</span></div>`).join("")}</div>
+    <div class="ro-meta" style="padding:10px 0 0">These exist on the module and are sniffed or planned — not yet wired up. They appear here so you can see what's coming.</div>
+  </div>`;
+}
+function renderStub(tab){
+  const name = MODULE_NAME[MODULE]||MODULE;
+  if(tab==="outputs"){
+    const items = MODULE==="slabs"
+      ? [{name:"ABS pump relay",tag:"ready"},{name:"Valve test per wheel",tag:"ready"},{name:"ABS bleed (power + module)",tag:"ready"},{name:"Raise / lower corners",tag:"ready"},{name:"Compressor · exhaust · buzzer",tag:"ready"}]
+      : [{name:"Fuel pump · MIL · glow plugs",tag:"ready"},{name:"Injector click 1–5",tag:"ready"},{name:"Wastegate / EGR (PWM)",tag:"ready"},{name:"EGR modulator readout",tag:"not mapped"}];
+    return `<h2>Outputs</h2><div style="font-size:12px;color:var(--fg2)">· ${name}</div>`+comingCard("Actuator tests", items);
+  }
+  if(tab==="utils"){
+    return `<h2>Utilities</h2><div style="font-size:12px;color:var(--fg2)">· ${name}</div>`+comingCard("Utilities", [
+      {name:"ECU identifiers (1A)",tag:"ready"},{name:"Raw LID block dump",tag:"ready"},
+      {name:"Routines",tag:"partial"},{name:"Log & report files",tag:"planned"}]);
+  }
+  if(tab==="connect") return `<h2>Connect</h2><div class="empty"><div class="pretty">Module picker + fast-init/session trace live here. This proof-of-concept focuses on Inputs.</div></div>`;
+  if(tab==="faults")  return `<h2>Faults</h2><div class="empty"><div class="pretty">Current / Logged groups with byte.bit refs and a detail sheet. Coming after Inputs is signed off.</div></div>`;
+  return "";
+}
+function render(){
+  $("#view").innerHTML = (TAB==="inputs") ? renderInputs() : renderStub(TAB);
+  if(TAB==="inputs"){
+    document.querySelectorAll("[data-chan]").forEach(b=>b.onclick=()=>{
+      const n=b.dataset.chan; PLOT.has(n)?PLOT.delete(n):(PLOT.size<3&&PLOT.add(n)); render();
+    });
+    const rl=$("#reclog"); if(rl) rl.onclick=async()=>{
+      rl.disabled=true;
+      try{ await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:recording?"stop_csv":"start_csv"})}); }catch(_){}
+      rl.disabled=false;
+    };
+  }
+}
+function renderNav(){
+  $("#nav").innerHTML = TABS.map(t=>
+    `<button class="${t.id===TAB?'on':''}" data-tab="${t.id}"><span class="nd"></span>${t.label}</button>`).join("");
+  document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{ TAB=b.dataset.tab; renderNav(); render(); });
+}
+$("#themebtn").onclick=()=>{
+  const cur=document.documentElement.getAttribute("data-theme");
+  document.documentElement.setAttribute("data-theme", cur==="dark"?"light":"dark");
+};
+renderNav(); render();
+</script>
+</body>
+</html>

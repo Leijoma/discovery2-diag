@@ -18,6 +18,7 @@ from .docs import DocLibrary
 from .sources import DataSource
 
 _DASHBOARD = Path(__file__).with_name("dashboard.html")
+_DASHBOARD_V2 = Path(__file__).with_name("dashboard_v2.html")  # ny design (proof of concept)
 
 
 def _calibrate(req: "dict") -> "dict":
@@ -124,6 +125,8 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         if self.path in ("/", "/index.html"):
             self._html()
+        elif self.path in ("/v2", "/v2.html"):
+            self._send(_DASHBOARD_V2.read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/events":
             self._sse()
         elif self.path == "/snapshot":
