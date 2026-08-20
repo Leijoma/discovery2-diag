@@ -78,6 +78,23 @@ nav .nd{width:5px;height:5px;border-radius:9999px;background:currentColor}
 .pretty{text-wrap:pretty;max-width:40ch}
 .comingrow{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px dashed var(--border-emph);border-radius:10px;color:var(--fg-dis)}
 .comingrow .tag{margin-left:auto;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+.overlay{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column}
+.sheet{position:absolute;inset:0;z-index:30;background:var(--color-overlay,rgba(0,0,0,.6));display:flex;flex-direction:column;justify-content:flex-end}
+.sheet-body{background:var(--bg-surface);border-top:1px solid var(--border);border-radius:12px 12px 0 0;padding:16px;display:flex;flex-direction:column;gap:16px;max-height:82%;overflow-y:auto}
+.grip{width:32px;height:4px;border-radius:9999px;background:var(--fg-dis);align-self:center}
+.opt{display:flex;align-items:flex-start;gap:12px;min-height:56px;padding:12px 16px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);color:var(--fg);text-align:left;cursor:pointer;width:100%;font-family:inherit;font-size:14px}
+.opt.on{border-color:var(--accent)}
+.opt .rr{width:24px;height:24px;flex:0 0 24px;margin-top:2px;border-radius:9999px;border:1px solid var(--border-emph);display:flex;align-items:center;justify-content:center}
+.opt.on .rr{border-color:var(--accent)}
+.opt .rr>i{width:12px;height:12px;border-radius:9999px;background:transparent}
+.opt.on .rr>i{background:var(--accent)}
+.opt .on-name{font-weight:700}
+.opt .on-desc{font-size:12px;color:var(--fg2);text-wrap:pretty}
+.tgl{width:48px;height:28px;border:1px solid var(--border-emph);border-radius:9999px;background:var(--bg-muted);display:flex;align-items:center;padding:2px;cursor:pointer}
+.tgl.on{background:var(--bg-green);border-color:var(--bd-green);justify-content:flex-end}
+.tgl>span{width:20px;height:20px;border-radius:9999px;background:var(--fg2)}
+.tgl.on>span{background:var(--ic-green)}
+.mtag{display:inline-flex;align-items:center;height:20px;padding:0 5px;border-radius:4px;font-size:11px;font-weight:700}
 </style>
 </head>
 <body>
@@ -89,9 +106,14 @@ nav .nd{width:5px;height:5px;border-radius:9999px;background:currentColor}
     </div>
     <div class="row" style="margin-left:auto">
       <div class="pill"><span class="pdot" id="pill-dot"></span><span id="pill-label" style="font-size:12px;font-weight:700">—</span></div>
-      <button class="chip" id="themebtn" title="Ljus/mörk">◐</button>
+      <button class="chip" id="setbtn" title="Settings">⚙</button>
     </div>
   </header>
+
+  <div id="expbanner" style="display:none;align-items:center;gap:8px;padding:5px 16px;background:var(--bg-card);border-bottom:1px solid var(--bd-yellow)">
+    <span class="pdot" style="background:var(--ic-yellow)"></span>
+    <span style="font-size:12px;font-weight:700">Experimental mode — unverified routines enabled</span>
+  </div>
 
   <main id="view"></main>
 
@@ -107,6 +129,15 @@ const TABS = [
   {id:"utils",   label:"Utilities"},
 ];
 let TAB = "inputs";
+
+// ---- preferenser (localStorage) + community-state ----
+const PREFS = Object.assign({trust:"trusted", consentDone:false, share:null, theme:"dark"},
+  JSON.parse(localStorage.getItem("d2diag.v2")||"{}"));
+function savePrefs(){ localStorage.setItem("d2diag.v2", JSON.stringify(PREFS)); }
+document.documentElement.setAttribute("data-theme", PREFS.theme);
+let COMMUNITY = null;
+function loadCommunity(){ fetch("/community").then(r=>r.json()).then(d=>{COMMUNITY=d;}).catch(()=>{}); }
+loadCommunity();
 
 // ---- signal-metadata (grupp + beskrivning). Speglar dashboard.html:s META. ----
 const GROUPS = ["Engine","Temperatures","Fuelling","Pressures","Accelerator","Ride height","Wheels","Electrical","Inputs","Other"];
@@ -271,7 +302,8 @@ function readoutCard(n, s, f){
     <div class="ro-meta">${meta}</div>
   </div>`;
 }
-let EXPERIMENTAL = true;  // POC: visa allt; togglas i Settings i den riktiga appen
+function isExperimental(){ return PREFS.trust==="experimental"; }
+let EXPERIMENTAL = isExperimental();
 function renderInputs(){
   const sig = (SNAP&&SNAP.signals)||{}, fmap = FIELDS[MODULE]||{};
   const names = [...new Set([...Object.keys(fmap), ...Object.keys(sig)])].filter(n=>!n.endsWith("_mm"));
@@ -323,7 +355,28 @@ function renderStub(tab){
   return "";
 }
 function render(){
-  $("#view").innerHTML = (TAB==="inputs") ? renderInputs() : renderStub(TAB);
+  EXPERIMENTAL = isExperimental();
+  $("#expbanner").style.display = EXPERIMENTAL ? "flex" : "none";
+  // Första start: consent-overlay blockerar tills den besvarats
+  if(!PREFS.consentDone){ renderConsent(); return; }
+  document.getElementById("consent-ov")?.remove();
+  let html;
+  if(TAB==="inputs") html = renderInputs();
+  else if(TAB==="connect") html = renderConnect();
+  else html = renderStub(TAB);
+  $("#view").innerHTML = html;
+  wireView();
+}
+
+function wireView(){
+  if(TAB==="connect"){
+    document.querySelectorAll("[data-mod]").forEach(b=>b.onclick=async()=>{
+      const m=b.dataset.mod;
+      await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"select_module",params:{module:m}})}).catch(()=>{});
+    });
+    const rt=$("#retry"); if(rt) rt.onclick=()=>fetch("/snapshot").then(r=>r.json()).then(onSnap);
+  }
   if(TAB==="inputs"){
     document.querySelectorAll("[data-chan]").forEach(b=>b.onclick=()=>{
       const n=b.dataset.chan; PLOT.has(n)?PLOT.delete(n):(PLOT.size<3&&PLOT.add(n)); render();
@@ -336,15 +389,152 @@ function render(){
     };
   }
 }
+const MODULES = [
+  {id:"motor", name:"TD5 (engine)", desc:"rpm, temps, boost, fuelling, injectors", tag:"verified", tagcls:"ok"},
+  {id:"slabs", name:"SLABS", desc:"ABS + self-levelling air suspension", tag:"verified", tagcls:"ok"},
+];
+function renderConnect(){
+  const mode = (SNAP&&SNAP.mode)||"—", src=(SNAP&&SNAP.source)||"—", st=SNAP&&SNAP.status;
+  const active = SNAP&&SNAP.module;
+  const iface = `<div class="card"><div class="row" style="gap:8px;margin-bottom:8px">
+      <span class="pdot" style="background:${st==='connected'?'var(--ic-green)':st==='error'?'var(--ic-red)':'var(--ic-yellow)'}"></span>
+      <span style="font-weight:700">Interface — ${mode==='live'?'live vehicle':'mock (no car)'}</span></div>
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 16px;font-size:12px;color:var(--fg2)">
+      <span style="color:var(--fg-dis)">SOURCE</span><span>${src}</span>
+      <span style="color:var(--fg-dis)">LINE</span><span>10 400 baud · 8N1 · half duplex</span>
+      <span style="color:var(--fg-dis)">MODE</span><span>${mode} · switch in Settings</span>
+    </div></div>`;
+  const mods = MODULES.map(m=>{
+    const on = m.id===active;
+    return `<button class="opt${on?' on':''}" data-mod="${m.id}">
+      <div style="flex:1;min-width:0"><div class="on-name">${m.name}</div><div class="on-desc">${m.desc}</div></div>
+      <span class="mtag ${m.tagcls==='ok'?'flag ok':''}" style="background:var(--bg-green);color:var(--ic-green)">${on?'connected':m.tag}</span>
+    </button>`;
+  }).join("");
+  let seq = "";
+  const phase = SNAP&&SNAP.connect_phase;
+  if(st==="error"){
+    seq = `<div class="card" style="border-color:var(--bd-red);background:var(--bg-red)">
+      <div style="font-weight:700;color:var(--ic-red)">No connection</div>
+      <div style="font-size:13px;color:var(--fg2);text-wrap:pretty;margin-top:4px">${(SNAP&&SNAP.error)||"The module did not answer."}</div>
+      <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--fg2)">
+        <div>— Ignition on, vehicle stationary.</div><div>— Check the KKL cable and OBD pin 7.</div>
+        <div>— SLABS answers best with the engine running.</div></div>
+      <button class="btn accent" id="retry" style="margin-top:10px">Retry</button></div>`;
+  } else if(st!=="connected" || phase){
+    seq = `<div class="card"><span class="kicker">Connection sequence</span>
+      <div class="row" style="gap:10px;margin-top:8px"><span class="pdot" style="background:var(--ic-yellow);animation:blink 1s infinite"></span>
+      <span style="font-weight:700">${phase||"connecting…"}</span></div></div>`;
+  }
+  return `<h2>Connect</h2><div style="font-size:12px;color:var(--fg2)">One session at a time — the K-line is shared.</div>
+    <div style="height:8px"></div>${iface}
+    <div><div class="kicker" style="margin:4px 2px 8px">Select module</div>
+      <div style="display:flex;flex-direction:column;gap:8px">${mods}</div></div>${seq}`;
+}
+
+function radioOpt(name, desc, on, act){
+  return `<button class="opt${on?' on':''}" onclick="${act}"><span class="rr"><i></i></span>
+    <div style="min-width:0"><div class="on-name">${name}</div><div class="on-desc">${desc}</div></div></button>`;
+}
+function setTrust(v){ PREFS.trust=v; savePrefs(); closeSheet(); render(); }
+function setShare(v){
+  PREFS.share=v; savePrefs();
+  fetch("/community/consent",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({consent:v})}).then(()=>loadCommunity()).catch(()=>{});
+  render();
+}
+function setMode(v){
+  fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:"set_mode",params:{mode:v}})}).catch(()=>{});
+  closeSheet();
+}
+function setTheme(v){ PREFS.theme=v; savePrefs(); document.documentElement.setAttribute("data-theme",v); openSettings(); }
+window.setTrust=setTrust; window.setShare=setShare; window.setMode=setMode; window.setTheme=setTheme;
+
+function closeSheet(){ document.getElementById("sheet")?.remove(); }
+window.closeSheet=closeSheet;
+function openSettings(){
+  closeSheet();
+  const share = COMMUNITY ? !!COMMUNITY.consent : (PREFS.share===true);
+  const mode = (SNAP&&SNAP.mode)||"mock";
+  const el = document.createElement("div"); el.className="sheet"; el.id="sheet";
+  el.innerHTML = `<div style="flex:1" onclick="closeSheet()"></div>
+    <div class="sheet-body" onclick="event.stopPropagation()">
+      <div class="grip"></div><div style="font-size:20px;font-weight:700">Settings</div>
+      <div><div class="kicker" style="margin-bottom:8px">Trust</div>
+        ${radioOpt("Trusted","Only routines proven on the car. Unverified stays hidden.",PREFS.trust==="trusted","setTrust('trusted')")}
+        <div style="height:8px"></div>
+        ${radioOpt("Experimental","Exposes partial modules and unverified tests. They can misbehave.",PREFS.trust==="experimental","setTrust('experimental')")}</div>
+      <div><div class="kicker" style="margin-bottom:8px">Data source</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn ${mode==='mock'?'accent':''}" style="flex:1" onclick="setMode('mock')">Mock</button>
+          <button class="btn ${mode==='live'?'accent':''}" style="flex:1" onclick="setMode('live')">Live vehicle</button></div></div>
+      <div><div class="kicker" style="margin-bottom:8px">Data sharing</div>
+        <div class="row card" style="gap:12px">
+          <div style="flex:1;min-width:0"><div style="font-weight:700">Share anonymous traces</div>
+            <div style="font-size:12px;color:var(--fg2);text-wrap:pretty">Raw fault blocks and unmapped bits — no VIN, no location, no identifiers.</div></div>
+          <div class="tgl ${share?'on':''}" onclick="setShare(${!share})"><span></span></div></div></div>
+      <div><div class="kicker" style="margin-bottom:8px">Display</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn ${PREFS.theme==='light'?'accent':''}" style="flex:1" onclick="setTheme('light')">Light</button>
+          <button class="btn ${PREFS.theme==='dark'?'accent':''}" style="flex:1" onclick="setTheme('dark')">Dark</button></div></div>
+      <button class="btn accent" onclick="closeSheet()">Done</button></div>`;
+  document.querySelector(".app").appendChild(el);
+}
+window.openSettings=openSettings;
+
+function acceptConsent(){
+  if(PREFS.share===null) return;
+  PREFS.consentDone=true; savePrefs();
+  fetch("/community/consent",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({consent:PREFS.share===true})}).then(()=>loadCommunity()).catch(()=>{});
+  document.getElementById("consent-ov")?.remove();
+  render();
+}
+window.acceptConsent=acceptConsent;
+function renderConsent(){
+  if(document.getElementById("consent-ov")) { updateConsentBtn(); return; }
+  const el=document.createElement("div"); el.className="overlay"; el.id="consent-ov";
+  el.style.background="var(--bg-body)";
+  el.innerHTML = `<div style="flex:1;overflow-y:auto;padding:24px 16px;display:flex;flex-direction:column;gap:16px">
+      <div><div class="kicker">First start</div><div style="font-size:24px;line-height:32px;font-weight:700">Before you connect</div></div>
+      <div style="font-size:14px;color:var(--fg2);text-wrap:pretty">This tool writes to real ECUs over the K-line. Two choices decide what it may do. Both change later in Settings.</div>
+      <div><div class="kicker" style="margin-bottom:8px">Trust</div><div id="c-trust"></div></div>
+      <div><div class="kicker" style="margin-bottom:8px">Data sharing</div><div id="c-share"></div>
+        <div style="font-size:12px;color:var(--fg-dis);margin-top:8px;text-wrap:pretty">Sharing is off unless chosen here. Nothing leaves the device before this screen is answered.</div></div>
+    </div>
+    <div style="padding:16px;border-top:1px solid var(--border);background:var(--bg-surface);display:flex;flex-direction:column;gap:8px">
+      <button class="btn" id="c-continue" onclick="acceptConsent()">Continue</button>
+      <div id="c-hint" style="font-size:12px;color:var(--fg-dis);text-align:center"></div></div>`;
+  document.querySelector(".app").appendChild(el);
+  document.getElementById("c-trust").innerHTML =
+    radioOpt("Trusted","Only routines proven on the car.",PREFS.trust==="trusted","setTrustC('trusted')")+
+    '<div style="height:8px"></div>'+
+    radioOpt("Experimental","Exposes partial modules and unverified tests.",PREFS.trust==="experimental","setTrustC('experimental')");
+  document.getElementById("c-share").innerHTML =
+    radioOpt("Share anonymous traces","Helps name unknown bits. No VIN, no location.",PREFS.share===true,"setShareC(true)")+
+    '<div style="height:8px"></div>'+
+    radioOpt("Don\'t share","Nothing leaves the device.",PREFS.share===false,"setShareC(false)");
+  updateConsentBtn();
+}
+function setTrustC(v){ PREFS.trust=v; renderConsent2(); }
+function setShareC(v){ PREFS.share=v; renderConsent2(); }
+function renderConsent2(){ document.getElementById("consent-ov")?.remove(); renderConsent(); }
+window.setTrustC=setTrustC; window.setShareC=setShareC;
+function updateConsentBtn(){
+  const btn=document.getElementById("c-continue"), hint=document.getElementById("c-hint");
+  const ready = PREFS.share!==null;
+  if(btn){ btn.className = "btn"+(ready?" accent":""); btn.style.opacity = ready?"1":".5"; btn.style.cursor=ready?"pointer":"not-allowed"; }
+  if(hint) hint.textContent = ready ? ("Trust "+PREFS.trust+" · sharing "+(PREFS.share?"on":"off")+" · changeable in Settings.")
+                                    : "Answer data sharing to continue.";
+}
+
 function renderNav(){
   $("#nav").innerHTML = TABS.map(t=>
     `<button class="${t.id===TAB?'on':''}" data-tab="${t.id}"><span class="nd"></span>${t.label}</button>`).join("");
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{ TAB=b.dataset.tab; renderNav(); render(); });
 }
-$("#themebtn").onclick=()=>{
-  const cur=document.documentElement.getAttribute("data-theme");
-  document.documentElement.setAttribute("data-theme", cur==="dark"?"light":"dark");
-};
+$("#setbtn").onclick=openSettings;
 renderNav(); render();
 </script>
 </body>
