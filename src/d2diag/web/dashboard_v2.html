@@ -72,9 +72,6 @@ h2{font-size:20px;line-height:28px;font-weight:700;margin:0}
 .iconbtn.rec{border-color:var(--bd-red);color:var(--ic-red)}
 .iconbtn .d{width:8px;height:8px;border-radius:9999px;background:currentColor}
 .iconbtn.rec .d{animation:blink 1s infinite}
-.ro-bar{height:4px;background:var(--bg-muted);position:relative}
-.ro-bar>i{position:absolute;top:0;bottom:0;width:2px;background:var(--fg2)}
-.ro-bar>.rng{position:absolute;top:0;bottom:0;background:var(--bg-green);opacity:.35}
 .chanwrap{display:flex;flex-wrap:wrap;gap:8px}
 .chan{min-height:40px;padding:0 12px;display:flex;align-items:center;gap:8px;border:1px solid var(--border-emph);border-radius:10px;background:var(--bg-surface);color:var(--fg2);font-size:12px;font-weight:600;cursor:pointer}
 .chan.on{color:var(--fg);border-color:var(--accent)}
@@ -216,6 +213,9 @@ const MODULE_NAME = {motor:"TD5 (engine)", slabs:"SLABS (ABS + air suspension)"}
 // ---- state ----
 let SNAP = null, FIELDS = {}, MODULE = "motor";
 const HISTORY = {};           // namn → array av {t, v} (ring-buffert ~60 s)
+const OPEN = new Set();       // vilka readouts som har infon uppfälld (överlever omritning)
+function toggleInfo(n){ OPEN.has(n)?OPEN.delete(n):OPEN.add(n); render(); }
+window.toggleInfo=toggleInfo;
 let SEQ = [];                 // anslutningssekvens: {phase, t} — ackumulerad connect_phase
 let SEQ_DONE = false;
 const PLOT = new Set();       // valda kanaler för trendgrafen
@@ -317,23 +317,16 @@ function readoutCard(n, s, f){
   const unit = (n==="any_door")? "" : (dim? "" : (s?(s.u||""):(f&&f.u||"")));
   const lim = f&&f.limits;
   const m = META[n]||{};
-  let bar = "";
-  if(lim && !dim && s && typeof s.v==="number"){
-    const [lo,hi]=lim, span=(hi-lo)||1;
-    const pos = Math.max(0,Math.min(100,((s.v-lo)/span)*100));
-    bar = `<div class="ro-bar"><span class="rng" style="left:0;right:0"></span><i style="left:${pos.toFixed(0)}%"></i></div>`;
-  }
   const range = lim ? `Normal ${lim[0]}–${lim[1]}${(s&&s.u)||(f&&f.u)||""}` : "";
   const meta = [m.d, range].filter(Boolean).join(" · ");
-  const hasInfo = !!meta;
-  return `<div class="ro${dim?' dim':''}">
+  const hasInfo = !!meta, open = OPEN.has(n);
+  return `<div class="ro${dim?' dim':''}${open?' open':''}">
     <div class="ro-top">
       <div class="ro-lbl">${LABELS[n]||n}</div>
       <div class="ro-val">${val}<span class="ro-u"> ${unit}</span></div>
       <span class="flag ${flag.cls}">${dim?'EXP':flag.txt}</span>
-      ${hasInfo?`<button class="infobtn" onclick="this.closest('.ro').classList.toggle('open')">ⓘ</button>`:''}
+      ${hasInfo?`<button class="infobtn" onclick="toggleInfo('${n}')">ⓘ</button>`:''}
     </div>
-    ${bar}
     ${hasInfo?`<div class="ro-meta">${meta}</div>`:''}
   </div>`;
 }
@@ -381,7 +374,10 @@ function renderInputs(){
   return `
     <div class="row"><h2>Inputs</h2>
       <span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${MODULE_NAME[MODULE]||MODULE}</span>
-      <button class="iconbtn ${recording?'rec':''}" id="reclog" style="margin-left:auto"><span class="d"></span>${recording?'Recording':'Log'}</button>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        ${recording && SNAP&&SNAP.logging&&SNAP.logging.file ? `<span style="font-size:11px;color:var(--fg-dis);font-family:ui-monospace,Menlo,monospace">${SNAP.logging.file}${SNAP.logging.rows!=null?` · ${SNAP.logging.rows} rows`:''}</span>`:''}
+        <button class="iconbtn ${recording?'rec':''}" id="reclog"><span class="d"></span>${recording?'Stop':'Log CSV'}</button>
+      </div>
     </div>
     ${names.length? groups : `<div class="empty"><div style="font-size:18px;font-weight:700">No live inputs yet</div><div class="pretty">Connect ${MODULE_NAME[MODULE]||MODULE} on the Connect tab. The K-line carries one session at a time.</div></div>`}
     ${trend}
@@ -390,19 +386,19 @@ function renderInputs(){
 // ---- Outputs-katalog per modul (riktiga /command-actions) ----
 const OUTPUTS = {
   slabs: [
-    {grp:"ABS", a:"pump_on", n:"ABS pump on", cmd:"31 25 08 fa", tag:"verified", warn:true},
-    {grp:"ABS", a:"pump_off", n:"ABS pump off", cmd:"31 25 02 fa", tag:"verified"},
+    {grp:"ABS", n:"ABS pump", cmd:"31 25 08/02 fa", tag:"verified",
+      btns:[{a:"pump_on",l:"On",warn:true},{a:"pump_off",l:"Off"}]},
     {grp:"ABS", a:"wheel_fl", n:"Valve test FL", cmd:"31 22 11 0c", tag:"verified", warn:true},
     {grp:"ABS", a:"wheel_fr", n:"Valve test FR", cmd:"31 22 10 03", tag:"verified", warn:true},
     {grp:"ABS", a:"wheel_rl", n:"Valve test RL", cmd:"31 22 13 c0", tag:"verified", warn:true},
     {grp:"ABS", a:"wheel_rr", n:"Valve test RR", cmd:"31 22 12 30", tag:"verified", warn:true},
-    {grp:"ABS bleed ⚠ brakes", a:"bleed_power_on", n:"Power bleed start", cmd:"31 22 04 00 49 c4", tag:"verified", warn:true},
-    {grp:"ABS bleed ⚠ brakes", a:"bleed_power_off", n:"Power bleed stop", cmd:"31 22 04 00 40 00", tag:"verified"},
+    {grp:"ABS bleed ⚠ brakes", n:"Power bleed", cmd:"31 22 04 00 49c4/40 00", tag:"verified",
+      btns:[{a:"bleed_power_on",l:"Start",warn:true},{a:"bleed_power_off",l:"Stop"}]},
     {grp:"ABS bleed ⚠ brakes", a:"bleed_module", n:"Module bleed (4 steps)", cmd:"31 22 11..14", tag:"verified", warn:true},
-    {grp:"Air suspension", a:"raise_left", n:"Raise left", cmd:"31 33 28", tag:"verified", warn:true},
-    {grp:"Air suspension", a:"lower_left", n:"Lower left", cmd:"31 35 28", tag:"verified", warn:true},
-    {grp:"Air suspension", a:"raise_right", n:"Raise right", cmd:"31 34 28", tag:"verified", warn:true},
-    {grp:"Air suspension", a:"lower_right", n:"Lower right", cmd:"31 36 28", tag:"verified", warn:true},
+    {grp:"Air suspension", n:"Left corner", cmd:"31 33/35 28", tag:"verified",
+      btns:[{a:"raise_left",l:"Raise",warn:true},{a:"lower_left",l:"Lower",warn:true}]},
+    {grp:"Air suspension", n:"Right corner", cmd:"31 34/36 28", tag:"verified",
+      btns:[{a:"raise_right",l:"Raise",warn:true},{a:"lower_right",l:"Lower",warn:true}]},
     {grp:"Air suspension", a:"compressor", n:"Compressor test", cmd:"31 30 28", tag:"verified", warn:true},
     {grp:"Air suspension", a:"exhaust", n:"Exhaust valve test", cmd:"31 2f 28", tag:"verified", warn:true},
     {grp:"Air suspension", a:"buzzer", n:"Buzzer test", cmd:"31 31 0a", tag:"verified"},
@@ -447,13 +443,17 @@ function renderOutputs(){
       const exp = o.tag==="experimental";
       const locked = exp && !EXPERIMENTAL;
       const tagcol = exp ? "var(--ic-yellow)" : "var(--ic-green)";
+      const mkbtn = (a,label,warn)=> `<button class="btn" style="${warn?'border-color:var(--bd-red);color:var(--ic-red)':'border-color:var(--border-emph)'}" onclick="runOutput('${a}','${o.n} ${label}',${!!warn})">${label}</button>`;
+      const controls = locked
+        ? `<span style="font-size:12px;color:var(--fg-dis)">enable Experimental</span>`
+        : (o.btns ? o.btns.map(b=>mkbtn(b.a,b.l,b.warn)).join("")
+                  : mkbtn(o.a,"Run",o.warn));
       return `<div class="card" style="${locked?'opacity:.55':''}">
         <div class="row" style="gap:8px"><span style="font-weight:700">${o.n}</span>
           <span class="mtag" style="background:transparent;color:${tagcol}">${o.tag}</span></div>
-        <div class="row" style="gap:12px;margin-top:8px">
+        <div class="row" style="gap:8px;margin-top:8px">
           <span style="flex:1;min-width:0;font-size:12px;color:var(--fg-dis);font-family:ui-monospace,Menlo,monospace">${o.cmd}</span>
-          ${locked ? `<span style="font-size:12px;color:var(--fg-dis)">enable Experimental</span>`
-                   : `<button class="btn ${o.warn?'':'accent'}" style="${o.warn?'border-color:var(--bd-red);color:var(--ic-red)':''}" onclick="runOutput('${o.a}','${o.n}',${!!o.warn})">Run</button>`}
+          ${controls}
         </div></div>`;
     }).join("");
     return `<div><div class="kicker" style="margin:4px 2px 8px">${g}</div><div class="grid">${cards}</div></div>`;
@@ -516,6 +516,7 @@ function wireView(){
   }
   if(TAB==="faults"){
     const rd=$("#freads"); if(rd) rd.onclick=()=>fetch("/snapshot").then(r=>r.json()).then(onSnap);
+    const wf=$("#fwrite"); if(wf) wf.onclick=()=>writeFaultsFile();
     const cl=$("#fclear"); if(cl) cl.onclick=async()=>{
       const n=((SNAP&&SNAP.faults)||[]).length;
       if(!confirm(`Clear ${n} fault code(s) from ${MODULE_NAME[MODULE]||MODULE}?\nWrites to the ECU. Cannot be undone.`)) return;
@@ -528,10 +529,16 @@ function wireView(){
       const n=b.dataset.chan; PLOT.has(n)?PLOT.delete(n):(PLOT.size<3&&PLOT.add(n)); render();
     });
     const rl=$("#reclog"); if(rl) rl.onclick=async()=>{
-      rl.disabled=true;
-      try{ await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({action:recording?"stop_csv":"start_csv"})}); }catch(_){}
-      rl.disabled=false;
+      const starting=!recording;
+      recording=starting;                                  // optimistiskt: uppdatera direkt
+      rl.className="iconbtn"+(starting?" rec":""); rl.innerHTML=`<span class="d"></span>${starting?'Stop':'Log CSV'}`;
+      toast(starting?"recording…":"stopping…");
+      try{
+        const r=await(await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({action:starting?"start_csv":"stop_csv"})})).json();
+        if(r.ok) toast(r.message?`${r.message}${r.file?` · ${r.file}`:''}${r.rows!=null&&!starting?` · ${r.rows} rows`:''}`:"ok");
+        else toast(r.error||"error",true);
+      }catch(_){ toast("network error",true); }
     };
   }
 }
@@ -749,6 +756,18 @@ async function readBlock(lidsStr){
   }catch(e){ toast("network error",true); }
 }
 window.readBlock=readBlock;
+function writeFaultsFile(){
+  const faults=(SNAP&&SNAP.faults)||[], name=MODULE_NAME[MODULE]||MODULE;
+  const now=new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
+  const lines=["D2 Diag — fault report","Module: "+name,"Time:   "+new Date().toISOString(),
+    "Codes:  "+faults.length,""].concat(faults.length?faults.map(f=>"  "+f):["  (no fault codes)"]);
+  const blob=new Blob([lines.join("\n")+"\n"],{type:"text/plain"});
+  const url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download=`faults-${MODULE}-${now}.txt`; document.body.appendChild(a); a.click();
+  a.remove(); URL.revokeObjectURL(url);
+  toast("wrote faults-"+MODULE+"-"+now+".txt");
+}
+window.writeFaultsFile=writeFaultsFile;
 const UTIL_LIDS = {
   motor: {ex:"09 0D 10 1A 1B 1C 40", note:"09 rpm · 1A temps · 1B pedal · 1C boost · 40 injector balance"},
   slabs: {ex:"54 43 50 44 56", note:"54 heights · 43 wheel speeds · 50 ABS sensors · 44 supply · 56 door"},
