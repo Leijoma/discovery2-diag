@@ -553,10 +553,9 @@ function renderFaults(){
   const cur = parsed.filter(f=>f.current), log = parsed.filter(f=>!f.current);
   function group(items, label, dot, note){
     if(!items.length) return "";
-    const rows = items.map(f=>`<div class="ro" onclick="this.classList.toggle('open')" style="cursor:pointer;border-left:4px solid ${dot}">
+    const rows = items.map(f=>`<div class="ro" style="border-left:4px solid ${dot}">
         <div class="ro-top"><div style="flex:1;min-width:0"><div style="font-weight:700;text-wrap:pretty">${f.text}</div>
-          ${f.raw?`<div style="font-size:12px;color:var(--fg-dis)">${f.raw}${f.tag?` · ${f.tag}`:''}</div>`:(f.tag?`<div style="font-size:12px;color:var(--fg-dis)">${f.tag}</div>`:'')}</div>
-          <span style="color:var(--fg-dis)">›</span></div></div>`).join("");
+          ${f.raw?`<div style="font-size:12px;color:var(--fg-dis)">${f.raw}${f.tag?` · ${f.tag}`:''}</div>`:(f.tag?`<div style="font-size:12px;color:var(--fg-dis)">${f.tag}</div>`:'')}</div></div></div>`).join("");
     return `<div><div class="row" style="gap:8px;margin:4px 2px 8px"><span class="pdot" style="background:${dot}"></span>
       <span class="kicker">${label}</span><span style="font-size:12px;color:var(--fg-dis)">${note}</span></div>
       <div class="grid">${rows}</div></div>`;
