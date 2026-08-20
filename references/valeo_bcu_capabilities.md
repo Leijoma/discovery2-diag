@@ -129,3 +129,35 @@ kan läggas till) är billig att ha redo om algoritmen dyker upp.
 **Read-only nästa gång i bilen (säkert, utan att gissa keys):** kör `27 01` upprepat
 och notera om seeden ändras per request / per tändningscykel / om en redan upplåst
 BCU ger en fast seed. Karakteriserar SA utan att röra skyddade skrivningar.
+
+## Seed-karakterisering 2026-08-20 (DEFINITIVT: seeden rollar, EKA blockerad)
+
+Körde `bcu_probe --no-prompt` tre gånger i rad och fångade rena seeds som master
+(inte passiv tapp → inga bit-fel). Rå-loggen är entydig:
+
+```
+session 1:  27 01 → 04 67 01 AF 18 33   → seed = AF 18  (33 = additiv cs)
+            21 CC → 06 61 CC AF 18 33 01 2E   → returnerar SEEDET, inte EKA
+session 2:  27 01 → 04 67 01 4A 4D 03   → seed = 4A 4D
+            21 CC → 06 61 CC 4A 4D 03 01 CE
+```
+
+**Tre belagda fynd:**
+1. **Seeden är 2 byte och ROLLAR per session** (AF 18 → 4A 4D). Standard anti-replay.
+2. **`21 CC` utan SecurityAccess returnerar den aktuella SEEDEN** (+ dess checksumma
+   + `01`), INTE EKA-koden. Det förklarar den tidigare "platshållaren" `11 99 07 01`
+   (2026-08-19 morgon) — det var bara den sessionens seed.
+3. `1A xx` returnerar ett fast identitets-/statusblock (`11 99 07 01 01 01 01 0a eb`),
+   samma varje gång.
+4. Init är lite ostadigt: 1 timeout av 4 försök, och en session där 1A/27 01 inte
+   svarade. Kopplar upp oftast men inte alltid (jfr SLABS/airbag init-känslighet).
+
+**Konsekvens — EKA-via-SA är definitivt blockerad:**
+- Rullande seed → ett gammalt seed→key-par kan aldrig låsa upp en ny session.
+- Att reverse-engineera `key = f(seed)` kräver MÅNGA färska (seed, key)-par, och
+  nyckeln kan bara fås ur ett verktyg som redan kan algoritmen (reference tool). Vi kan
+  fånga hur många seeds som helst, men inga keys.
+- Brute-force är olämpligt (rullande seed + trolig attempt-counter/lockout).
+- **Slutsats: sluta jaga EKA via SecurityAccess.** Koden är känd och lagrad i
+  systerprojektet. Protokollet är fullständigt dokumenterat här om det någonsin
+  behövs; det enda som saknas är `f(seed)`, som inte går att få fram med vårt data.
