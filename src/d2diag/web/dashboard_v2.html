@@ -339,6 +339,22 @@ function readoutCard(n, s, f){
 }
 function isExperimental(){ return PREFS.trust==="experimental"; }
 let EXPERIMENTAL = isExperimental();
+function statusGate(){
+  const st = SNAP && SNAP.status, name = MODULE_NAME[MODULE]||MODULE;
+  if(st==="connected") return "";
+  if(st==="error"){
+    return `<div class="card" style="border-color:var(--bd-red);background:var(--bg-red)">
+      <div style="font-weight:700;color:var(--ic-red)">Not connected</div>
+      <div style="font-size:13px;color:var(--fg2);text-wrap:pretty;margin-top:4px">${(SNAP&&SNAP.error)||"The module did not answer."}</div>
+      <button class="btn accent" style="margin-top:10px" onclick="TAB='connect';renderNav();render()">Go to Connect</button></div>`;
+  }
+  // connecting / okänt
+  const last = SEQ.length ? SEQ[SEQ.length-1].phase : "connecting…";
+  return `<div class="card"><div class="row" style="gap:10px"><span class="pdot" style="background:var(--ic-yellow);animation:blink 1s infinite"></span>
+    <div style="flex:1;min-width:0"><div style="font-weight:700">Connecting to ${name}…</div>
+    <div style="font-size:12px;color:var(--fg-dis)">${last}</div></div></div></div>`;
+}
+
 function renderInputs(){
   const sig = (SNAP&&SNAP.signals)||{}, fmap = FIELDS[MODULE]||{};
   const names = [...new Set([...Object.keys(fmap), ...Object.keys(sig)])].filter(n=>!n.endsWith("_mm"));
@@ -360,6 +376,8 @@ function renderInputs(){
       ${trendSvg()}
       <div style="font-size:11px;color:var(--fg-dis);text-wrap:pretty;margin:6px 2px 0">History is held in this session only — switching module or reloading discards it. Log to CSV to keep it.</div>
       <div class="chanwrap" style="margin-top:8px">${chan||'<span style="color:var(--fg-dis)">waiting for live values…</span>'}</div></div>` : "";
+  const gate = statusGate();
+  if(gate) return `<div class="row"><h2>Inputs</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${MODULE_NAME[MODULE]||MODULE}</span></div>${gate}`;
   return `
     <div class="row"><h2>Inputs</h2>
       <span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${MODULE_NAME[MODULE]||MODULE}</span>
@@ -440,6 +458,8 @@ function renderOutputs(){
     }).join("");
     return `<div><div class="kicker" style="margin:4px 2px 8px">${g}</div><div class="grid">${cards}</div></div>`;
   }).join("");
+  const gate = statusGate();
+  if(gate) return `<div class="row"><h2>Outputs</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${name}</span></div>${gate}`;
   return `<div class="row"><h2>Outputs</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${name}</span></div>${banner}${groups}`;
 }
 
@@ -544,6 +564,8 @@ function renderFaults(){
   const empty = !parsed.length ? `<div class="empty"><div style="font-size:18px;font-weight:700">No fault codes</div>
     <div class="pretty">${SNAP&&SNAP.status==='connected'?'This module reports a clean fault memory.':'Connect a module on the Connect tab.'}</div></div>` : "";
   const connected = SNAP&&SNAP.status==="connected";
+  const gate = statusGate();
+  if(gate) return `<div class="row"><h2>Faults</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${MODULE_NAME[MODULE]||MODULE}</span></div>${gate}`;
   return `<div class="row"><h2>Faults</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${MODULE_NAME[MODULE]||MODULE}</span>
       <button class="iconbtn" id="freads" style="margin-left:auto"><span class="d" style="background:var(--fg2)"></span>Read</button></div>
     ${group(cur,"Current","var(--ic-red)","present now")}
