@@ -338,7 +338,7 @@ def _slabs_faults_flat(f: "dict[str, list]") -> "list[str]":
 
 # Ställdons-actions (webb → SLABS). Namn → svensk etikett (för mock-svar/UI).
 _SLABS_ACTUATORS = {
-    "buzzer": "SLS buzzer", "compressor": "Compressor", "exhaust": "Exhaust valve",
+    "buzzer": "Buzzer test", "compressor": "Compressor test", "exhaust": "Exhaust valve test",
     "pump_on": "ABS pump on", "pump_off": "ABS pump off",
     "raise_left": "Raise left", "raise_right": "Raise right",
     "lower_left": "Lower left", "lower_right": "Lower right",

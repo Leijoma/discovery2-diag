@@ -417,9 +417,9 @@
           <button class="btn warn" data-cmd="lower_right" data-confirm="Lower right?">Lower R</button>
         </div>
         <div class="btns" style="margin-top:8px">
-          <button class="btn warn" data-cmd="compressor" data-confirm="Run the compressor?">Compressor</button>
-          <button class="btn warn" data-cmd="exhaust" data-confirm="Open the exhaust valve?">Vent</button>
-          <button class="btn" data-cmd="buzzer">🔔 Buzzer</button>
+          <button class="btn warn" data-cmd="compressor" data-confirm="Run the compressor (test)?">Compressor test</button>
+          <button class="btn warn" data-cmd="exhaust" data-confirm="Pulse the exhaust valve (test)?">Exhaust valve test</button>
+          <button class="btn" data-cmd="buzzer">🔔 Buzzer test</button>
         </div>
       </section>
 
@@ -1012,6 +1012,7 @@
   }
 
   function render(d) {
+    if(window.hideTip) window.hideTip();
     _last = d;
     const st = d.status || "connecting";
     $("dot").className = "dot " + st;
@@ -1235,12 +1236,16 @@
       tt.classList.add("show"); place(e);
     });
     document.addEventListener("mousemove", e => {
-      if(tt.classList.contains("show") && e.target.closest && e.target.closest("[data-tip]")) place(e);
-    });
-    document.addEventListener("mouseout", e => {
+      if(!tt.classList.contains("show")) return;
       const row = e.target.closest && e.target.closest("[data-tip]");
-      if(row && !(e.relatedTarget && row.contains(e.relatedTarget))) tt.classList.remove("show");
+      if(row) place(e);
+      else tt.classList.remove("show");   // ute ur raden (el. omritad) → dölj direkt
     });
+    // Säkerhetsnät: dölj vid omritning, tab-byte, scroll och när fönstret tappar fokus.
+    window.hideTip = () => tt.classList.remove("show");
+    document.addEventListener("mouseleave", hideTip);
+    window.addEventListener("blur", hideTip);
+    document.addEventListener("scroll", hideTip, true);
   })();
 
   loadFields("motor");   // so the Engine layout shows even before a cable is connected

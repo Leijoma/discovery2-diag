@@ -48,12 +48,12 @@
     "scale": 0.0625,
     "bias": 0.0,
     "unit": "V",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       11.5,
       15.0
     ],
-    "source": "21 44 byte12 ~0xb3·0.0625 ~11.3 V. Ventil-/systemmatning ska ligga på batterispänning ~12,5–14 V. KANDIDAT — skala (1/16) ej korsvaliderad."
+    "source": "21 44 byte12 u8×0.0625 V. BELAGT i bilen 2026-08-20: 13,5 V med motorn igång (laddning), 12,0 V med motorn av — spårar systemspänningen rätt."
   },
   {
     "name": "ecu_supply",
@@ -63,12 +63,12 @@
     "scale": 0.0625,
     "bias": 0.0,
     "unit": "V",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       11.5,
       15.0
     ],
-    "source": "21 44 byte13 = ECU-supply (~0xb1 -> x1/16 ~11.5 V); varierar & matchar men skala EJ bekräftad"
+    "source": "21 44 byte13 u8×0.0625 V. BELAGT 2026-08-20: samma som batteri (13,5 V motor på, 12,0 V av)."
   },
   {
     "name": "wheel_speed_fl",
@@ -80,7 +80,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@0 u16le = hjulhastighet FL (råvärde ~124 stilla, ≠ km/h). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+    "source": "21 43@0 u16le. Avkodning BELAGD i bilen 2026-08-20 (alla fyra läser 124 stilla, ≠ km/h). ⚠ HJUL-ordningen (vilket offset = vilket hjul) ej bekräftad — alla lika stilla går ej att skilja. Kräver snurra-ETT-hjul-test. KANDIDAT tills dess."
   },
   {
     "name": "wheel_speed_fr",
@@ -92,7 +92,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@2 u16le = hjulhastighet FR (råvärde ~124 stilla, ≠ km/h). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+    "source": "21 43@2 u16le. Avkodning BELAGD i bilen 2026-08-20 (alla fyra läser 124 stilla, ≠ km/h). ⚠ HJUL-ordningen (vilket offset = vilket hjul) ej bekräftad — alla lika stilla går ej att skilja. Kräver snurra-ETT-hjul-test. KANDIDAT tills dess."
   },
   {
     "name": "wheel_speed_rl",
@@ -104,7 +104,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@4 u16le = hjulhastighet RL (råvärde ~124 stilla, ≠ km/h). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+    "source": "21 43@4 u16le. Avkodning BELAGD i bilen 2026-08-20 (alla fyra läser 124 stilla, ≠ km/h). ⚠ HJUL-ordningen (vilket offset = vilket hjul) ej bekräftad — alla lika stilla går ej att skilja. Kräver snurra-ETT-hjul-test. KANDIDAT tills dess."
   },
   {
     "name": "wheel_speed_rr",
@@ -116,7 +116,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@6 u16le = hjulhastighet RR (råvärde ~124 stilla, ≠ km/h). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+    "source": "21 43@6 u16le. Avkodning BELAGD i bilen 2026-08-20 (alla fyra läser 124 stilla, ≠ km/h). ⚠ HJUL-ordningen (vilket offset = vilket hjul) ej bekräftad — alla lika stilla går ej att skilja. Kräver snurra-ETT-hjul-test. KANDIDAT tills dess."
   },
   {
     "name": "abs_sensor_fl",
@@ -131,7 +131,7 @@
       1.5,
       3.0
     ],
-    "source": "21 50@0 u8×0.02 V = ABS-sensorspänning FL (~2,3 V). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+    "source": "21 50@0 u8×0.02 V. Avkodning BELAGD 2026-08-20 (alla ~2,3 V stabilt). ⚠ HJUL-ordning ej bekräftad. KANDIDAT."
   },
   {
     "name": "abs_sensor_fr",
@@ -146,7 +146,7 @@
       1.5,
       3.0
     ],
-    "source": "21 50@1 u8×0.02 V = ABS-sensorspänning FR (~2,3 V). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+    "source": "21 50@1 u8×0.02 V. Avkodning BELAGD 2026-08-20 (alla ~2,3 V stabilt). ⚠ HJUL-ordning ej bekräftad. KANDIDAT."
   },
   {
     "name": "abs_sensor_rl",
@@ -161,7 +161,7 @@
       1.5,
       3.0
     ],
-    "source": "21 50@2 u8×0.02 V = ABS-sensorspänning RL (~2,3 V). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+    "source": "21 50@2 u8×0.02 V. Avkodning BELAGD 2026-08-20 (alla ~2,3 V stabilt). ⚠ HJUL-ordning ej bekräftad. KANDIDAT."
   },
   {
     "name": "abs_sensor_rr",
@@ -176,6 +176,6 @@
       1.5,
       3.0
     ],
-    "source": "21 50@3 u8×0.02 V = ABS-sensorspänning RR (~2,3 V). Hjul→offset-ordningen (fl,fr,rl,rr) är en HYPOTES, ej bekräftad — bekräfta genom att snurra ETT hjul och se vilket fält som ändras."
+    "source": "21 50@3 u8×0.02 V. Avkodning BELAGD 2026-08-20 (alla ~2,3 V stabilt). ⚠ HJUL-ordning ej bekräftad. KANDIDAT."
   }
 ]
