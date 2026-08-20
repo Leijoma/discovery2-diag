@@ -258,3 +258,20 @@ def test_abs_module_bleed_step_validates_range():
     with slabs:
         with pytest.raises(ValueError):
             slabs.abs_module_bleed_step(5)
+
+
+def test_clear_faults_reads_the_delayed_54_ack():
+    # SLABS 54-ack:en dröjer ~300 ms (EEPROM-skrivning). Tidigare kastade vi
+    # "tomt svar" trots att rensningen lyckades. Med bredare läsfönster + en fake
+    # som svarar 54 ska clear_faults inte kasta.
+    from d2diag.kline import KLine, encode
+    from d2diag.kwp2000 import KWP2000
+    from d2diag.slabs import SLABS_ADDRESS, Slabs
+    from tests.fakes import FakeKLineEcu
+
+    resp = {encode(b"\x14\xff\xff", addressed=False): encode(b"\x54", addressed=False)}
+    ecu = FakeKLineEcu(resp)
+    slabs = Slabs(KWP2000(KLine(ecu, target=SLABS_ADDRESS), tolerant=True))
+    with slabs:
+        slabs.clear_faults()   # ska inte kasta
+    assert encode(b"\x14\xff\xff", addressed=False) in ecu.sent

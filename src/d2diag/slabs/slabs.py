@@ -157,8 +157,15 @@ class Slabs(EcuSession):
         }
 
     def clear_faults(self) -> None:
-        """ClearDiagnosticInformation (14 FF FF). Nollställer felminnet."""
-        self._kwp.request(CLEAR_FAULTS_SERVICE, b"\xff\xff")
+        """ClearDiagnosticInformation (14 FF FF) → 54. Nollställer felminnet.
+
+        ⚠️ Ack:en är FÖRDRÖJD: SLABS skriver till EEPROM och svarar `54` först
+        ~300 ms efter kommandot (belagt ur sniff session.log: TX @72560,
+        RX @72856). Standardläsningens 60 ms-gap returnerar då bara ekot och vi
+        kastade "tomt svar" trots att rensningen lyckades. Läs därför med bredare
+        fönster (gap 0.5 s, overall 2.5 s) så vi fångar `54`.
+        """
+        self._kwp.request(CLEAR_FAULTS_SERVICE, b"\xff\xff", overall=2.5, gap=0.5)
 
     # ---- live-data (21 xx) ------------------------------------------- #
     def read_data(self, lid: int) -> bytes:

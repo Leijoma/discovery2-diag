@@ -80,7 +80,7 @@ class KWP2000:
 
     # ---- generisk tjänsteförfrågan ------------------------------------ #
     def request(self, service: int, payload: bytes = b"", overall: "float | None" = None,
-                retries: "int | None" = None) -> bytes:
+                retries: "int | None" = None, gap: "float | None" = None) -> bytes:
         """Skicka en tjänst, returnera svarets datafält (utan positiv SID).
 
         Hanterar responsePending (0x78) genom att vänta in nästa svar utan att
@@ -88,7 +88,7 @@ class KWP2000:
         """
         payload = bytes(payload)
         if self._tolerant:
-            resp = self._request_tolerant(service, payload, overall)
+            resp = self._request_tolerant(service, payload, overall, gap)
         else:
             kw = {} if retries is None else {"retries": retries}
             resp = self._resolve_pending(
@@ -105,13 +105,18 @@ class KWP2000:
         return resp[1:]
 
     def _request_tolerant(self, service: int, payload: bytes,
-                          overall: "float | None" = None) -> bytes:
+                          overall: "float | None" = None,
+                          gap: "float | None" = None) -> bytes:
         """Skicka via burst-läsning; plocka svaret ur bursten utan checksum.
 
         Returnerar bytes från och med den funna SID:en (positiv eller negativ),
         så att den gemensamma tolkningen i :meth:`request` fungerar oförändrad.
         """
-        kw = {} if overall is None else {"overall": overall}
+        kw = {}
+        if overall is not None:
+            kw["overall"] = overall
+        if gap is not None:
+            kw["gap"] = gap
         raw = self._k.converse(bytes([service]) + payload, addressed=self._addressed, **kw)
         return self._extract_response(raw, service, payload)
 
