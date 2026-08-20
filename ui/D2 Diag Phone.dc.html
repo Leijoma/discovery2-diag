@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="astryx-theme.css" />
+<script>document.documentElement.setAttribute('data-theme', 'dark');</script>
+<style>
+  html, body { margin: 0; padding: 0; background: var(--color-background-body); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  a { color: var(--color-icon-blue); text-decoration: none; }
+  a:hover { color: var(--color-text-blue); }
+  ::-webkit-scrollbar { width: 0; height: 0; }
+  @keyframes axblink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: .25 } }
+</style>
+</helmet>
+<div style="display:flex;flex-direction:column;height:100vh;min-height:640px;width:100%;margin:0 auto;background:var(--color-background-body);color:var(--color-text-primary);font-family:var(--font-family-base);font-size:14px;line-height:20px;font-variant-numeric:tabular-nums;overflow:hidden;position:relative">
+
+  <header style="display:flex;align-items:center;gap:12px;padding:8px 16px;min-height:56px;background:var(--color-background-surface);border-bottom:1px solid var(--color-border)">
+    <div style="display:flex;flex-direction:column;min-width:0">
+      <div style="font-size:12px;line-height:16px;font-weight:700;color:var(--color-text-primary)">{{ headerTitle }}</div>
+      <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled)">{{ headerSub }}</div>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border:1px solid {{ pill.border }};border-radius:10px;background:{{ pill.bg }}">
+        <span style="width:8px;height:8px;border-radius:9999px;background:{{ pill.dot }};animation:{{ pill.anim }}"></span>
+        <span style="font-size:12px;line-height:16px;font-weight:700;color:{{ pill.fg }};white-space:nowrap">{{ pill.label }}</span>
+      </div>
+      <button onClick="{{ onOpenSettings }}" style="width:48px;height:48px;flex:0 0 48px;display:flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;padding:0;position:relative">
+        <span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid {{ modeChip.border }};border-radius:10px;background:{{ modeChip.bg }};color:{{ modeChip.fg }}">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M3 8V10H13V8H3ZM7 12V14H3V16H7V18H9V12H7ZM21 16V14H11V16H21ZM15 12H17V10H21V8H17V6H15V12Z" fill="currentColor"></path>
+          </svg>
+        </span>
+        <span style="position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:9999px;background:{{ modeChip.dot }}"></span>
+      </button>
+    </div>
+  </header>
+
+  <sc-if value="{{ experimental }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 16px;background:var(--color-background-card);border-bottom:1px solid var(--color-border-yellow)">
+      <span style="width:8px;height:8px;border-radius:9999px;background:var(--color-icon-yellow)"></span>
+      <span style="font-size:12px;line-height:16px;font-weight:700;color:var(--color-text-primary)">Experimental Mode — unverified routines enabled</span>
+    </div>
+  </sc-if>
+
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--color-background-body)">
+
+    <sc-if value="{{ isConnect }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;align-items:start;max-width:1440px;margin:0 auto;width:100%">
+        <div style="border:1px solid var(--color-border);border-radius:10px;background:var(--color-background-card);padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:8px;height:8px;border-radius:9999px;background:var(--color-icon-green)"></span>
+            <span style="font-size:14px;font-weight:700">Interface Detected</span>
+          </div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 16px;font-size:12px;line-height:16px;font-variant-numeric:tabular-nums">
+            <span style="color:var(--color-text-disabled)">ADAPTER</span><span style="color:var(--color-text-secondary)">KKL 409.1 · FTDI FT232R</span>
+            <span style="color:var(--color-text-disabled)">PORT</span><span style="color:var(--color-text-secondary)">/dev/cu.usbserial-1410</span>
+            <span style="color:var(--color-text-disabled)">LINE</span><span style="color:var(--color-text-secondary)">10 400 baud · 8N1 · half duplex</span>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Select Module</div>
+          <sc-for list="{{ moduleChoices }}" as="m" hint-placeholder-count="5">
+            <button onClick="{{ m.onClick }}" style="display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 16px;border:1px solid {{ m.border }};border-radius:10px;background:{{ m.bg }};color:{{ m.fg }};font-family:inherit;font-size:14px;text-align:left;cursor:{{ m.cursor }};width:100%">
+              <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+                <div style="font-weight:700">{{ m.name }}</div>
+                <div style="font-size:12px;line-height:16px;color:{{ m.descFg }}">{{ m.desc }}</div>
+              </div>
+              <span style="display:inline-flex;align-items:center;height:20px;padding:0 4px;border-radius:4px;font-size:12px;line-height:16px;font-weight:700;background:{{ m.tagBg }};color:{{ m.tagFg }};white-space:nowrap">{{ m.tag }}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ hasError }}" hint-placeholder-val="{{ false }}">
+          <div style="grid-column:1/-1;border:1px solid var(--color-border-red);border-radius:10px;background:var(--color-background-red);padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:14px;font-weight:700;color:var(--color-icon-red)">{{ error.title }}</div>
+            <div style="font-size:14px;color:var(--color-text-secondary);text-wrap:pretty">{{ error.detail }}</div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <sc-for list="{{ error.hints }}" as="h" hint-placeholder-count="3">
+                <div style="display:flex;gap:8px;font-size:12px;line-height:16px;color:var(--color-text-secondary)"><span style="color:var(--color-icon-red)">—</span><span>{{ h.text }}</span></div>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:8px;padding-top:4px">
+              <button onClick="{{ onRetry }}" style="min-height:48px;padding:0 16px;border:1px solid var(--color-accent);border-radius:10px;background:var(--color-accent);color:var(--color-on-accent);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Retry</button>
+              <button onClick="{{ onReset }}" style="min-height:48px;padding:0 16px;border:1px solid var(--color-border-emphasized);border-radius:10px;background:var(--color-background-surface);color:var(--color-text-primary);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset Link</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Connection Sequence</div>
+            <div style="margin-left:auto;font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums">{{ seqCount }}</div>
+          </div>
+          <div style="border:1px solid var(--color-border);border-radius:10px;background:var(--color-background-card);overflow:hidden">
+            <sc-for list="{{ sequence }}" as="s" hint-placeholder-count="6">
+              <div style="display:flex;gap:12px;padding:8px 16px;border-bottom:1px solid var(--color-border);background:{{ s.bg }}">
+                <span style="width:12px;height:12px;flex:0 0 12px;margin-top:4px;border-radius:9999px;border:1px solid {{ s.ring }};background:{{ s.fill }};animation:{{ s.anim }}"></span>
+                <div style="display:flex;flex-direction:column;min-width:0">
+                  <div style="font-size:14px;font-weight:700;color:{{ s.fg }}">{{ s.label }}</div>
+                  <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums;word-break:break-word">{{ s.trace }}</div>
+                </div>
+                <span style="margin-left:auto;font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums;white-space:nowrap">{{ s.ms }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ showEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:48px 16px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center">
+        <div style="font-size:20px;line-height:28px;font-weight:700">No Module Connected</div>
+        <div style="font-size:14px;color:var(--color-text-secondary);max-width:32ch;text-wrap:pretty">Select a module on the Connect tab. The K-line carries one session at a time.</div>
+        <button onClick="{{ onGoConnect }}" style="min-height:48px;padding:0 16px;border:1px solid var(--color-accent);border-radius:10px;background:var(--color-accent);color:var(--color-on-accent);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Go To Connect</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isFaults }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:16px;display:flex;flex-direction:column;gap:16px;max-width:1440px;margin:0 auto;width:100%">
+        <div style="display:flex;align-items:flex-start;gap:12px">
+          <div style="display:flex;flex-direction:column;min-width:0">
+            <div style="font-size:20px;line-height:28px;font-weight:700">Faults</div>
+            <div style="font-size:12px;line-height:16px;color:var(--color-text-secondary)">{{ faultSubtitle }}</div>
+          </div>
+          <button onClick="{{ onReadFaults }}" style="margin-left:auto;min-height:48px;padding:0 16px;border:1px solid var(--color-border-emphasized);border-radius:10px;background:var(--color-background-surface);color:var(--color-text-primary);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Read</button>
+        </div>
+
+        <sc-for list="{{ faultGroups }}" as="g" hint-placeholder-count="2">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="width:8px;height:8px;border-radius:9999px;background:{{ g.dot }}"></span>
+              <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">{{ g.label }}</div>
+              <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled)">{{ g.note }}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;align-items:start">
+            <sc-for list="{{ g.items }}" as="f" hint-placeholder-count="3">
+              <button onClick="{{ f.onClick }}" style="display:flex;gap:12px;min-height:56px;padding:8px 16px;border:1px solid var(--color-border);border-left:4px solid {{ f.edge }};border-radius:10px;background:var(--color-background-card);color:var(--color-text-primary);font-family:inherit;font-size:14px;text-align:left;cursor:pointer;width:100%">
+                <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+                  <div style="font-weight:700;text-wrap:pretty">{{ f.text }}</div>
+                  <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums">{{ f.raw }} · {{ f.occurrence }}</div>
+                </div>
+                <span style="align-self:center;color:var(--color-text-disabled)">›</span>
+              </button>
+            </sc-for>
+            </div>
+          </div>
+        </sc-for>
+
+        <div style="border:1px solid var(--color-border);border-radius:10px;background:var(--color-background-card);padding:12px 16px;display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Report</div>
+          <div style="font-size:12px;line-height:16px;color:var(--color-text-secondary);text-wrap:pretty">{{ reportNote }}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onClick="{{ onWriteReport }}" style="flex:1;min-width:140px;min-height:48px;padding:0 16px;border:1px solid var(--color-accent);border-radius:10px;background:var(--color-accent);color:var(--color-on-accent);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Write Faults To File</button>
+            <button onClick="{{ onClear }}" style="flex:1;min-width:140px;min-height:48px;padding:0 16px;border:1px solid var(--color-border-red);border-radius:10px;background:var(--color-background-card);color:var(--color-icon-red);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">{{ clearLabel }}</button>
+          </div>
+          <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled);text-wrap:pretty">Clear writes to the ECU. Ignition on, engine off. Re-read after one drive cycle.</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isInputs }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:16px;display:flex;flex-direction:column;gap:16px;max-width:1440px;margin:0 auto;width:100%">
+        <div style="display:flex;align-items:flex-start;gap:12px">
+          <div style="display:flex;flex-direction:column;min-width:0">
+            <div style="font-size:20px;line-height:28px;font-weight:700">Inputs</div>
+            <div style="font-size:12px;line-height:16px;color:var(--color-text-secondary)">{{ liveStatus }}</div>
+          </div>
+          <button onClick="{{ onToggleLive }}" style="margin-left:auto;min-height:48px;padding:0 16px;border:1px solid var(--color-border-emphasized);border-radius:10px;background:var(--color-background-surface);color:var(--color-text-primary);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">{{ liveButton }}</button>
+        </div>
+
+        <div style="border:1px solid {{ rec.border }};border-radius:10px;background:var(--color-background-card);padding:12px 16px;display:flex;align-items:center;gap:12px">
+          <span style="width:12px;height:12px;flex:0 0 12px;border-radius:9999px;background:{{ rec.dot }};animation:{{ rec.anim }}"></span>
+          <div style="display:flex;flex-direction:column;min-width:0;flex:1">
+            <div style="font-size:14px;font-weight:700;color:{{ rec.fg }}">{{ rec.title }}</div>
+            <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums">{{ rec.detail }}</div>
+          </div>
+          <button onClick="{{ onToggleLog }}" style="min-height:48px;padding:0 16px;border:1px solid {{ rec.btnBorder }};border-radius:10px;background:{{ rec.btnBg }};color:{{ rec.btnFg }};font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap">{{ rec.btn }}</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-items:start">
+        <sc-for list="{{ readouts }}" as="p" hint-placeholder-count="6">
+          <div style="border:1px solid {{ p.border }};border-radius:10px;background:var(--color-background-card);overflow:hidden">
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 16px">
+              <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:12px;line-height:16px;font-weight:600;letter-spacing:.15px;color:var(--color-text-secondary)">{{ p.label }}</span>
+                  <span style="display:inline-flex;align-items:center;height:16px;padding:0 4px;border-radius:4px;font-size:12px;line-height:16px;font-weight:700;background:{{ p.flagBg }};color:{{ p.flagFg }}">{{ p.flag }}</span>
+                </div>
+                <div style="display:flex;align-items:baseline;gap:8px">
+                  <span style="font-size:32px;line-height:36px;font-weight:700;font-variant-numeric:tabular-nums;color:{{ p.fg }}">{{ p.value }}</span>
+                  <span style="font-size:16px;line-height:20px;color:var(--color-text-secondary)">{{ p.unit }}</span>
+                </div>
+                <div style="height:4px;border-radius:4px;background:var(--color-neutral);overflow:hidden;position:relative">
+                  <div style="position:absolute;left:{{ p.okStart }};width:{{ p.okWidth }};top:0;bottom:0;background:var(--color-overlay-pressed)"></div>
+                  <div style="position:absolute;left:0;top:0;bottom:0;width:{{ p.pct }};background:{{ p.bar }}"></div>
+                </div>
+                <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums">NORMAL {{ p.range }}</div>
+              </div>
+              <button onClick="{{ p.onInfo }}" style="width:48px;height:48px;flex:0 0 48px;display:flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;padding:0">
+                <span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid {{ p.infoBorder }};border-radius:10px;background:{{ p.infoBg }};color:{{ p.infoFg }};font-family:inherit;font-size:14px;font-weight:700">i</span>
+              </button>
+            </div>
+            <sc-if value="{{ p.open }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:12px 16px;border-top:1px solid var(--color-border);background:var(--color-background-body);display:flex;flex-direction:column;gap:4px">
+                <div style="font-size:14px;color:var(--color-text-primary);text-wrap:pretty">{{ p.info }}</div>
+                <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums">{{ p.source }}</div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+        </div>
+
+        <div style="border:1px solid var(--color-border);border-radius:10px;background:var(--color-background-card);padding:12px 16px;display:flex;flex-direction:column;gap:12px;position:relative">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Trend · 60 s</div>
+            <button onClick="{{ onOpenPicker }}" style="margin-left:auto;min-height:48px;padding:0 16px;display:flex;align-items:center;gap:8px;border:1px solid var(--color-border-emphasized);border-radius:10px;background:var(--color-background-surface);color:var(--color-text-primary);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">
+              {{ pickerLabel }}
+              <span style="color:var(--color-text-secondary)">▾</span>
+            </button>
+          </div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <sc-for list="{{ plotted }}" as="c" hint-placeholder-count="3">
+              <span style="display:flex;align-items:center;gap:8px;font-size:12px;line-height:16px;color:var(--color-text-secondary)"><span style="width:16px;height:2px;background:{{ c.color }}"></span>{{ c.label }}</span>
+            </sc-for>
+          </div>
+          <svg viewBox="0 0 640 160" preserveAspectRatio="none" style="width:100%;height:200px;display:block">
+            <line x1="0" y1="40" x2="640" y2="40" stroke="var(--color-border)" stroke-width="1"></line>
+            <line x1="0" y1="80" x2="640" y2="80" stroke="var(--color-border)" stroke-width="1"></line>
+            <line x1="0" y1="120" x2="640" y2="120" stroke="var(--color-border)" stroke-width="1"></line>
+            <sc-for list="{{ plotted }}" as="c" hint-placeholder-count="3">
+              <polyline fill="none" stroke="{{ c.color }}" stroke-width="2" points="{{ c.points }}"></polyline>
+            </sc-for>
+          </svg>
+          <div style="display:flex;justify-content:space-between;font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums"><span>−60 s</span><span>−30 s</span><span>NOW</span></div>
+          <div style="display:flex;gap:8px;padding-top:4px;border-top:1px solid var(--color-border)">
+            <span style="color:var(--color-text-disabled)">—</span>
+            <span style="font-size:12px;line-height:16px;color:var(--color-text-disabled);text-wrap:pretty">History is held in this session only. Switching module, reloading or closing the app discards it. Start a log to keep it.</span>
+          </div>
+          <sc-if value="{{ pickerOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;top:64px;right:16px;z-index:5;width:300px;max-height:340px;overflow-y:auto;border:1px solid var(--color-border-emphasized);border-radius:12px;background:var(--color-background-popover);box-shadow:var(--shadow-low);display:flex;flex-direction:column">
+              <div style="padding:12px 16px;border-bottom:1px solid var(--color-border);display:flex;align-items:center;gap:8px">
+                <span style="font-size:12px;line-height:16px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Plot Channels</span>
+                <span style="margin-left:auto;font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums">{{ pickerCount }}</span>
+              </div>
+              <sc-for list="{{ channels }}" as="c" hint-placeholder-count="8">
+                <button onClick="{{ c.onClick }}" style="display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 16px;border:0;border-bottom:1px solid var(--color-border);background:{{ c.bg }};color:{{ c.fg }};font-family:inherit;font-size:14px;text-align:left;cursor:pointer;width:100%">
+                  <span style="width:16px;height:16px;flex:0 0 16px;border-radius:4px;border:1px solid {{ c.boxBorder }};background:{{ c.boxBg }}"></span>
+                  <span style="flex:1;min-width:0">{{ c.label }}</span>
+                  <span style="width:16px;height:2px;background:{{ c.color }}"></span>
+                </button>
+              </sc-for>
+              <button onClick="{{ onClosePicker }}" style="margin:12px 16px;min-height:48px;border:1px solid var(--color-accent);border-radius:10px;background:var(--color-accent);color:var(--color-on-accent);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Done</button>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isOutputs }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:16px;display:flex;flex-direction:column;gap:16px;max-width:1440px;margin:0 auto;width:100%">
+        <div style="display:flex;flex-direction:column">
+          <div style="font-size:20px;line-height:28px;font-weight:700">Outputs</div>
+          <div style="font-size:12px;line-height:16px;color:var(--color-text-secondary)">{{ outputSubtitle }}</div>
+        </div>
+
+        <div style="border:1px solid var(--color-border-yellow);border-radius:10px;background:var(--color-background-yellow);padding:12px 16px;display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:14px;font-weight:700">Actuator Test Active Control</div>
+          <div style="font-size:12px;line-height:16px;color:var(--color-text-secondary);text-wrap:pretty">Tests drive real hardware. Vehicle stationary, handbrake on, nobody under the car.</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start">
+        <sc-for list="{{ outputs }}" as="o" hint-placeholder-count="4">
+          <div style="border:1px solid {{ o.border }};border-radius:10px;background:var(--color-background-card);padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:14px;font-weight:700;color:{{ o.fg }}">{{ o.name }}</span>
+              <span style="display:inline-flex;align-items:center;height:20px;padding:0 4px;border-radius:4px;font-size:12px;line-height:16px;font-weight:700;background:{{ o.tagBg }};color:{{ o.tagFg }};white-space:nowrap">{{ o.tag }}</span>
+            </div>
+            <div style="font-size:12px;line-height:16px;color:var(--color-text-secondary);text-wrap:pretty">{{ o.desc }}</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="flex:1;min-width:0;font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums">{{ o.cmd }}</span>
+              <button onClick="{{ o.onRun }}" style="min-height:48px;padding:0 16px;border:1px solid {{ o.btnBorder }};border-radius:10px;background:{{ o.btnBg }};color:{{ o.btnFg }};font-family:inherit;font-size:14px;font-weight:600;cursor:{{ o.cursor }};white-space:nowrap">{{ o.btn }}</button>
+            </div>
+          </div>
+        </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isUtilities }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:16px;display:flex;flex-direction:column;gap:16px;max-width:1440px;margin:0 auto;width:100%">
+        <div style="display:flex;flex-direction:column">
+          <div style="font-size:20px;line-height:28px;font-weight:700">Utilities</div>
+          <div style="font-size:12px;line-height:16px;color:var(--color-text-secondary)">{{ utilSubtitle }}</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start">
+        <sc-for list="{{ utilities }}" as="u" hint-placeholder-count="4">
+          <button onClick="{{ u.onRun }}" style="display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 16px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-background-card);color:{{ u.fg }};font-family:inherit;font-size:14px;text-align:left;cursor:{{ u.cursor }};width:100%">
+            <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+              <div style="font-weight:700">{{ u.name }}</div>
+              <div style="font-size:12px;line-height:16px;color:var(--color-text-secondary);text-wrap:pretty">{{ u.desc }}</div>
+            </div>
+            <span style="display:inline-flex;align-items:center;height:20px;padding:0 4px;border-radius:4px;font-size:12px;line-height:16px;font-weight:700;background:{{ u.tagBg }};color:{{ u.tagFg }};white-space:nowrap">{{ u.tag }}</span>
+          </button>
+        </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Files</div>
+            <div style="margin-left:auto;font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums">{{ fileCount }}</div>
+          </div>
+          <div style="border:1px solid var(--color-border);border-radius:10px;background:var(--color-background-card);overflow:hidden">
+            <sc-for list="{{ files }}" as="f" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 16px;border-bottom:1px solid var(--color-border)">
+                <div style="display:flex;flex-direction:column;min-width:0;flex:1">
+                  <div style="font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.name }}</div>
+                  <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums">{{ f.meta }}</div>
+                </div>
+                <button style="min-height:48px;padding:0 16px;border:1px solid var(--color-border-emphasized);border-radius:10px;background:var(--color-background-surface);color:var(--color-text-primary);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Share</button>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noFiles }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:16px;font-size:12px;line-height:16px;color:var(--color-text-disabled)">No files yet. Log a session on Inputs, or write faults to file.</div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <div style="height:24px"></div>
+  </div>
+
+  <sc-if value="{{ confirmOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px">
+        <div style="width:100%;max-width:640px;border:1px solid var(--color-border);border-radius:12px;background:var(--color-background-surface);padding:16px;display:flex;flex-direction:column;gap:12px">
+        <div style="font-size:20px;line-height:28px;font-weight:700">Clear Fault Memory?</div>
+        <div style="font-size:14px;color:var(--color-text-secondary);text-wrap:pretty">{{ confirmBody }}</div>
+        <div style="border:1px solid var(--color-border);border-radius:10px;background:var(--color-background-card);padding:12px 16px;display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:12px;line-height:16px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Command</div>
+          <div style="font-size:12px;line-height:16px;color:var(--color-text-secondary);font-variant-numeric:tabular-nums">{{ confirmCmd }}</div>
+        </div>
+        <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled);text-wrap:pretty">This cannot be undone. Write the faults to file first if the history matters.</div>
+        <div style="display:flex;gap:8px">
+          <button onClick="{{ onCancelClear }}" style="flex:1;min-height:48px;border:1px solid var(--color-border-emphasized);border-radius:10px;background:var(--color-background-surface);color:var(--color-text-primary);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Cancel</button>
+          <button onClick="{{ onConfirmClear }}" style="flex:1;min-height:48px;border:1px solid var(--color-border-red);border-radius:10px;background:var(--color-background-red);color:var(--color-text-red);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Clear</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;flex-direction:column;justify-content:flex-end">
+      <div onClick="{{ onCloseSettings }}" style="flex:1"></div>
+      <div style="background:var(--color-background-surface);border-top:1px solid var(--color-border);border-radius:12px 12px 0 0;padding:16px;display:flex;flex-direction:column;gap:16px;max-height:82%;overflow-y:auto">
+        <div style="width:32px;height:4px;border-radius:9999px;background:var(--color-text-disabled);align-self:center"></div>
+        <div style="font-size:20px;line-height:28px;font-weight:700">Settings</div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Mode</div>
+          <sc-for list="{{ modeOptions }}" as="o" hint-placeholder-count="2">
+            <button onClick="{{ o.onClick }}" style="display:flex;align-items:flex-start;gap:12px;min-height:56px;padding:12px 16px;border:1px solid {{ o.border }};border-radius:10px;background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:14px;text-align:left;cursor:pointer;width:100%">
+              <span style="width:24px;height:24px;flex:0 0 24px;margin-top:2px;border-radius:9999px;border:1px solid {{ o.ring }};display:flex;align-items:center;justify-content:center">
+                <span style="width:12px;height:12px;border-radius:9999px;background:{{ o.dot }}"></span>
+              </span>
+              <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                <div style="font-weight:700">{{ o.name }}</div>
+                <div style="font-size:12px;line-height:16px;color:{{ o.descFg }};text-wrap:pretty">{{ o.desc }}</div>
+              </div>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Data Sharing</div>
+          <div style="display:flex;align-items:center;gap:12px;min-height:56px;padding:12px 16px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-background-card)">
+            <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:700">Share Anonymous Traces</div>
+              <div style="font-size:12px;line-height:16px;color:var(--color-text-secondary);text-wrap:pretty">Sends raw fault blocks and unmapped bits with no VIN, no location, no identifiers. Used to name unknown bits.</div>
+            </div>
+            <button onClick="{{ onToggleShare }}" style="width:56px;height:48px;flex:0 0 56px;display:flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;padding:0">
+              <span style="width:48px;height:28px;border:1px solid {{ share.border }};border-radius:9999px;background:{{ share.bg }};display:flex;align-items:center;padding:2px;justify-content:{{ share.justify }}">
+                <span style="width:20px;height:20px;border-radius:9999px;background:{{ share.knob }}"></span>
+              </span>
+            </button>
+          </div>
+          <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled)">{{ share.state }}</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Display</div>
+          <div style="display:flex;gap:8px">
+            <sc-for list="{{ themeOptions }}" as="o" hint-placeholder-count="2">
+              <button onClick="{{ o.onClick }}" style="flex:1;min-height:48px;border:1px solid {{ o.border }};border-radius:10px;background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">{{ o.name }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <button onClick="{{ onCloseSettings }}" style="min-height:48px;border:1px solid var(--color-accent);border-radius:10px;background:var(--color-accent);color:var(--color-on-accent);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Done</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ consentOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;background:var(--color-background-body);display:flex;flex-direction:column">
+      <div style="flex:1;overflow-y:auto;padding:24px 16px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:12px;line-height:16px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">First Start</div>
+          <div style="font-size:24px;line-height:32px;font-weight:700">Before You Connect</div>
+        </div>
+        <div style="font-size:14px;color:var(--color-text-secondary);text-wrap:pretty">This tool writes to real ECUs over the K-line. Two choices decide what it is allowed to do. Both can be changed later in Settings.</div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Mode</div>
+          <sc-for list="{{ modeOptions }}" as="o" hint-placeholder-count="2">
+            <button onClick="{{ o.onClick }}" style="display:flex;align-items:flex-start;gap:12px;min-height:56px;padding:12px 16px;border:1px solid {{ o.border }};border-radius:10px;background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:14px;text-align:left;cursor:pointer;width:100%">
+              <span style="width:24px;height:24px;flex:0 0 24px;margin-top:2px;border-radius:9999px;border:1px solid {{ o.ring }};display:flex;align-items:center;justify-content:center">
+                <span style="width:12px;height:12px;border-radius:9999px;background:{{ o.dot }}"></span>
+              </span>
+              <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                <div style="font-weight:700">{{ o.name }}</div>
+                <div style="font-size:12px;line-height:16px;color:{{ o.descFg }};text-wrap:pretty">{{ o.desc }}</div>
+              </div>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Data Sharing</div>
+          <sc-for list="{{ shareOptions }}" as="o" hint-placeholder-count="2">
+            <button onClick="{{ o.onClick }}" style="display:flex;align-items:flex-start;gap:12px;min-height:56px;padding:12px 16px;border:1px solid {{ o.border }};border-radius:10px;background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:14px;text-align:left;cursor:pointer;width:100%">
+              <span style="width:24px;height:24px;flex:0 0 24px;margin-top:2px;border-radius:9999px;border:1px solid {{ o.ring }};display:flex;align-items:center;justify-content:center">
+                <span style="width:12px;height:12px;border-radius:9999px;background:{{ o.dot }}"></span>
+              </span>
+              <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                <div style="font-weight:700">{{ o.name }}</div>
+                <div style="font-size:12px;line-height:16px;color:{{ o.descFg }};text-wrap:pretty">{{ o.desc }}</div>
+              </div>
+            </button>
+          </sc-for>
+          <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled);text-wrap:pretty">Sharing is off unless chosen here. Nothing leaves the device before this screen is answered.</div>
+        </div>
+      </div>
+      <div style="padding:16px;border-top:1px solid var(--color-border);background:var(--color-background-surface);display:flex;flex-direction:column;gap:8px">
+        <button onClick="{{ onAcceptConsent }}" style="min-height:48px;border:1px solid {{ consentBtn.border }};border-radius:10px;background:{{ consentBtn.bg }};color:{{ consentBtn.fg }};font-family:inherit;font-size:14px;font-weight:600;cursor:{{ consentBtn.cursor }}">{{ consentBtn.label }}</button>
+        <div style="font-size:12px;line-height:16px;color:var(--color-text-disabled);text-align:center">{{ consentHint }}</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toastOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;left:16px;right:16px;bottom:96px;display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-background-surface)">
+      <span style="width:8px;height:8px;flex:0 0 8px;border-radius:9999px;background:var(--color-icon-green)"></span>
+      <div style="flex:1;min-width:0;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ toast }}</div>
+      <button onClick="{{ onCloseToast }}" style="min-height:48px;padding:0 12px;border:0;background:transparent;color:var(--color-text-secondary);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Dismiss</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;flex-direction:column;justify-content:flex-end">
+      <div onClick="{{ onCloseSheet }}" style="flex:1"></div>
+      <div style="background:var(--color-background-surface);border-top:1px solid var(--color-border);border-radius:12px 12px 0 0;padding:16px;display:flex;flex-direction:column;gap:12px;max-height:78%;overflow-y:auto">
+        <div style="width:32px;height:4px;border-radius:9999px;background:var(--color-text-disabled);align-self:center"></div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="display:inline-flex;align-items:center;height:20px;padding:0 4px;border-radius:4px;font-size:12px;line-height:16px;font-weight:700;background:{{ sheet.badgeBg }};color:{{ sheet.badgeFg }}">{{ sheet.status }}</span>
+            <span style="font-size:12px;line-height:16px;color:var(--color-text-disabled);font-variant-numeric:tabular-nums">{{ sheet.raw }}</span>
+          </div>
+          <div style="font-size:20px;line-height:28px;font-weight:700;text-wrap:pretty">{{ sheet.text }}</div>
+        </div>
+        <p style="margin:0;font-size:14px;color:var(--color-text-secondary);text-wrap:pretty">{{ sheet.meaning }}</p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:12px;line-height:16px;padding:12px 16px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-background-card)">
+          <span style="color:var(--color-text-disabled)">MODULE</span><span style="color:var(--color-text-secondary)">{{ sheet.module }}</span>
+          <span style="color:var(--color-text-disabled)">OCCURRENCE</span><span style="color:var(--color-text-secondary);font-variant-numeric:tabular-nums">{{ sheet.occurrence }}</span>
+          <span style="color:var(--color-text-disabled)">CONFIDENCE</span><span style="color:var(--color-text-secondary)">{{ sheet.confidence }}</span>
+          <span style="color:var(--color-text-disabled)">SOURCE</span><span style="color:var(--color-text-secondary)">{{ sheet.source }}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:14px;line-height:20px;font-weight:600;letter-spacing:.15px;text-transform:uppercase;color:var(--color-text-secondary)">Checks</div>
+          <sc-for list="{{ sheet.checks }}" as="c" hint-placeholder-count="3">
+            <div style="display:flex;gap:12px;font-size:14px"><span style="color:var(--color-text-disabled);font-variant-numeric:tabular-nums">{{ c.n }}</span><span style="color:var(--color-text-primary);text-wrap:pretty">{{ c.text }}</span></div>
+          </sc-for>
+        </div>
+        <button onClick="{{ onCloseSheet }}" style="min-height:48px;border:1px solid var(--color-accent);border-radius:10px;background:var(--color-accent);color:var(--color-on-accent);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Close</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <nav style="display:flex;background:var(--color-background-surface);border-top:1px solid var(--color-border)">
+    <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+      <button onClick="{{ t.onClick }}" style="flex:1;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px 2px;border:0;border-top:2px solid {{ t.mark }};background:{{ t.bg }};font-family:inherit;cursor:pointer;color:{{ t.fg }}">
+        <span style="font-size:12px;line-height:16px;font-weight:{{ t.weight }}">{{ t.label }}</span>
+        <span style="font-size:12px;line-height:16px;color:{{ t.subFg }};font-variant-numeric:tabular-nums">{{ t.sub }}</span>
+      </button>
+    </sc-for>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 390, &quot;height&quot;: 844}, &quot;failAtSecurityAccess&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Demo states&quot;}}">
+const MODULES = [
+  {id: 'td5', short: 'TD5', name: 'Td5 — Engine ECU', desc: 'Faults, inputs, outputs, utilities. Validated on the car.', tag: 'READY', ready: true},
+  {id: 'slabs', short: 'SLABS', name: 'SLABS — ABS + Air Suspension', desc: 'Logged and current faults, heights, actuator tests.', tag: 'READY', ready: true},
+  {id: 'airbag', short: 'SRS', name: 'Airbag / SRS', desc: 'Read-only by construction. No clear, no outputs.', tag: 'EXPERIMENTAL', ready: false},
+  {id: 'ace', short: 'ACE', name: 'ACE — Active Cornering', desc: 'Fault block isolated, decoding in progress.', tag: 'PARTIAL', ready: false},
+  {id: 'bcu', short: 'BCU', name: 'BCU — Body Control', desc: 'EKA code read. No conventional fault memory.', tag: 'PARTIAL', ready: false},
+];
+
+const SEQUENCE = [
+  {label: 'Serial Port Open', trace: '/dev/cu.usbserial-1410 · 10400 8N1', ms: '12 ms'},
+  {label: 'Bus Idle', trace: 'line quiet 300 ms — let any open session die', ms: '300 ms'},
+  {label: 'Fast Init', trace: 'low pulse 25 ms → StartCommunication → C1 0x13', ms: '84 ms'},
+  {label: 'Diagnostic Session', trace: 'StartDiagnosticSession 0xA0 → 50 A0', ms: '26 ms'},
+  {label: 'SecurityAccess', trace: 'seed d3 e6 → key ad 87 → unlocked', ms: '41 ms'},
+  {label: 'Immobiliser Status', trace: '03 = not immobilised', ms: '18 ms'},
+];
+
+const FAULTS = {
+  td5: [
+    {group: 'current', text: 'Air flow circuit', raw: 'byte4.bit2 · 01-07', occurrence: 'current + logged low', module: 'Td5 (Lucas)', confidence: 'Proven — decoded in faults.py', source: 'read 21 3B, warm idle 2026-08-08', meaning: 'The ECU sees an implausible signal from the air flow meter circuit. On an early Td5 ROM this is usually wiring or the MAF connector rather than the sensor itself.', checks: ['Unplug the MAF and check the connector pins for oil and corrosion.', 'Wiggle the loom by the intake while watching the live air flow field.', 'Clear, drive one cycle under load and re-read — a returning current fault means the circuit, not history.']},
+    {group: 'current', text: 'Driver demand problem', raw: 'byte20.bit1', occurrence: 'current', module: 'Td5 (Lucas)', confidence: 'Proven — decoded in faults.py', source: 'read 21 3B 2026-08-08', meaning: 'The two accelerator pedal tracks disagree beyond the allowed window. The ECU falls back to limited fuelling when this is active.', checks: ['Read accel track 1 and 2 live and sweep the pedal slowly — the tracks should move together.', 'Check the 5 V reference sits at 4.7–5.3 V.', 'Inspect the pedal connector for a partly backed-out pin.']},
+    {group: 'current', text: 'Injector 6 peak charge long', raw: 'byte31.bit5', occurrence: 'current — suspect', module: 'Td5 (Lucas)', confidence: 'Suspect — engine is 5-cylinder', source: 'read 21 3B 2026-08-08', meaning: 'Bit set for a sixth injector that does not exist on this engine. Most likely a mapping offset in the decode table rather than a real fault.', checks: ['Ignore for repair purposes.', 'Log the raw 35-byte block and compare with the reference tool reading.']},
+    {group: 'logged', text: 'Inlet air temperature', raw: 'byte2.bit3 · 04-01', occurrence: 'logged high · intermittent', module: 'Td5 (Lucas)', confidence: 'Proven — decoded in faults.py', source: 'read 21 3B 2026-08-08', meaning: 'Stored open-circuit reading from the inlet air temperature sensor. Logged high means the signal went to the top of its range at some point.', checks: ['Compare live air temp with ambient — a stuck 150 °C reading means an unplugged or broken sensor.', 'Check the sensor connector in the intake elbow.']},
+    {group: 'logged', text: 'CAN tx/rx error', raw: 'byte17.bit0', occurrence: 'logged', module: 'Td5 (Lucas)', confidence: 'Proven — decoded in faults.py', source: 'read 21 3B 2026-08-08', meaning: 'The ECU logged failed message exchange on its internal comms link. Common after low battery voltage or a module dropout during cranking.', checks: ['Load-test the battery — dropout under 12.2 V at crank sets this.', 'Check earth straps at the engine and body.']},
+    {group: 'logged', text: 'Unknown bit — byte18.bit6', raw: 'byte18.bit6', occurrence: 'logged', module: 'Td5 (Lucas)', confidence: 'Unmapped — reported generically', source: 'read 21 3B 2026-08-08', meaning: 'A set bit with no name in the decode table. It is reported rather than dropped so nothing disappears silently. Bit index = offset × 8 + bit.', checks: ['Note it and move on — no repair action.', 'If you own a reference tool, capture its reading of the same block so the bit can be named.']},
+  ],
+  slabs: [
+    {group: 'logged', text: 'No batt supply voltage', raw: '020-05 · byte3.bit4', occurrence: 'logged', module: 'SLABS (Wabco)', confidence: 'Proven — display code cross-validated', source: 'read 21 11 2026-08-08', meaning: 'The SLABS ECU logged a loss of battery supply. Almost always a voltage drop rather than a broken feed — the module records it and lights the three amigos.', checks: ['Load-test the battery and check the SLABS fuse and earth.', 'Clear and re-read after a cold start.']},
+    {group: 'logged', text: 'Shuttle valve switch long term failure', raw: '027-05 · byte10.bit4', occurrence: 'logged · 254 counts', module: 'SLABS (Wabco)', confidence: 'Proven — display code cross-validated', source: 'read 21 11 2026-08-08', meaning: 'The shuttle valve switch has not behaved as expected over many cycles. A stuck shuttle valve is one of the classic three-amigos causes on the Discovery 2.', checks: ['Run the power bleed routine and watch the pedal feel.', 'Check the switch wiring at the modulator.', 'Counter at 254 means it has been logging for a long time — clear it to get a fresh count.']},
+  ],
+};
+
+const SIGNALS = {
+  td5: [
+    {name: 'rpm', label: 'ENGINE SPEED', unit: 'RPM', min: 0, max: 4800, lo: 0, hi: 4800, base: 780, amp: 40, dec: 0, info: 'Crankshaft speed read straight from the ECU. Warm idle sits near 750 RPM; below 600 or hunting by more than 50 RPM points at fuelling or air leaks.', source: '21 09 @0 u16 · limits 0–4800'},
+    {name: 'coolant', label: 'COOLANT TEMP', unit: '°C', min: -40, max: 120, lo: -40, hi: 105, base: 88, amp: 1.2, dec: 1, info: 'Engine coolant temperature. A warm Td5 runs 82–92 °C. A reading stuck at −40 or 150 °C means an open circuit, not a cold engine.', source: '21 1A @0 u16/10 − 273.2 · limits −40–105'},
+    {name: 'manifold', label: 'MANIFOLD PRESSURE', unit: 'bar', min: 0.5, max: 2.8, lo: 0.8, hi: 2.6, base: 1.02, amp: 0.04, dec: 2, info: 'Absolute boost pressure. At idle it reads roughly atmospheric — about 1.0 bar. Under full load a healthy Td5 reaches 1.8–2.2 bar.', source: '21 1C @0 u16/10000 bar · limits 0.8–2.6'},
+    {name: 'battery', label: 'BATTERY', unit: 'V', min: 10, max: 16, lo: 11.5, hi: 15.5, base: 14.1, amp: 0.12, dec: 2, info: 'Supply voltage as the ECU sees it. Engine running should be 13.8–14.4 V. Below 12.5 V running means the alternator is not charging.', source: '21 10 @0 u16/1000 V · limits 11.5–15.5'},
+    {name: 'fuel_temp', label: 'FUEL TEMP', unit: '°C', min: -30, max: 100, lo: -30, hi: 90, base: 44, amp: 2.5, dec: 1, info: 'Fuel temperature in the return line. It climbs with running time; above 90 °C the ECU reduces fuelling to protect the pump.', source: '21 1A @12 u16/10 − 273.2 · limits −30–90'},
+    {name: 'accel1', label: 'ACCEL TRACK 1', unit: 'V', min: 0, max: 5.1, lo: 0, hi: 5.1, base: 0.62, amp: 0.02, dec: 2, info: 'First accelerator pedal track. Closed throttle is about 0.6 V, full travel about 4.3 V. Track 1 and 2 must move together or the ECU logs a driver demand fault.', source: '21 1B @0 u16/1000 V · limits 0.0–5.1'},
+    {name: 'accel_supply', label: 'ACCEL 5 V REFERENCE', unit: 'V', min: 4.5, max: 5.5, lo: 4.7, hi: 5.3, base: 5.01, amp: 0.01, dec: 2, info: 'The 5 V reference feeding the pedal sensor. It should be rock steady. Drift outside 4.7–5.3 V makes both pedal tracks read wrong.', source: '21 1B @6 u16/1000 V · limits 4.7–5.3'},
+    {name: 'ambient', label: 'AMBIENT PRESSURE', unit: 'bar', min: 0.7, max: 1.2, lo: 0.8, hi: 1.1, base: 1.0, amp: 0.005, dec: 3, info: 'Barometric pressure used as the boost reference. It tracks altitude and weather — around 1.0 bar at sea level.', source: '21 23 @0 u16/10000 bar · limits 0.8–1.1'},
+  ],
+  slabs: [
+    {name: 'h_fl', label: 'HEIGHT FRONT LEFT', unit: 'mm', min: -60, max: 60, lo: -15, hi: 15, base: -2, amp: 1.5, dec: 0, info: 'Deviation from standard ride height at the front left corner. Within ±15 mm of nominal is normal; a corner sitting low overnight points at a leak.', source: 'height sensor block · limits −15–15'},
+    {name: 'h_rl', label: 'HEIGHT REAR LEFT', unit: 'mm', min: -60, max: 60, lo: -15, hi: 15, base: -18, amp: 2, dec: 0, info: 'Deviation from standard ride height at the rear left corner. The rear axle is the air-sprung one on a Discovery 2 — this is where leaks show first.', source: 'height sensor block · limits −15–15'},
+    {name: 'h_rr', label: 'HEIGHT REAR RIGHT', unit: 'mm', min: -60, max: 60, lo: -15, hi: 15, base: -4, amp: 2, dec: 0, info: 'Deviation from standard ride height at the rear right corner. Compare with rear left — a split of more than 10 mm means one bellows or one valve.', source: 'height sensor block · limits −15–15'},
+    {name: 'batt', label: 'BATTERY', unit: 'V', min: 10, max: 16, lo: 11.5, hi: 15.5, base: 14.0, amp: 0.1, dec: 2, info: 'Supply voltage at the SLABS ECU. Low voltage is the most common cause of logged SLABS faults and the three amigos.', source: 'status block · limits 11.5–15.5'},
+    {name: 'wheel_fl', label: 'WHEEL SPEED FL', unit: 'km/h', min: 0, max: 200, lo: 0, hi: 200, base: 0, amp: 0, dec: 0, info: 'Front left wheel speed sensor. All four must agree within 2 km/h while rolling — a dead sensor reads zero while the others climb.', source: 'wheel speed block'},
+    {name: 'wheel_fr', label: 'WHEEL SPEED FR', unit: 'km/h', min: 0, max: 200, lo: 0, hi: 200, base: 0, amp: 0, dec: 0, info: 'Front right wheel speed sensor. Spin the wheel by hand with the axle raised and watch the value follow.', source: 'wheel speed block'},
+  ],
+};
+
+const OUTPUTS = {
+  td5: [
+    {name: 'Injector Cut-Off', desc: 'Cuts one injector at a time at idle. A cylinder that changes nothing when cut is the dead one.', cmd: 'routine per cylinder 1–5', verified: false},
+    {name: 'EGR Modulator', desc: 'Drives the EGR modulator across its duty range. Listen for the valve and watch air flow move.', cmd: 'output control · duty 0–100 %', verified: false},
+    {name: 'Glow Plug Relay', desc: 'Energises the glow relay for a fixed period. Check current draw at the relay.', cmd: 'output control · on 10 s', verified: false},
+    {name: 'Cooling Fan', desc: 'Runs the viscous fan control output. Confirms the ECU side of a fan complaint.', cmd: 'output control · on 30 s', verified: false},
+  ],
+  slabs: [
+    {name: 'Power Bleed', desc: 'Cycles the ABS pump and valves to purge air from the modulator. Two people: one pedal, one tool.', cmd: 'routine · pump + valve cycle', verified: true},
+    {name: 'Raise Rear Axle', desc: 'Commands the rear axle up one step. Watch the height values on Inputs while it runs.', cmd: 'valve block · rear up', verified: true},
+    {name: 'Lower Rear Axle', desc: 'Commands the rear axle down one step. Stops automatically at the low limit.', cmd: 'valve block · rear down', verified: true},
+    {name: 'Compressor Run', desc: 'Runs the compressor to fill the reservoir. Cuts out on thermal limit.', cmd: 'output control · compressor on', verified: true},
+    {name: 'ABS Valve Test', desc: 'Pulses each wheel valve in turn. You should hear a distinct click per corner.', cmd: 'output control · per corner', verified: false},
+  ],
+};
+
+const UTILITIES = {
+  td5: [
+    {name: 'Read ECU Identifiers', desc: 'Part number, ROM version, VIN and immobiliser status.', tag: 'READY', ready: true, result: 'ECU NNN000173 · ROM 016 · VIN SALLTGM873A123456'},
+    {name: 'Reset Adaptions', desc: 'Clears learned fuelling and idle adaptions. Drive one cycle after.', tag: 'UNVERIFIED', ready: false, result: ''},
+    {name: 'Immobiliser Status', desc: 'Reads whether the ECU considers the vehicle mobilised.', tag: 'READY', ready: true, result: 'Status 03 — not immobilised'},
+    {name: 'Raw Block Dump', desc: 'Reads the 35-byte fault block and writes it verbatim for comparison.', tag: 'READY', ready: true, result: 'Wrote td5-block-21-3B.hex'},
+  ],
+  slabs: [
+    {name: 'Read ECU Identifiers', desc: 'Wabco part number and software version.', tag: 'READY', ready: true, result: 'SLABS SRD000160 · sw 4.2'},
+    {name: 'Calibrate Height Sensors', desc: 'Sets standard ride height reference at all corners. Vehicle level, doors closed.', tag: 'UNVERIFIED', ready: false, result: ''},
+    {name: 'Read EKA Code', desc: 'Emergency key access code, read from the BCU via the same session.', tag: 'PARTIAL', ready: false, result: ''},
+    {name: 'Export Session Log', desc: 'Writes the full request/response trace of this session.', tag: 'READY', ready: true, result: 'Wrote slabs-session.log'},
+  ],
+};
+
+const pad = n => String(n).padStart(2, '0');
+
+class Component extends DCLogic {
+  state = {
+    tab: 'connect',
+    module: null,
+    pending: null,
+    link: 'idle',
+    step: 0,
+    live: true,
+    t: 0,
+    openInfo: null,
+    sheet: null,
+    cleared: false,
+    logging: false,
+    logSamples: 0,
+    files: [],
+    toast: null,
+    mode: 'trusted',
+    share: null,
+    consentDone: false,
+    settingsOpen: false,
+    confirmClear: false,
+    plotSel: {},
+    pickerOpen: false,
+    theme: 'dark',
+  };
+
+  savePrefs(next) {
+    const cur = this.state;
+    try {
+      localStorage.setItem(
+        'd2diag.prefs',
+        JSON.stringify({
+          mode: next.mode !== undefined ? next.mode : cur.mode,
+          share: next.share !== undefined ? next.share : cur.share,
+          consentDone: next.consentDone !== undefined ? next.consentDone : cur.consentDone,
+          theme: next.theme !== undefined ? next.theme : cur.theme,
+        })
+      );
+    } catch (e) {}
+  }
+
+  componentDidMount() {
+    try {
+      const raw = localStorage.getItem('d2diag.prefs');
+      if (raw) {
+        const p = JSON.parse(raw);
+        this.setState({
+          mode: p.mode === 'experimental' ? 'experimental' : 'trusted',
+          share: p.share === true ? true : p.share === false ? false : null,
+          consentDone: p.consentDone === true,
+          theme: p.theme === 'light' ? 'light' : 'dark',
+        });
+      }
+    } catch (e) {}
+    this.mount();
+  }
+
+  mount() {
+    this.timer = setInterval(() => {
+      this.setState(s => {
+        if (!s.live) return {};
+        return {t: s.t + 1, logSamples: s.logging ? s.logSamples + 1 : s.logSamples};
+      });
+    }, 1000);
+  }
+
+  componentDidUpdate() {
+    const th = this.state.theme === 'light' ? 'light' : 'dark';
+    if (document.documentElement.getAttribute('data-theme') !== th)
+      document.documentElement.setAttribute('data-theme', th);
+  }
+
+  componentWillUnmount() {
+    clearInterval(this.timer);
+    clearTimeout(this.seqTimer);
+    clearTimeout(this.toastTimer);
+  }
+
+  stamp() {
+    const d = new Date();
+    return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+  }
+
+  notify(msg) {
+    clearTimeout(this.toastTimer);
+    this.setState({toast: msg});
+    this.toastTimer = setTimeout(() => this.setState({toast: null}), 4000);
+  }
+
+  addFile(name, meta) {
+    this.setState(s => ({files: [{name, meta}].concat(s.files)}));
+    this.notify('Saved ' + name);
+  }
+
+  advance() {
+    const failAt = this.props.failAtSecurityAccess === true ? 4 : -1;
+    this.seqTimer = setTimeout(() => {
+      this.setState(
+        s => {
+          if (s.link !== 'connecting') return {};
+          const next = s.step + 1;
+          if (next === failAt) return {link: 'error', step: failAt};
+          if (next >= SEQUENCE.length)
+            return {link: 'connected', step: SEQUENCE.length, module: s.pending, tab: 'faults', cleared: false};
+          return {step: next};
+        },
+        () => {
+          if (this.state.link === 'connecting') this.advance();
+        }
+      );
+    }, 480);
+  }
+
+  connect(id) {
+    clearTimeout(this.seqTimer);
+    this.setState({pending: id, module: null, link: 'connecting', step: 0, openInfo: null, sheet: null}, () => this.advance());
+  }
+
+  renderVals() {
+    const s = this.state;
+    const active = s.module ? MODULES.find(m => m.id === s.module) : null;
+    const target = MODULES.find(m => m.id === (s.pending || s.module));
+    const connected = s.link === 'connected' && !!active;
+    const connecting = s.link === 'connecting';
+    const errored = s.link === 'error';
+
+    const pill = connected
+      ? {label: active.short + ' LINKED', bg: 'var(--color-background-card)', border: 'var(--color-icon-green)', fg: 'var(--color-text-primary)', dot: 'var(--color-icon-green)', anim: 'none'}
+      : connecting
+        ? {label: 'HANDSHAKING', bg: 'var(--color-background-card)', border: 'var(--color-border)', fg: 'var(--color-text-primary)', dot: 'var(--color-icon-blue)', anim: 'axblink 1s steps(1) infinite'}
+        : errored
+          ? {label: 'NO RESPONSE', bg: 'var(--color-background-card)', border: 'var(--color-icon-red)', fg: 'var(--color-icon-red)', dot: 'var(--color-icon-red)', anim: 'axblink .5s steps(1) infinite'}
+          : {label: 'OFFLINE', bg: 'var(--color-background-card)', border: 'var(--color-border)', fg: 'var(--color-text-secondary)', dot: 'var(--color-text-disabled)', anim: 'none'};
+
+    const sequence = SEQUENCE.map((step, i) => {
+      const done = i < s.step;
+      const act = i === s.step && connecting;
+      const failed = i === s.step && errored;
+      return {
+        label: step.label,
+        trace: failed ? 'no C1 within 300 ms · 3 attempts (tolerant retry)' : step.trace,
+        ms: done || connected ? step.ms : failed ? 'TIMEOUT' : act ? '…' : '',
+        bg: act || failed ? 'var(--color-overlay-hover)' : 'transparent',
+        fg: done || connected ? 'var(--color-text-primary)' : failed ? 'var(--color-icon-red)' : act ? 'var(--color-text-primary)' : 'var(--color-text-disabled)',
+        ring: failed ? 'var(--color-icon-red)' : done || connected ? 'var(--color-icon-green)' : act ? 'var(--color-icon-blue)' : 'var(--color-text-disabled)',
+        fill: done || connected ? 'var(--color-icon-green)' : failed ? 'var(--color-icon-red)' : 'transparent',
+        anim: act ? 'axblink 1s steps(1) infinite' : 'none',
+      };
+    });
+
+    const list = active ? FAULTS[active.id] || [] : [];
+    const visible = s.cleared ? [] : list;
+    const groupOf = key =>
+      visible
+        .filter(f => f.group === key)
+        .map(f => ({
+          text: f.text,
+          raw: f.raw,
+          occurrence: f.occurrence,
+          edge: key === 'current' ? 'var(--color-icon-red)' : 'var(--color-icon-yellow)',
+          onClick: () => this.setState({sheet: f}),
+        }));
+    const currentItems = groupOf('current');
+    const loggedItems = groupOf('logged');
+    const faultGroups = [];
+    if (currentItems.length) faultGroups.push({label: 'Current', note: 'active now', dot: 'var(--color-icon-red)', items: currentItems});
+    if (loggedItems.length) faultGroups.push({label: 'Logged', note: 'stored history', dot: 'var(--color-icon-yellow)', items: loggedItems});
+
+    const allSigs = active ? SIGNALS[active.id] || [] : [];
+    const t = s.t;
+    const valueAt = (sig, i, tt) => sig.base + sig.amp * Math.sin(tt / (4 + i));
+    const PLOT_COLORS = [
+      'var(--color-icon-blue)',
+      'var(--color-icon-orange)',
+      'var(--color-icon-teal)',
+      'var(--color-icon-purple)',
+    ];
+    const key = n => (active ? active.id : '') + ':' + n;
+    const picked = s.plotSel && s.plotSel[active ? active.id : ''];
+    const selNames = picked || allSigs.slice(0, 3).map(sig => sig.name);
+    const selected = allSigs.filter(sig => selNames.indexOf(sig.name) > -1).slice(0, 4);
+    const channels = allSigs.map(sig => {
+      const idx = selected.indexOf(sig);
+      const on = idx > -1;
+      const full = !on && selected.length >= 4;
+      return {
+        label: sig.label,
+        onClick: () => {
+          if (full) {
+            this.notify('Four channels maximum on the chart');
+            return;
+          }
+          const next = on ? selNames.filter(n => n !== sig.name) : selNames.concat(sig.name);
+          const nextSel = Object.assign({}, s.plotSel);
+          nextSel[active ? active.id : ''] = next;
+          this.setState({plotSel: nextSel});
+        },
+        bg: on ? 'var(--color-overlay-hover)' : 'transparent',
+        fg: full ? 'var(--color-text-disabled)' : 'var(--color-text-primary)',
+        boxBg: on ? 'var(--color-accent)' : 'transparent',
+        boxBorder: on ? 'var(--color-accent)' : 'var(--color-border-emphasized)',
+        color: on ? PLOT_COLORS[idx] : 'transparent',
+      };
+    });
+    const shown = allSigs;
+    const plotted = selected.map((sig, idx) => {
+      const i = allSigs.indexOf(sig);
+      const pts = [];
+      for (let k = 0; k < 60; k++) {
+        const v = valueAt(sig, i, t - 59 + k);
+        const span = sig.max - sig.min || 1;
+        const norm = Math.max(0, Math.min(1, (v - sig.min) / span));
+        pts.push(((k / 59) * 640).toFixed(1) + ',' + (156 - norm * 152).toFixed(1));
+      }
+      return {label: sig.label, color: PLOT_COLORS[idx], points: pts.join(' ')};
+    });
+    const sigs = shown;
+    const readouts = shown.map(sig => {
+      const i = allSigs.indexOf(sig);
+      const raw = valueAt(sig, i, t);
+      const span = sig.max - sig.min;
+      const pct = v => Math.round(Math.max(0, Math.min(1, (v - sig.min) / span)) * 100) + '%';
+      const out = raw < sig.lo || raw > sig.hi;
+      return {
+        label: sig.label,
+        value: sig.dec === 0 ? Math.round(raw) : raw.toFixed(sig.dec),
+        unit: sig.unit,
+        fg: out ? 'var(--color-icon-yellow)' : 'var(--color-text-primary)',
+        bar: out ? 'var(--color-icon-yellow)' : 'var(--color-icon-blue)',
+        border: out ? 'var(--color-icon-yellow)' : 'var(--color-border)',
+        pct: pct(raw),
+        okStart: pct(sig.lo),
+        okWidth: Math.round(((sig.hi - sig.lo) / span) * 100) + '%',
+        range: sig.lo + ' – ' + sig.hi + ' ' + sig.unit,
+        flag: out ? 'OUT OF RANGE' : 'IN RANGE',
+        flagBg: out ? 'var(--color-icon-yellow)' : 'transparent',
+        flagFg: out ? 'var(--color-text-yellow)' : 'var(--color-icon-green)',
+        info: sig.info,
+        source: sig.source,
+        open: s.openInfo === sig.name,
+        infoBg: s.openInfo === sig.name ? 'var(--color-accent)' : 'var(--color-background-surface)',
+        infoBorder: s.openInfo === sig.name ? 'var(--color-accent)' : 'var(--color-border-emphasized)',
+        infoFg: s.openInfo === sig.name ? 'var(--color-on-accent)' : 'var(--color-text-secondary)',
+        onInfo: () => this.setState(p => ({openInfo: p.openInfo === sig.name ? null : sig.name})),
+      };
+    });
+
+    const tabs = [
+      {key: 'connect', label: 'Connect', sub: connected ? active.short : 'offline'},
+      {key: 'faults', label: 'Faults', sub: connected ? (visible.length ? String(visible.length) : 'none') : '—'},
+      {key: 'inputs', label: 'Inputs', sub: connected ? (s.logging ? 'REC' : s.live ? '1 Hz' : 'hold') : '—'},
+      {key: 'outputs', label: 'Outputs', sub: connected ? String((OUTPUTS[active.id] || []).filter(o => s.mode === 'experimental' || o.verified).length) : '—'},
+      {key: 'utilities', label: 'Utils', sub: connected ? String((UTILITIES[active.id] || []).filter(u => s.mode === 'experimental' || u.ready).length) : '—'},
+    ].map(tb => ({
+      label: tb.label,
+      sub: tb.sub,
+      fg: s.tab === tb.key ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+      subFg: s.tab === tb.key ? 'var(--color-text-secondary)' : 'var(--color-text-disabled)',
+      weight: s.tab === tb.key ? 700 : 400,
+      mark: s.tab === tb.key ? 'var(--color-icon-blue)' : 'transparent',
+      bg: s.tab === tb.key ? 'var(--color-background-card)' : 'transparent',
+      onClick: () => this.setState({tab: tb.key}),
+    }));
+
+    const sheet = s.sheet;
+    const onTab = s.tab;
+    const needsModule = onTab !== 'connect' && !connected;
+    const exp = s.mode === 'experimental';
+
+    const setMode = m => () => {
+      const next = {mode: m, share: s.share, consentDone: s.consentDone};
+      this.setState({mode: m});
+      this.savePrefs(next);
+    };
+    const modeOptions = [
+      {id: 'trusted', name: 'Trusted', desc: 'Only routines proven on the car. Unverified modules and tests stay hidden.'},
+      {id: 'experimental', name: 'Experimental', desc: 'Exposes partial modules, undecoded blocks and unverified output tests. They can misbehave.'},
+    ].map(o => ({
+      name: o.name,
+      desc: o.desc,
+      onClick: setMode(o.id),
+      bg: s.mode === o.id ? 'var(--color-accent)' : 'var(--color-background-surface)',
+      border: s.mode === o.id ? 'var(--color-accent)' : 'var(--color-border-emphasized)',
+      fg: s.mode === o.id ? 'var(--color-on-accent)' : 'var(--color-text-primary)',
+      descFg: s.mode === o.id ? 'var(--color-on-accent)' : 'var(--color-text-secondary)',
+      ring: s.mode === o.id ? 'var(--color-on-accent)' : 'var(--color-text-disabled)',
+      dot: s.mode === o.id ? 'var(--color-on-accent)' : 'transparent',
+    }));
+
+    const setShare = v => () => {
+      const next = {mode: s.mode, share: v, consentDone: s.consentDone};
+      this.setState({share: v});
+      this.savePrefs(next);
+    };
+    const shareOptions = [
+      {id: true, name: 'Share Anonymous Traces', desc: 'Raw fault blocks and unmapped bits, no VIN, no location, no identifiers. Helps name unknown bits.'},
+      {id: false, name: 'Keep Everything Local', desc: 'Nothing leaves the device. Logs and reports are written to storage only.'},
+    ].map(o => ({
+      name: o.name,
+      desc: o.desc,
+      onClick: setShare(o.id),
+      bg: s.share === o.id ? 'var(--color-accent)' : 'var(--color-background-surface)',
+      border: s.share === o.id ? 'var(--color-accent)' : 'var(--color-border-emphasized)',
+      fg: s.share === o.id ? 'var(--color-on-accent)' : 'var(--color-text-primary)',
+      descFg: s.share === o.id ? 'var(--color-on-accent)' : 'var(--color-text-secondary)',
+      ring: s.share === o.id ? 'var(--color-on-accent)' : 'var(--color-text-disabled)',
+      dot: s.share === o.id ? 'var(--color-on-accent)' : 'transparent',
+    }));
+
+    const themeOptions = [
+      {id: 'dark', name: 'Dark'},
+      {id: 'light', name: 'Light'},
+    ].map(o => ({
+      name: o.name,
+      onClick: () => {
+        this.setState({theme: o.id});
+        this.savePrefs({theme: o.id});
+      },
+      bg: s.theme === o.id ? 'var(--color-accent)' : 'var(--color-background-surface)',
+      border: s.theme === o.id ? 'var(--color-accent)' : 'var(--color-border-emphasized)',
+      fg: s.theme === o.id ? 'var(--color-on-accent)' : 'var(--color-text-primary)',
+    }));
+
+    return {
+      themeOptions,
+      experimental: exp,
+      modeChip: exp
+        ? {bg: 'var(--color-background-card)', border: 'var(--color-icon-yellow)', fg: 'var(--color-text-primary)', dot: 'var(--color-icon-yellow)'}
+        : {bg: 'var(--color-background-surface)', border: 'var(--color-border-emphasized)', fg: 'var(--color-text-secondary)', dot: 'transparent'},
+      modeOptions,
+      shareOptions,
+      settingsOpen: s.settingsOpen,
+      onOpenSettings: () => this.setState({settingsOpen: true}),
+      onCloseSettings: () => this.setState({settingsOpen: false}),
+      share: {
+        bg: s.share === true ? 'var(--color-accent)' : 'var(--color-neutral)',
+        border: s.share === true ? 'var(--color-accent)' : 'var(--color-border)',
+        knob: s.share === true ? 'var(--color-on-accent)' : 'var(--color-text-disabled)',
+        justify: s.share === true ? 'flex-end' : 'flex-start',
+        state: s.share === true ? 'On — traces queue until the device is online.' : 'Off — nothing leaves the device.',
+      },
+      onToggleShare: () => {
+        const v = s.share !== true;
+        this.setState({share: v});
+        this.savePrefs({mode: s.mode, share: v, consentDone: s.consentDone});
+        this.notify(v ? 'Data sharing on' : 'Data sharing off');
+      },
+      consentOpen: !s.consentDone,
+      consentBtn:
+        s.share === null
+          ? {label: 'Choose A Sharing Option', bg: 'var(--color-background-muted)', border: 'var(--color-border)', fg: 'var(--color-text-disabled)', cursor: 'not-allowed'}
+          : {label: 'Continue', bg: 'var(--color-accent)', border: 'var(--color-accent)', fg: 'var(--color-on-accent)', cursor: 'pointer'},
+      consentHint:
+        s.share === null
+          ? 'Both choices are required to continue.'
+          : 'Mode ' + s.mode + ' · sharing ' + (s.share ? 'on' : 'off') + ' · changeable in Settings.',
+      onAcceptConsent: () => {
+        if (s.share === null) return;
+        this.setState({consentDone: true});
+        this.savePrefs({mode: s.mode, share: s.share, consentDone: true});
+      },
+
+      headerTitle: connected ? active.name : 'D2 Diag',
+      headerSub: connected ? 'Discovery 2 · K-line 10 400 baud' : 'Discovery 2 · no session',
+      pill,
+      tabs,
+      isConnect: onTab === 'connect',
+      showEmpty: needsModule,
+      isFaults: onTab === 'faults' && connected,
+      isInputs: onTab === 'inputs' && connected,
+      isOutputs: onTab === 'outputs' && connected,
+      isUtilities: onTab === 'utilities' && connected,
+      onGoConnect: () => this.setState({tab: 'connect'}),
+
+      moduleChoices: MODULES.map(m => {
+        const isTarget = (s.pending || s.module) === m.id;
+        const busy = connecting && isTarget;
+        const sel = isTarget && (connected || busy);
+        const allowed = m.ready || exp;
+        return {
+          name: m.name,
+          desc: busy
+            ? 'Connecting — ' + SEQUENCE[Math.min(s.step, SEQUENCE.length - 1)].label.toLowerCase()
+            : allowed
+              ? m.desc
+              : m.desc + ' Enable Experimental mode to use it.',
+          tag: busy ? 'LINKING' : connected && isTarget ? 'CONNECTED' : m.tag,
+          tagBg: sel || allowed ? 'transparent' : 'var(--color-neutral)',
+          tagFg: sel
+            ? 'var(--color-on-accent)'
+            : !allowed
+              ? 'var(--color-text-disabled)'
+              : m.ready
+                ? 'var(--color-icon-green)'
+                : 'var(--color-icon-yellow)',
+          fg: sel ? 'var(--color-on-accent)' : allowed ? 'var(--color-text-primary)' : 'var(--color-text-disabled)',
+          descFg: sel ? 'var(--color-on-accent)' : allowed ? 'var(--color-text-secondary)' : 'var(--color-text-disabled)',
+          bg: sel ? 'var(--color-accent)' : allowed ? 'var(--color-background-surface)' : 'var(--color-background-muted)',
+          border: sel ? 'var(--color-accent)' : allowed ? 'var(--color-border-emphasized)' : 'var(--color-border)',
+          cursor: allowed ? 'pointer' : 'not-allowed',
+          onClick: () => {
+            if (!allowed) {
+              this.notify('Trusted mode — ' + m.short + ' needs Experimental');
+              return;
+            }
+            if (connected && s.module === m.id) {
+              this.setState({tab: 'faults'});
+              return;
+            }
+            this.connect(m.id);
+          },
+        };
+      }),
+      onRetry: () => this.connect(s.pending || 'td5'),
+      onReset: () => this.setState({link: 'idle', step: 0, pending: null}),
+      hasError: errored,
+      error: {
+        title: 'SecurityAccess: no response',
+        detail: 'The ECU answered fast init but returned 7F on the seed request after three tolerant retries. The session is half open — reset the link before trying again.',
+        hints: [
+          {text: 'Ignition at position II, engine off.'},
+          {text: 'Only one tool on the bus — unplug anything else on pin 7.'},
+          {text: 'FTDI latency above 16 ms can jitter fast init. Keep tolerant retry on.'},
+        ],
+      },
+      seqCount: connected ? '6 / 6' : errored ? 'FAILED AT 5' : connecting ? s.step + ' / 6' : '0 / 6',
+      sequence,
+
+      faultSubtitle: s.cleared
+        ? 'Cleared — drive one cycle and re-read'
+        : visible.length + ' entries · ' + (active && active.id === 'td5' ? '35-byte block, bit per fault' : 'logged 21 11 · current 21 47'),
+      faultGroups,
+      onReadFaults: () => this.setState({cleared: false}),
+      reportNote: visible.length
+        ? 'Writes ' + visible.length + ' entries with raw byte references, freeze context and session header.'
+        : 'Nothing to write — read the fault memory first.',
+      onWriteReport: () => {
+        if (!visible.length) {
+          this.notify('No faults to write');
+          return;
+        }
+        this.addFile(active.id + '-faults-' + this.stamp() + '.txt', visible.length + ' entries · report');
+      },
+      onClear: () => {
+        if (!visible.length) {
+          this.notify('Fault memory already empty');
+          return;
+        }
+        this.setState({confirmClear: true});
+      },
+      clearLabel: 'Clear Fault Memory',
+      confirmOpen: s.confirmClear === true,
+      confirmBody:
+        visible.length +
+        ' entries will be erased from the ' +
+        (active ? active.short : '') +
+        ' ECU. Ignition on, engine off. Faults that are still present come back on the next drive cycle.',
+      confirmCmd: active && active.id === 'td5' ? 'StartRoutine DD + 18 zero bytes' : '14 FF FF → 54',
+      onCancelClear: () => this.setState({confirmClear: false}),
+      onConfirmClear: () => {
+        this.setState({confirmClear: false, cleared: true, sheet: null});
+        this.notify('Fault memory cleared');
+      },
+
+      liveStatus: connected
+        ? s.live
+          ? active.short + ' · polling 1 Hz'
+          : 'Paused — last values held'
+        : '',
+      liveButton: s.live ? 'Hold' : 'Resume',
+      channels,
+      plotted,
+      pickerOpen: s.pickerOpen === true,
+      onOpenPicker: () => this.setState(p => ({pickerOpen: !p.pickerOpen})),
+      onClosePicker: () => this.setState({pickerOpen: false}),
+      pickerLabel: selected.length === 1 ? selected[0].label : selected.length + ' channels',
+      pickerCount: selected.length + ' of 4 max',
+      onToggleLive: () => this.setState(p => ({live: !p.live})),
+      readouts,
+      rec: s.logging
+        ? {
+            title: 'Logging',
+            detail: s.logSamples + ' samples · ' + sigs.length + ' channels · CSV',
+            dot: 'var(--color-icon-red)',
+            anim: 'axblink 1s steps(1) infinite',
+            fg: 'var(--color-text-primary)',
+            border: 'var(--color-icon-red)',
+            btn: 'Stop & Save',
+            btnBg: 'var(--color-background-card)',
+            btnBorder: 'var(--color-border-red)',
+            btnFg: 'var(--color-icon-red)',
+          }
+        : {
+            title: 'Data Log',
+            detail: sigs.length + ' channels at 1 Hz · nothing kept until you log',
+            dot: 'var(--color-text-disabled)',
+            anim: 'none',
+            fg: 'var(--color-text-secondary)',
+            border: 'var(--color-border)',
+            btn: 'Start Log',
+            btnBg: 'var(--color-accent)',
+            btnBorder: 'var(--color-accent)',
+            btnFg: 'var(--color-on-accent)',
+          },
+      onToggleLog: () => {
+        if (s.logging) {
+          const n = s.logSamples;
+          this.setState({logging: false, logSamples: 0});
+          this.addFile(active.id + '-log-' + this.stamp() + '.csv', n + ' samples · ' + sigs.length + ' channels');
+        } else {
+          this.setState({logging: true, logSamples: 0, live: true});
+        }
+      },
+
+      outputSubtitle: active
+        ? (OUTPUTS[active.id] || []).filter(o => exp || o.verified).length + ' of ' + (OUTPUTS[active.id] || []).length + ' available · ' + active.short
+        : '',
+      outputs: (active ? OUTPUTS[active.id] || [] : []).map(o => {
+        const allowed = o.verified || exp;
+        return {
+          name: o.name,
+          desc: allowed ? o.desc : o.desc + ' Enable Experimental mode to run it.',
+          cmd: o.cmd,
+          tag: o.verified ? 'VERIFIED' : 'UNVERIFIED',
+          tagBg: 'transparent',
+          tagFg: o.verified ? 'var(--color-icon-green)' : allowed ? 'var(--color-icon-yellow)' : 'var(--color-text-disabled)',
+          fg: allowed ? 'var(--color-text-primary)' : 'var(--color-text-disabled)',
+          border: allowed ? 'var(--color-border)' : 'var(--color-border)',
+          btn: o.verified ? 'Run' : allowed ? 'Run Anyway' : 'Locked',
+          btnBg: !allowed
+            ? 'var(--color-background-muted)'
+            : o.verified
+              ? 'var(--color-accent)'
+              : 'var(--color-background-surface)',
+          btnBorder: !allowed
+            ? 'var(--color-border)'
+            : o.verified
+              ? 'var(--color-accent)'
+              : 'var(--color-border-emphasized)',
+          btnFg: !allowed ? 'var(--color-text-disabled)' : o.verified ? 'var(--color-on-accent)' : 'var(--color-text-primary)',
+          cursor: allowed ? 'pointer' : 'not-allowed',
+          onRun: () =>
+            allowed
+              ? this.notify(o.name + ' — command sent')
+              : this.notify('Trusted mode — unverified test locked'),
+        };
+      }),
+
+      utilSubtitle: active
+        ? (UTILITIES[active.id] || []).filter(u => exp || u.ready).length + ' of ' + (UTILITIES[active.id] || []).length + ' available · ' + active.short
+        : '',
+      utilities: (active ? UTILITIES[active.id] || [] : []).map(u => {
+        const allowed = u.ready || exp;
+        return {
+        name: u.name,
+        desc: allowed ? u.desc : u.desc + ' Enable Experimental mode to run it.',
+        tag: u.tag,
+        tagBg: 'transparent',
+        tagFg: u.ready ? 'var(--color-icon-green)' : allowed ? 'var(--color-icon-yellow)' : 'var(--color-text-disabled)',
+        fg: allowed ? 'var(--color-text-primary)' : 'var(--color-text-disabled)',
+        cursor: allowed ? 'pointer' : 'not-allowed',
+        onRun: () => {
+          if (!allowed) {
+            this.notify('Trusted mode — routine locked');
+            return;
+          }
+          if (u.name === 'Raw Block Dump') {
+            this.addFile(active.id + '-block-' + this.stamp() + '.hex', '35 bytes · raw 21 3B');
+            return;
+          }
+          if (u.name === 'Export Session Log') {
+            this.addFile(active.id + '-session-' + this.stamp() + '.log', 'request/response trace');
+            return;
+          }
+          this.notify(u.result || u.name + ' — done');
+        },
+        };
+      }),
+      files: s.files,
+      noFiles: s.files.length === 0,
+      fileCount: s.files.length ? s.files.length + ' saved' : '',
+
+      toastOpen: !!s.toast,
+      toast: s.toast,
+      onCloseToast: () => this.setState({toast: null}),
+
+      sheetOpen: !!sheet,
+      sheet: sheet
+        ? {
+            text: sheet.text,
+            raw: sheet.raw,
+            status: sheet.group === 'current' ? 'CURRENT' : 'LOGGED',
+            badgeBg: sheet.group === 'current' ? 'var(--color-background-red)' : 'var(--color-background-yellow)',
+            badgeFg: sheet.group === 'current' ? 'var(--color-text-red)' : 'var(--color-text-yellow)',
+            meaning: sheet.meaning,
+            module: sheet.module,
+            occurrence: sheet.occurrence,
+            confidence: sheet.confidence,
+            source: sheet.source,
+            checks: sheet.checks.map((c, i) => ({n: i + 1 + '.', text: c})),
+          }
+        : {checks: []},
+      onCloseSheet: () => this.setState({sheet: null}),
+    };
+  }
+}
+</script>
+</body>
+</html>
