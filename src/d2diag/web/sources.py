@@ -296,6 +296,22 @@ class Td5DataSource(DataSource):
                 return {"ok": True, "message": "Fault codes cleared"}
             except Exception as exc:  # noqa: BLE001
                 return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        # Output-tester (IOControl) + injektorpuls. Belagda ur sniff 2026-08-08 men
+        # ALDRIG körda från vår kod mot bilen → experimentella tills verifierade.
+        # Hårdvaruskrivningar: UI gatar bakom bekräftelse.
+        if self._td5 is None:
+            return {"ok": False, "error": "not connected to the ECU"}
+        try:
+            if action.startswith("output_"):
+                name = action[len("output_"):]
+                self._td5.output_test(name)
+                return {"ok": True, "message": f"Output test: {name}"}
+            if action.startswith("injector_"):
+                cyl = int(action[len("injector_"):])
+                self._td5.injector_pulse(cyl)
+                return {"ok": True, "message": f"Injector {cyl} pulse"}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
         return {"ok": False, "error": f"unknown command: {action}"}
 
 

@@ -102,6 +102,11 @@ nav .nd{width:5px;height:5px;border-radius:9999px;background:currentColor}
 .tgl.on{background:var(--bg-green);border-color:var(--bd-green);justify-content:flex-end}
 .tgl>span{width:20px;height:20px;border-radius:9999px;background:var(--fg2)}
 .tgl.on>span{background:var(--ic-green)}
+#toast{position:absolute;left:16px;right:16px;bottom:76px;z-index:40;padding:12px 16px;border-radius:10px;
+  background:var(--bg-surface);border:1px solid var(--border);color:var(--fg);font-size:13px;font-weight:600;
+  box-shadow:0 6px 24px rgba(0,0,0,.35);opacity:0;transform:translateY(8px);transition:.15s;pointer-events:none}
+#toast.show{opacity:1;transform:none}
+#toast.bad{border-color:var(--bd-red);color:var(--ic-red)}
 .mtag{display:inline-flex;align-items:center;height:20px;padding:0 5px;border-radius:4px;font-size:11px;font-weight:700}
 </style>
 </head>
@@ -129,6 +134,14 @@ nav .nd{width:5px;height:5px;border-radius:9999px;background:currentColor}
 </div>
 <script>
 const $ = s => document.querySelector(s);
+let _toastT=null;
+function toast(msg, bad){
+  let el=document.getElementById("toast");
+  if(!el){ el=document.createElement("div"); el.id="toast"; document.querySelector(".app").appendChild(el); }
+  el.textContent=msg; el.className="show"+(bad?" bad":"");
+  clearTimeout(_toastT); _toastT=setTimeout(()=>el.className="",3200);
+}
+window.toast=toast;
 const TABS = [
   {id:"connect", label:"Connect"},
   {id:"faults",  label:"Faults"},
@@ -340,6 +353,80 @@ function renderInputs(){
     ${trend}
   `;
 }
+// ---- Outputs-katalog per modul (riktiga /command-actions) ----
+const OUTPUTS = {
+  slabs: [
+    {grp:"ABS", a:"pump_on", n:"ABS pump on", cmd:"31 25 08 fa", tag:"verified", warn:true},
+    {grp:"ABS", a:"pump_off", n:"ABS pump off", cmd:"31 25 02 fa", tag:"verified"},
+    {grp:"ABS", a:"wheel_fl", n:"Valve test FL", cmd:"31 22 11 0c", tag:"verified", warn:true},
+    {grp:"ABS", a:"wheel_fr", n:"Valve test FR", cmd:"31 22 10 03", tag:"verified", warn:true},
+    {grp:"ABS", a:"wheel_rl", n:"Valve test RL", cmd:"31 22 13 c0", tag:"verified", warn:true},
+    {grp:"ABS", a:"wheel_rr", n:"Valve test RR", cmd:"31 22 12 30", tag:"verified", warn:true},
+    {grp:"ABS bleed ⚠ brakes", a:"bleed_power_on", n:"Power bleed start", cmd:"31 22 04 00 49 c4", tag:"verified", warn:true},
+    {grp:"ABS bleed ⚠ brakes", a:"bleed_power_off", n:"Power bleed stop", cmd:"31 22 04 00 40 00", tag:"verified"},
+    {grp:"ABS bleed ⚠ brakes", a:"bleed_module", n:"Module bleed (4 steps)", cmd:"31 22 11..14", tag:"verified", warn:true},
+    {grp:"Air suspension", a:"raise_left", n:"Raise left", cmd:"31 33 28", tag:"verified", warn:true},
+    {grp:"Air suspension", a:"lower_left", n:"Lower left", cmd:"31 35 28", tag:"verified", warn:true},
+    {grp:"Air suspension", a:"raise_right", n:"Raise right", cmd:"31 34 28", tag:"verified", warn:true},
+    {grp:"Air suspension", a:"lower_right", n:"Lower right", cmd:"31 36 28", tag:"verified", warn:true},
+    {grp:"Air suspension", a:"compressor", n:"Compressor test", cmd:"31 30 28", tag:"verified", warn:true},
+    {grp:"Air suspension", a:"exhaust", n:"Exhaust valve test", cmd:"31 2f 28", tag:"verified", warn:true},
+    {grp:"Air suspension", a:"buzzer", n:"Buzzer test", cmd:"31 31 0a", tag:"verified"},
+  ],
+  motor: [
+    {grp:"Lamps & relays", a:"output_fuel_pump", n:"Fuel pump", cmd:"30 A1 FF", tag:"experimental", warn:true},
+    {grp:"Lamps & relays", a:"output_mil_lamp", n:"MIL lamp", cmd:"30 A2 FF", tag:"experimental"},
+    {grp:"Lamps & relays", a:"output_ac_clutch", n:"A/C clutch", cmd:"30 A3 FF", tag:"experimental", warn:true},
+    {grp:"Lamps & relays", a:"output_ac_fan", n:"A/C fan", cmd:"30 A4 FF", tag:"experimental", warn:true},
+    {grp:"Lamps & relays", a:"output_glow_plugs", n:"Glow plugs", cmd:"30 B3 FF", tag:"experimental", warn:true},
+    {grp:"Lamps & relays", a:"output_rev_counter", n:"Rev counter", cmd:"30 B7 FF", tag:"experimental"},
+    {grp:"Lamps & relays", a:"output_temp_gauge", n:"Temp gauge", cmd:"30 BA FF", tag:"experimental"},
+    {grp:"Boost & EGR", a:"output_wastegate", n:"Wastegate", cmd:"30 BE …PWM", tag:"experimental", warn:true},
+    {grp:"Boost & EGR", a:"output_egr_throttle", n:"EGR throttle", cmd:"30 BD …PWM", tag:"experimental", warn:true},
+    {grp:"Injectors", a:"injector_1", n:"Injector 1 click", cmd:"31 C2 01", tag:"experimental", warn:true},
+    {grp:"Injectors", a:"injector_2", n:"Injector 2 click", cmd:"31 C2 02", tag:"experimental", warn:true},
+    {grp:"Injectors", a:"injector_3", n:"Injector 3 click", cmd:"31 C2 03", tag:"experimental", warn:true},
+    {grp:"Injectors", a:"injector_4", n:"Injector 4 click", cmd:"31 C2 04", tag:"experimental", warn:true},
+    {grp:"Injectors", a:"injector_5", n:"Injector 5 click", cmd:"31 C2 05", tag:"experimental", warn:true},
+  ],
+};
+async function runOutput(a, n, warn){
+  if(warn && !confirm(`${n}\nDrives real hardware — vehicle stationary, handbrake on, nobody under the car.`)) return;
+  toast(`${n}…`);
+  try{
+    const r = await (await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:a})})).json();
+    toast(r.ok ? (r.message||"ok") : ("Error: "+(r.error||"unknown")), !r.ok);
+  }catch(e){ toast("network error", true); }
+}
+window.runOutput=runOutput;
+function renderOutputs(){
+  const name = MODULE_NAME[MODULE]||MODULE, list = OUTPUTS[MODULE];
+  if(!list) return `<h2>Outputs</h2><div style="font-size:12px;color:var(--fg2)">· ${name}</div>`+
+    comingCard("Actuator tests", [{name:"No output tests mapped for this module yet",tag:"—"}]);
+  const byG = {}; list.forEach(o=>{ (byG[o.grp] ||= []).push(o); });
+  const banner = `<div class="card" style="border-color:var(--bd-yellow);background:var(--bg-yellow)">
+    <div style="font-weight:700">Actuator tests drive real hardware</div>
+    <div style="font-size:12px;color:var(--fg2);text-wrap:pretty;margin-top:2px">Vehicle stationary, handbrake on, nobody under the car. Each test pulses a moment — it does not latch on.</div></div>`;
+  const groups = Object.keys(byG).map(g=>{
+    const cards = byG[g].map(o=>{
+      const exp = o.tag==="experimental";
+      const locked = exp && !EXPERIMENTAL;
+      const tagcol = exp ? "var(--ic-yellow)" : "var(--ic-green)";
+      return `<div class="card" style="${locked?'opacity:.55':''}">
+        <div class="row" style="gap:8px"><span style="font-weight:700">${o.n}</span>
+          <span class="mtag" style="background:transparent;color:${tagcol}">${o.tag}</span></div>
+        <div class="row" style="gap:12px;margin-top:8px">
+          <span style="flex:1;min-width:0;font-size:12px;color:var(--fg-dis);font-family:ui-monospace,Menlo,monospace">${o.cmd}</span>
+          ${locked ? `<span style="font-size:12px;color:var(--fg-dis)">enable Experimental</span>`
+                   : `<button class="btn ${o.warn?'':'accent'}" style="${o.warn?'border-color:var(--bd-red);color:var(--ic-red)':''}" onclick="runOutput('${o.a}','${o.n}',${!!o.warn})">Run</button>`}
+        </div></div>`;
+    }).join("");
+    return `<div><div class="kicker" style="margin:4px 2px 8px">${g}</div><div class="grid">${cards}</div></div>`;
+  }).join("");
+  return `<div class="row"><h2>Outputs</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${name}</span></div>${banner}${groups}`;
+}
+
 function comingCard(title, items){
   return `<div class="card"><div class="kicker" style="margin-bottom:10px">${title}</div>
     <div style="display:flex;flex-direction:column;gap:8px">${items.map(i=>
@@ -374,6 +461,8 @@ function render(){
   if(TAB==="inputs") html = renderInputs();
   else if(TAB==="connect") html = renderConnect();
   else if(TAB==="faults") html = renderFaults();
+  else if(TAB==="outputs") html = renderOutputs();
+  else if(TAB==="utils") html = renderUtilities();
   else html = renderStub(TAB);
   $("#view").innerHTML = html;
   wireView();
@@ -597,6 +686,42 @@ function updateConsentBtn(){
   if(btn){ btn.className = "btn"+(ready?" accent":""); btn.style.opacity = ready?"1":".5"; btn.style.cursor=ready?"pointer":"not-allowed"; }
   if(hint) hint.textContent = ready ? ("Trust "+PREFS.trust+" · sharing "+(PREFS.share?"on":"off")+" · changeable in Settings.")
                                     : "Answer data sharing to continue.";
+}
+
+async function readBlock(lidsStr){
+  const lids = lidsStr.split(/[ ,]+/).filter(Boolean);
+  toast("reading "+lids.length+" LID(s)…");
+  try{
+    const r = await (await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"read_block",params:{lids}})})).json();
+    const out = document.getElementById("dump");
+    if(!r.ok){ toast("Error: "+(r.error||"?"),true); return; }
+    const rows = Object.entries(r.raws||{}).map(([lid,hex])=>
+      `<div class="row" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;gap:12px">
+        <span style="color:var(--ic-blue)">21 ${lid}</span><span style="flex:1;word-break:break-all">${hex.replace(/(..)/g,"$1 ")}</span></div>`).join("");
+    if(out) out.innerHTML = rows || '<span style="color:var(--fg-dis)">no LID answered</span>';
+    toast("read "+Object.keys(r.raws||{}).length+" LID(s)");
+  }catch(e){ toast("network error",true); }
+}
+window.readBlock=readBlock;
+const UTIL_LIDS = {
+  motor: {ex:"09 0D 10 1A 1B 1C 40", note:"09 rpm · 1A temps · 1B pedal · 1C boost · 40 injector balance"},
+  slabs: {ex:"54 43 50 44 56", note:"54 heights · 43 wheel speeds · 50 ABS sensors · 44 supply · 56 door"},
+};
+function renderUtilities(){
+  const name = MODULE_NAME[MODULE]||MODULE, u = UTIL_LIDS[MODULE]||{ex:"",note:""};
+  const connected = SNAP && SNAP.status==="connected";
+  return `<div class="row"><h2>Utilities</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${name}</span></div>
+    <div class="card"><div class="kicker" style="margin-bottom:8px">Raw LID block dump</div>
+      <div style="font-size:12px;color:var(--fg2);text-wrap:pretty;margin-bottom:8px">Read raw <span style="font-family:ui-monospace">21 xx</span> data straight off the ECU — read-only. ${u.note}</div>
+      <div class="row" style="gap:8px">
+        <input id="lidin" value="${u.ex}" placeholder="e.g. 54 43 50" style="flex:1;min-height:44px;padding:0 12px;border:1px solid var(--border-emph);border-radius:10px;background:var(--bg-surface);color:var(--fg);font-family:ui-monospace,Menlo,monospace;font-size:13px">
+        <button class="btn accent" onclick="readBlock(document.getElementById('lidin').value)">Read</button></div>
+      <div id="dump" style="margin-top:12px;display:flex;flex-direction:column;gap:4px"></div></div>
+    ${comingCard("Coming", [
+      {name:"ECU identifiers (1A — VIN, versions)",tag:"planned"},
+      {name:"Routines & security status",tag:"planned"},
+      {name:"Saved logs & reports",tag:"planned"}])}`;
 }
 
 function renderNav(){
