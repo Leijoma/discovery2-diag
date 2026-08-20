@@ -201,7 +201,7 @@
       -300,
       300
     ],
-    "source": "21 21@0 s16; idle-reglerfel. BELAGT mot bilen (labeled_captures 21='korrekt'); varierar −10…+18 över session.log — signerad skala bekräftad, inte bara tomgångsnoll."
+    "source": "21 21@0 s16; tomgångsregulatorns avvikelse (mål − faktisk). BELAGT: ≈0 vid tomgång (bilen 2026-08-20: snitt −4 vid 700–900 rpm), växer med varvtalet vid pådrag (~2150 vid 3000 rpm) — förväntat, bara meningsfullt vid TOMGÅNG. Ej fel."
   },
   {
     "name": "ambient_press_1",

@@ -514,7 +514,7 @@
   const META = {
     // TD5
     rpm:{g:"Engine",d:"Engine speed."},
-    rpm_error:{g:"Engine",d:"Idle-speed error: target minus actual idle rpm. Near 0 when idle is stable."},
+    rpm_error:{g:"Engine",d:"Idle-governor error (target − actual). ~0 at idle; grows large when you rev — that is expected, it is only meaningful at idle, not a fault."},
     speed:{g:"Engine",d:"Road speed as reported by the ECU."},
     coolant_temp:{g:"Temperatures",d:"Coolant temperature. Normal 86–95 °C (thermostat opens 88); above 105 °C = overheating."},
     air_temp:{g:"Temperatures",d:"Intake air temperature."},
