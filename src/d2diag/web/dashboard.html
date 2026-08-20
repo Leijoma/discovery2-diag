@@ -528,7 +528,7 @@
     manifold_press:{g:"Pressures",d:"Turbo / boost pressure. Idle ~1.0 bar (atmospheric); full load 2.0\u20132.2 bar; ECU overboost-cut above 2.42 bar."},
     ambient_press_1:{g:"Pressures",d:"Atmospheric pressure \u2014 ~1.0 bar at sea level; the ECU\u2019s altitude reference."},
     ambient_press_2:{g:"Pressures",d:"Atmospheric pressure (second reading)."},
-    maf_raw:{g:"Engine",d:"Air-flow meter (MAF). Idle 55–65 kg/hr, ~190 at 2000 rpm; stuck at 0 or 4.00 = dead sensor (limp home). Raw units here — kg/hr scale not yet mapped."},
+    maf_raw:{g:"Engine",d:"Raw field at 1C@4. NOT the MAF — reads 57 key-on, 0 while running (car test 2026-08-20). Real air-flow LID still unmapped."},
     accel_way1:{g:"Accelerator",d:"Pedal track 1: ~0.3\u20130.5 V at idle, rising to ~4.7 V at full throttle."},
     accel_way2:{g:"Accelerator",d:"Pedal track 2: mirror of track 1 \u2014 ~4.7 V at idle, falling to ~0.3 V at full throttle."},
     accel_way3:{g:"Accelerator",d:"Pedal track 3 \u2014 Euro 3 (NNN) engines only; reads 0 on Euro 2."},
@@ -596,7 +596,7 @@
   const LABELS = {
     rpm:"RPM", speed:"Speed", battery:"Battery", coolant_temp:"Coolant",
     air_temp:"Intake air", fuel_temp:"Fuel", manifold_press:"Turbo pressure",
-    ambient_press_1:"Ambient pressure", maf_raw:"Air flow (MAF)", rpm_error:"RPM error",
+    ambient_press_1:"Ambient pressure", maf_raw:"1C@4 (unknown)", rpm_error:"RPM error",
     balance_1:"Injector 1", balance_2:"Injector 2", balance_3:"Injector 3",
     balance_4:"Injector 4", balance_5:"Injector 5",
     height_left_mm:"Height left", height_right_mm:"Height right",

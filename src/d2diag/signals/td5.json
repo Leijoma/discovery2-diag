@@ -139,12 +139,12 @@
     "scale": 0.001,
     "bias": 0.0,
     "unit": "V",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       0.0,
       5.1
     ],
-    "source": "21 1B@4 u16/1000 V; gaspedal track 3. Finns ENDAST på Euro 3 (NNN-box) — läser 0 på Euro 2. Vår bil läser 0 → antingen Euro 2 eller ej mappat. KANDIDAT tills bekräftat vid pådrag."
+    "source": "21 1B@4 u16/1000 V; gaspedal track 3. BELAGT i bilen 2026-08-20: rör sig 0→2,23 V vid pådrag → bilen är Euro 3 (NNN). Speglar way1/way2."
   },
   {
     "name": "accel_supply",
@@ -186,7 +186,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 1C@4 = luftmassa (MAF), reference tool skärm 2 'Air Flow'. Vår enda avläsning var 0 (motorn AV → manifold=atmosfär). Tomgång ska ge 55–65 kg/hr, ~190 vid 2000 rpm; fast 0 eller 4.00 = död givare (limp home). Råvärde→kg/hr-skala EJ bestämd — kräver capture med motorn igång. KANDIDAT."
+    "source": "21 1C@4. INTE luftmassa — biltest 2026-08-20: läser 57 vid tändning-på och 0 hela tiden motorn GÅR (tvärtemot MAF). Min tidigare 'Air Flow'-omklassning var FEL. Okänt statusfält. Riktiga MAF-LID:en är ÄNNU OMAPPAD — kräver råsvep av LID:er medan man gasar (differential)."
   },
   {
     "name": "rpm_error",
