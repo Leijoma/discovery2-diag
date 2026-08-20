@@ -70,3 +70,25 @@ den igen. `tools/bcu_probe.py` guidar genom samma sekvens.
 söker skriptet koden i råsvaret och avgör kodningen (en siffra per byte, eller två
 per byte) i stället för att gissa. ⚠️ Koden skickas som argument och lagras aldrig
 här — repot är publikt.
+
+## Biltest 2026-08-20 — uppkoppling BEKRÄFTAD, EKA låst
+
+Första uppkopplingen mot BCU:n lyckades (`tools/bcu_probe.py`):
+
+- **Adress `0x40`, 5-baud slow init, keybytes `E5 8F`** — precis som adressjakten
+  2026-08-05 förutsade. `0x40 = BCU` är därmed inte längre en gissning.
+- **EKA (`21 CC`) är gated bakom SecurityAccess.** Utan unlock svarar BCU:n med en
+  fast platshållare `11 99 07 01` — identisk på alla `1A xx`-optioner OCH på
+  `21 CC`. Facit (EKA XXXX) fanns inte i den, i någon kodning. Ramarna är giltiga
+  (checksummor stämmer), så det är ett medvetet låst svar, inte brus.
+- Sniffen 2026-08-09 visar att reference tool gör `27 01` → `27 02` omedelbart
+  efter uppkoppling, före varje läsning. Vi hoppar det.
+
+**Blockerare:** Valeo BCU seed→key-algoritm är okänd. Td5:ans keygen (portad från
+td5keygen) gäller inte här. Nästa steg är research (community/reference tool-a commercial tool) eller
+att samla seed→key-par för att reverse-engineera. Proben fångar nu alltid en färsk
+seed via `27 01` så vi har data.
+
+**Sniffat par (en session, seed roterar per session så det låser inte upp en ny):**
+`27 01` → svar med seed, `27 02 4b 5c d4 82 f7 82` = nyckel (6 byte). Ligger i
+`logs/faultread-20260809-2.log` t≈60 s.

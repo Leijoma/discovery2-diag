@@ -2,13 +2,16 @@
 
 Underlaget kommer från två håll:
 
-* **Adress `0x40`, 5-BAUD SLOW INIT** — vår egen adressjakt 2026-08-05
-  (`logs/slabs_hunt-*.log`, `logs/slow_sweep-*.log`) fick komplett handskakning
-  med KWP2000-nycklar ``E5 8F`` och korrekt ``~address``-bekräftelse (0xBF),
-  2 av 3 försök. Att det är BCU:n är en **slutsats**, inte bevisat: modulen
-  svarar med tändningen HELT AV, och BCU:n är den enda D2-modul som är permanent
-  batterimatad (larm/immobiliser). Kör :meth:`identify` för att låta modulen
-  själv svara på vem den är.
+* **Adress `0x40`, 5-BAUD SLOW INIT — BEKRÄFTAT i bilen 2026-08-20.** Handskakning
+  med KWP2000-nycklar ``E5 8F`` (som adressjakten 2026-08-05 förutsade). Uppkoppling
+  på första försöket efter tändningscykel.
+* ⚠️ **EKA är LÅST bakom SecurityAccess.** Utan ``27 01``/``27 02`` returnerar BCU:n
+  en fast platshållare (``11 99 07 01…``) på BÅDE ``1A xx`` och ``21 CC`` — bevisat
+  i bilen: alla ReadEcuId-optioner + EKA-läsningen gav identisk data. Reference tool
+  gör SecurityAccess DIREKT efter uppkoppling (sniff 2026-08-09), före varje läsning.
+  Valeo seed→key-algoritmen är **okänd** (till skillnad från Td5:ans, som är portad),
+  så vi kan fånga en seed men inte låsa upp än. ``identify`` är därför inte pålitlig
+  förrän unlock finns.
 * **Sessionen** ur sniffen ``logs/faultread-20260809-2.log``: oadresserade
   längdramar, keepalive ``02 3E 01 41`` (med sub-byte, till skillnad från SLABS),
   och ReadDataByLocalIdentifier. **EKA-koden läses med `21 CC`** — den ramen

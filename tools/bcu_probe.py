@@ -123,8 +123,20 @@ def main() -> int:
         for opt, data in ident.items():
             say(f"  1A {opt}: {data[:24].hex(' ')}   {ascii_of(data[:24])}")
 
-        # 2) Målet: EKA.
-        say(f"\n[EKA] läser 21 {EKA_LID:02X}")
+        # 1b) SecurityAccess-SEED. Reference tool gör 27 01 → 27 02 DIREKT efter
+        # uppkoppling (sniff 2026-08-09), innan varje läsning. Utan unlock returnerar
+        # BCU:n en fast platshållare på allt (belagt i bilen 2026-08-20). Vi kan inte
+        # skicka nyckeln — Valeo seed→key är okänd — men vi fångar seeden så den
+        # kan matas till framtida keygen-arbete.
+        say("\n[security] hämtar en seed (27 01) — vi kan inte låsa upp än, bara fånga")
+        try:
+            seed = bcu._kwp.request_seed(0x01)
+            say(f"  seed: {seed.hex(' ')}  ← spara loggen; behövs för Valeo-keygen")
+        except Exception as exc:  # noqa: BLE001
+            say(f"  seed-begäran svarade inte ({type(exc).__name__})")
+
+        # 2) Målet: EKA. Utan unlock är detta troligen en platshållare.
+        say(f"\n[EKA] läser 21 {EKA_LID:02X}  (låst utan SecurityAccess)")
         try:
             eka = bcu.read_eka()
         except NegativeResponse as exc:
@@ -157,10 +169,10 @@ def main() -> int:
                 say("    → formatet är därmed belagt. Skriv in det i "
                     "references/valeo_bcu_capabilities.md (men INTE koden).")
             else:
-                say("\n  ✗ facit hittades inte i svaret — varken som en siffra per byte "
-                    "eller som nibbles.")
-                say("    Antingen är det inte EKA som ligger i 21 CC, eller så är "
-                    "kodningen något annat. Spara råloggen.")
+                say("\n  ✗ facit hittades inte — troligen en LÅST platshållare.")
+                say("    BCU:n gav samma data på 1A som på 21 CC → EKA är gated bakom")
+                say("    SecurityAccess (27 01/27 02), som vi ännu inte kan göra (Valeo")
+                say("    seed→key okänd). Seeden ovan är första pusselbiten.")
         else:
             say("\n  Kör med --expect <kod> om du vet koden, så avgörs formatet direkt.")
         return 0
