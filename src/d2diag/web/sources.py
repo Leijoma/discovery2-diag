@@ -43,6 +43,22 @@ def _transport(port: str, raw_log_path: "str | None"):
         return LoggingTransport(inner, logfile=raw_log_path)
     return inner
 
+
+# Full reference tool-täckning: läs även LID:er reference tool pollar men vi ännu inte mappat, så
+# råloggen fångar ALL tillgänglig data — då kan omappade fält hittas ur en vanlig
+# körning (så hittades MAF i 1D 2026-08-21). "Kasta inte bort de bytes vi inte döpt."
+#
+# TD5 (ej sessionskänslig): läs extra-LID:erna VARJE cykel så de samplas jämte rpm
+# för korrelation. Bekräftat svarande i fuelling-blocket via lid_sweep 2026-08-21.
+_TD5_COVERAGE_EXTRA = (0x1E, 0x1F, 0x20)
+# SLABS (MÅSTE pollas lätt — block-läsning dödar sessionen): dessa LID:er roteras
+# EN per cykel (0x54-höjderna läses ändå varje cykel). Källa: slabs/menu.py +
+# references/reference_tool_menu_map.md (reference tool-menyns input-block).
+_SLABS_COVERAGE = frozenset({
+    0x11, 0x3B, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49,
+    0x50, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59,
+})
+
 # Chip-ledtrådar för att känna igen en KKL/OBD-kabel bland flera USB-seriella enheter.
 _KKL_HINTS = ("ft232", "ftdi", "ch340", "cp210", "usb-serial", "usb_uart", "obd", "kkl")
 
@@ -290,6 +306,13 @@ class Td5DataSource(DataSource):
                 # sessionen "uppe" men alla läsningar föll (brus/tappad kabel) →
                 # behandla som tappad kontakt så vi återansluter nästa poll.
                 raise RuntimeError("no signals read — noise or lost connection")
+            # Full täckning: läs omappade LID:er reference tool pollar → hamnar i råloggen
+            # (avkodas inte, men fångas för framtida mappning). Fel här får inte
+            # fälla pollen — read_all lyckades redan.
+            try:
+                self._td5.read_block(_TD5_COVERAGE_EXTRA)
+            except Exception:  # noqa: BLE001
+                pass
             # läs felkoder mer sällan (dyrt); var ~10:e poll
             if self._read_faults and self._fault_tick % self.fault_every == 0:
                 try:
@@ -526,7 +549,11 @@ class SlabsDataSource(DataSource):
         # Övriga LID:er storen bryr sig om (höjderna 0x54 läses varje cykel; resten
         # roteras EN per cykel så trafiken stannar på ~1 Hz). Ny mappning i
         # slabs.json → nytt fält i UI:t utan kodändring.
-        self._extra_lids = sorted({sig.lid for sig in load_signals("slabs")} - {0x54})
+        # Full reference tool-täckning i rotationen: alla LID:er reference tool pollar (mappade +
+        # omappade), EN per cykel så pollen förblir lätt (0x54 läses ändå varje cykel).
+        # Omappade avkodas inte men fångas i råloggen för framtida mappning.
+        self._extra_lids = sorted(
+            (_SLABS_COVERAGE | {sig.lid for sig in load_signals("slabs")}) - {0x54})
         return slabs
 
     def disconnect(self) -> None:
