@@ -158,9 +158,10 @@ const SCREENS = {
   inputs:  {label:"Inputs",     render:renderInputs,    mount:mountInputs},
   outputs: {label:"Outputs",    render:renderOutputs},
   utils:   {label:"Utilities",  render:renderUtilities},
-  map:     {label:"Map",        render:renderMap,       mount:mountMap,   admin:true},
+  map:     {label:"Map",        render:renderMap,       mount:mountMap,     admin:true},
+  capture: {label:"Capture",    render:renderCapture,   mount:mountCapture, admin:true},
 };
-const TAB_ORDER = ["connect","faults","inputs","outputs","utils","map"];
+const TAB_ORDER = ["connect","faults","inputs","outputs","utils","map","capture"];
 function tabList(){ return TAB_ORDER.filter(id => SCREENS[id] && (ADMIN || !SCREENS[id].admin)); }
 let TAB = ADMIN ? "map" : "inputs";
 
@@ -601,6 +602,64 @@ function mountMap(){
       if(!d) return; MAP=d; MAP_MOD=MODULE; if(TAB==="map") render();
     }).catch(()=>{});
   }
+}
+
+// ---- Capture (admin): läs en LID rå och märk den → labeled_captures.jsonl ----
+// Samma dataset som auto-mappern läser. Read-only mot ECU:n (bara 21-läsning).
+let CAPS=[];        // fångster sparade denna session (server-listning kommer senare)
+let CAP_LAST=null;  // {lid, raw} senast lästa, väntar på etikett
+const spacedHex = h => (h||"").replace(/(..)/g,"$1 ").trim();
+function storeModule(m){ return m==="motor" ? "td5" : m; }   // UI-namn → store-modul
+function renderCapture(){
+  const name = MODULE_NAME[MODULE]||MODULE;
+  const connected = SNAP && SNAP.status==="connected";
+  const head = `<div class="row"><h2>Capture</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${name}</span></div>`;
+  const warn = connected ? "" : `<div class="card" style="border-color:var(--bd-yellow);background:var(--bg-yellow);padding:8px 14px"><span style="font-size:12px;color:var(--ic-yellow)">Connect ${name} on the Connect tab to read live values.</span></div>`;
+  const last = CAP_LAST ? `<div style="font-family:ui-monospace,Menlo,monospace;font-size:13px;margin-top:10px;padding:8px 12px;border:1px solid var(--border-emph);border-radius:10px;background:var(--bg-surface)"><span style="color:var(--ic-blue)">21 ${CAP_LAST.lid}</span> <span style="word-break:break-all">${spacedHex(CAP_LAST.raw)}</span></div>` : "";
+  const inp = "min-height:44px;padding:0 12px;border:1px solid var(--border-emph);border-radius:10px;background:var(--bg-surface);color:var(--fg)";
+  const form = `<div class="card">
+    <div class="kicker" style="margin-bottom:8px">1 · Read a LID</div>
+    <div class="row" style="gap:8px">
+      <input id="caplid" placeholder="LID hex — e.g. 23" style="width:150px;${inp};font-family:ui-monospace,Menlo,monospace">
+      <button class="btn accent" id="capread">Read</button></div>
+    ${last}
+    <div class="kicker" style="margin:16px 2px 8px">2 · Label — what does this value mean?</div>
+    <input id="captext" placeholder="e.g. left height 149, right 162" style="width:100%;${inp}">
+    <div class="row" style="margin-top:10px"><button class="btn" id="capsave" style="margin-left:auto">Save capture</button></div>
+    <div style="font-size:12px;color:var(--fg2);text-wrap:pretty;margin-top:8px">Appends <span style="font-family:ui-monospace">{module, lid, raw, text}</span> to logs/labeled_captures.jsonl — the dataset the auto-mapper reads.</div></div>`;
+  const list = CAPS.length ? `<div><div class="kicker" style="margin:12px 2px 6px">Captured this session · ${CAPS.length}</div><div class="grid">`+
+    CAPS.slice().reverse().map(c=>`<div class="ro"><div class="ro-top"><div style="flex:1;min-width:0">
+      <div style="font-weight:600;text-wrap:pretty">${c.text||"(no label)"}</div>
+      <div style="font-size:12px;color:var(--fg-dis);font-family:ui-monospace,Menlo,monospace">${c.module} · 21 ${String(c.lid).toUpperCase()} · ${c.raw}</div></div></div></div>`).join("")+`</div></div>` : "";
+  return head + warn + form + list;
+}
+function mountCapture(){
+  const rd=$("#capread"); if(rd) rd.onclick=async()=>{
+    const lid=($("#caplid").value||"").trim().replace(/^0x/i,"");
+    if(!lid){ toast("enter a LID",true); return; }
+    toast("reading 21 "+lid+"…");
+    try{
+      const r=await(await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"read_block",params:{lids:[lid]}})})).json();
+      if(!r.ok){ toast(r.error||"read failed",true); return; }
+      const raws=r.raws||{};
+      const raw=raws[lid]||raws[lid.toLowerCase()]||raws[lid.toUpperCase()];
+      if(!raw){ toast("no answer for 21 "+lid,true); return; }
+      CAP_LAST={lid:lid.toUpperCase(), raw}; render();
+    }catch(e){ toast("network error",true); }
+  };
+  const sv=$("#capsave"); if(sv) sv.onclick=async()=>{
+    if(!CAP_LAST){ toast("read a LID first",true); return; }
+    const text=($("#captext").value||"").trim();
+    if(!text){ toast("add a label",true); return; }
+    const rec={module:storeModule(MODULE), lid:CAP_LAST.lid.toLowerCase(), raw:spacedHex(CAP_LAST.raw), text};
+    try{
+      const r=await(await fetch("/capture",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(rec)})).json();
+      if(r.ok){ CAPS.push(rec); CAP_LAST=null; toast(r.stored===false?"ok (capture store off)":"saved"); render(); }
+      else toast(r.error||"error",true);
+    }catch(e){ toast("network error",true); }
+  };
 }
 function parseFault(str){
   // "027: shuttle valve switch — electrical failure (Current)" → {text, tag, raw}
