@@ -11,6 +11,7 @@ import hmac
 import json
 import os
 import queue
+import subprocess
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -334,7 +335,7 @@ class _Handler(BaseHTTPRequestHandler):
 # establishment (SLABS: bus-idle + 3 attempts × 5 s retry ≈ 20 s) and then time out
 # at 8 s in the UI — even though they later succeed once the queue drains. They only
 # touch the server's own state (CsvLogger object, fault_every attribute).
-_INLINE_COMMANDS = frozenset({"start_csv", "stop_csv", "set_fault_watch"})
+_INLINE_COMMANDS = frozenset({"start_csv", "stop_csv", "set_fault_watch", "shutdown"})
 
 
 class ConnectAborted(Exception):
@@ -366,6 +367,7 @@ class DiagServer(ThreadingHTTPServer):
         public: bool = False,
         fault_watch: bool = False,
         admin_password: "str | None" = None,
+        allow_shutdown: bool = False,
     ) -> None:
         super().__init__((host, port), _Handler)
         # None/"" = admin ungated (local dev). Set = /admin + mapping endpoints
@@ -378,6 +380,10 @@ class DiagServer(ThreadingHTTPServer):
         self._csv_lock = threading.Lock()  # start/stop on the HTTP thread, log() in the poller
         self.community = community  # opt-in contribution client (Community) or None
         self._public = public  # public mode: simpler UI (hides Map/Capture/Docs + actuators)
+        # allow_shutdown: expose a "Shut down Pi" button in Settings. Off by default so
+        # dev on a laptop can never power off the host; the Pi's systemd unit passes
+        # --allow-shutdown. Stopgap until proper power control exists.
+        self._allow_shutdown = bool(allow_shutdown)
         self._menus = menus or {}  # module → menu list (Map tab)
         self.docs = docs or DocLibrary()  # markdown view (Documents tab)
         self.sniffer = sniffer  # passive sniff feed (Mapping tab), optional
@@ -412,6 +418,7 @@ class DiagServer(ThreadingHTTPServer):
             "module": self._active, "mode": self._mode, "modes": self._modes,
             "signals": {}, "faults": [], "logging": {"recording": False},
             "public": self._public, "fault_watch": self._fault_watch,
+            "allow_shutdown": self._allow_shutdown,
         }
         self._apply_fault_watch()  # set the fault-polling cadence on all sources
         for s in self._all_sources():  # live feedback during blocking establishment
@@ -544,7 +551,29 @@ class DiagServer(ThreadingHTTPServer):
             return self.stop_csv()
         if action == "set_fault_watch":
             return self.set_fault_watch(params.get("on"))
+        if action == "shutdown":
+            return self.shutdown_host(params)
         return {"ok": False, "error": f"unknown command: {action}"}
+
+    def _spawn_poweroff(self) -> None:
+        """Fire the OS poweroff after a short delay so the HTTP reply flushes to the
+        browser before the box goes down. Isolated so tests can stub it. ``sudo -n``
+        fails fast instead of hanging if passwordless sudo is not configured."""
+        def _go() -> None:
+            time.sleep(1.0)
+            try:
+                subprocess.Popen(["sudo", "-n", "shutdown", "-h", "now"])
+            except Exception:  # noqa: BLE001 — nothing to report to; the caller already replied
+                pass
+        threading.Thread(target=_go, daemon=True).start()
+
+    def shutdown_host(self, params: "dict | None" = None) -> "dict":
+        """Power off the host (the Pi in the car). Guarded by --allow-shutdown so dev
+        on a laptop can never trigger it. A stopgap until proper power control exists."""
+        if not self._allow_shutdown:
+            return {"ok": False, "error": "shutdown is not enabled on this host"}
+        self._spawn_poweroff()
+        return {"ok": True, "shutting_down": True}
 
     def enqueue_command(self, cmd: "dict", timeout: float = 8.0) -> "dict":
         """Queue a write command to the poller thread and wait for the result.

@@ -829,10 +829,23 @@ function openSettings(){
       <div><div class="kicker" style="margin-bottom:8px">Advanced</div>
         <a class="btn" href="/admin" style="display:block;text-align:center;text-decoration:none">Mapping console (admin)</a>
         <div style="font-size:12px;color:var(--fg2);text-wrap:pretty;margin-top:6px">Same app, admin mode — adds the Map tab (coverage). Capture, docs and signal editing come next. Password protected.</div></div>
+      ${(SNAP&&SNAP.allow_shutdown) ? `<div><div class="kicker" style="margin-bottom:8px">Power</div>
+        <button class="btn" style="display:block;width:100%;border-color:var(--bd-red);color:var(--ic-red)" onclick="shutdownPi()">Shut down Pi</button>
+        <div style="font-size:12px;color:var(--fg2);text-wrap:pretty;margin-top:6px">Powers off the Raspberry Pi safely, then wait for the green LED to stop before cutting power. Stopgap until a proper power control exists.</div></div>` : ''}
       <button class="btn accent" onclick="closeSheet()">Done</button></div>`;
   document.querySelector(".app").appendChild(el);
 }
 window.openSettings=openSettings;
+
+async function shutdownPi(){
+  if(!confirm("Shut down the Pi now? The dashboard will go offline; wait for the green LED to stop before cutting power.")) return;
+  try{
+    const r = await (await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"shutdown"})})).json();
+    if(r.ok){ closeSheet(); toast("Shutting down the Pi…"); }
+    else toast(r.error||"Shutdown refused", true);
+  }catch(e){ closeSheet(); toast("Shutting down the Pi…"); }  // fetch drops as the Pi powers off — expected
+}
+window.shutdownPi=shutdownPi;
 
 function acceptConsent(){
   if(PREFS.share===null) return;

@@ -535,6 +535,34 @@ def test_fault_watch_command_runs_inline():
         srv.server_close()
 
 
+def test_shutdown_is_guarded_and_inline():
+    # The Settings "Shut down Pi" button posts {action:"shutdown"}. It runs INLINE
+    # (never queued behind K-line) and is refused unless --allow-shutdown was set,
+    # so dev on a laptop can never power off the host.
+    from d2diag.web.server import DiagServer
+    from d2diag.web.sources import MockDataSource
+
+    off = DiagServer(MockDataSource(), host="127.0.0.1", port=0)  # allow_shutdown default False
+    try:
+        r = off.enqueue_command({"action": "shutdown"})
+        assert not r["ok"] and "not enabled" in r["error"]
+        assert off._commands.empty()               # inline — never touched the poll queue
+        assert off.latest["allow_shutdown"] is False
+    finally:
+        off.server_close()
+
+    on = DiagServer(MockDataSource(), host="127.0.0.1", port=0, allow_shutdown=True)
+    calls = []
+    on._spawn_poweroff = lambda: calls.append(True)  # stub — must NOT power off the test host
+    try:
+        r = on.enqueue_command({"action": "shutdown"})
+        assert r["ok"] and r["shutting_down"] is True and calls == [True]
+        assert on._commands.empty()
+        assert on.latest["allow_shutdown"] is True
+    finally:
+        on.server_close()
+
+
 def test_ecu_commands_still_go_through_the_poll_queue():
     # The opposite: anything touching K-line MUST be serialized with the poll. Without a poller
     # the queue is never drained → the command times out (short timeout here).

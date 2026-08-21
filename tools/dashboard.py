@@ -59,6 +59,9 @@ def main() -> int:
     ap.add_argument("--raw-log", action="store_true",
                     help="log ALL raw TX/RX to logs/raw-<module>-<time>.log (for mapping). "
                          "Appends across reconnects; one file per module per run.")
+    ap.add_argument("--allow-shutdown", action="store_true",
+                    help="expose a 'Shut down Pi' button in Settings (set on the Pi's "
+                         "systemd unit; needs passwordless sudo for shutdown)")
     args = ap.parse_args()
 
     # Raw bus log (TX/RX) for mapping — off by default, on with --raw-log.
@@ -139,6 +142,7 @@ def main() -> int:
         variants=variants, mode=mode, scan_port=port, csv_dir=csv_dir, community=community,
         public=args.public, fault_watch=args.fault_watch,
         admin_password=args.admin_password,
+        allow_shutdown=args.allow_shutdown,
     )
     if raw_log_dir:
         print(f"Raw TX/RX log → {raw_log_dir}/raw-<module>-<time>.log")
