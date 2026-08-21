@@ -1,8 +1,8 @@
-"""Tester för den delade EcuSession-basen (livscykel, read_block, _establish).
+"""Tests for the shared EcuSession base (lifecycle, read_block, _establish).
 
-Testar mot ``FakeKLineEcu`` genom en minimal konkret subklass, så bas-mekaniken
-verifieras oberoende av Td5/Slabs. Modulernas egna establish-beteenden täcks
-fortsatt av test_tolerant/test_slabs.
+Tests against ``FakeKLineEcu`` through a minimal concrete subclass, so the base
+mechanics are verified independently of Td5/Slabs. The modules' own establish
+behaviours are still covered by test_tolerant/test_slabs.
 """
 import pytest
 
@@ -23,7 +23,7 @@ def _init_req() -> bytes:
 
 
 class _Dummy(EcuSession):
-    """Modul utan efter-fas (som Slabs): fast init → klar."""
+    """Module without an after phase (like Slabs): fast init → done."""
 
     name = "DUMMY"
 
@@ -32,7 +32,7 @@ class _Dummy(EcuSession):
 
 
 def _dummy(responses):
-    # kort ram-timeout: testerna ska inte betala 1 s per uteblivet svar
+    # short frame timeout: the tests should not pay 1 s per missing response
     ecu = FakeKLineEcu(responses)
     return ecu, _Dummy(KWP2000(KLine(ecu, timeout=0.05)))
 
@@ -60,13 +60,13 @@ def test_read_block_returns_lid_hex_keyed_bytes():
     ecu, s = _dummy(responses)
     with s:
         block = s.read_block([0x54, 0x43])
-    assert set(block) == {"54", "43"}                 # gemena 2-hex-nycklar (automap-format)
+    assert set(block) == {"54", "43"}                 # lowercase 2-hex keys (automap format)
     assert block["54"] == bytes.fromhex("919c0f0f")
     assert block["43"] == bytes.fromhex("7c007c00")
 
 
 def test_read_block_skips_failing_lid():
-    # 0x54 svarar; 0x99 ger negativt svar (7F 21 12) → hoppas tyst över.
+    # 0x54 responds; 0x99 gives a negative response (7F 21 12) → silently skipped.
     responses = {
         _sess(b"\x21\x54"): _sess(b"\x61\x54\x91\x9c"),
         _sess(b"\x21\x99"): _sess(b"\x7f\x21\x12"),
@@ -74,7 +74,7 @@ def test_read_block_skips_failing_lid():
     ecu, s = _dummy(responses)
     with s:
         block = s.read_block([0x54, 0x99])
-    assert set(block) == {"54"}                       # den felande LID:en finns inte med
+    assert set(block) == {"54"}                       # the failing LID is not included
 
 
 def test_establish_after_none_returns_c1():
@@ -85,48 +85,48 @@ def test_establish_after_none_returns_c1():
 
 
 def test_establish_raises_after_attempts_when_no_c1():
-    # Ingen init-respons → tolerant fast init hittar ingen C1 → höjer efter attempts.
+    # No init response → tolerant fast init finds no C1 → raises after attempts.
     ecu, s = _dummy({})
     with s:
         with pytest.raises(KWP2000Error):
             s.establish()
 
 
-# ---- ren avslutning på delad buss (release/end_session) ------------------ #
+# ---- clean teardown on a shared bus (release/end_session) ---------------- #
 
 class _WithSession(_Dummy):
-    """Modul MED diagnostiksession (som Td5) — ska stängas rent."""
+    """Module WITH a diagnostic session (like Td5) — should close cleanly."""
 
     name = "WITHSESSION"
     _has_session = True
 
 
 def test_release_sends_stop_diagnostic_session_then_closes():
-    # Td5-fallet: release() ska skicka StopDiagnosticSession (20 → 60) INNAN porten
-    # stängs, annars ligger sessionen kvar och nästa moduls init får 7F 81 10.
+    # Td5 case: release() should send StopDiagnosticSession (20 → 60) BEFORE the port
+    # is closed, otherwise the session lingers and the next module's init gets 7F 81 10.
     ecu = FakeKLineEcu({_sess(b"\x20"): _sess(b"\x60"), _sess(b"\x82"): _sess(b"\xc2")})
     s = _WithSession(KWP2000(KLine(ecu)))
     with s:
         s.release()
-    # Td5 har BÅDA: en diagnostiksession (20) ovanpå kommunikationslänken (82).
+    # Td5 has BOTH: a diagnostic session (20) on top of the communication link (82).
     assert ecu.sent == [_sess(b"\x20"), _sess(b"\x82")]
     assert ecu._is_open is False
 
 
 def test_release_without_session_still_stops_communication():
-    # SLABS-fallet: ingen diagnostiksession att avsluta — men fast init upprättade
-    # en LÄNK, och den måste rivas med 82. Annars svarar modulen 7F 81 10 på nästa
-    # StartCommunication tills dess egen timeout löper ut (belagt i bilen 2026-08-18).
+    # SLABS case: no diagnostic session to end — but fast init established
+    # a LINK, and it must be torn down with 82. Otherwise the module answers 7F 81 10 on the next
+    # StartCommunication until its own timeout expires (confirmed in the car 2026-08-18).
     ecu, s = _dummy({_sess(b"\x82"): _sess(b"\xc2")})
     with s:
         s.release()
-    assert ecu.sent == [_sess(b"\x82")]     # 82, men inget 20 (ingen session)
+    assert ecu.sent == [_sess(b"\x82")]     # 82, but no 20 (no session)
     assert ecu._is_open is False
 
 
 def test_release_closes_even_when_stop_fails():
-    # Tyst/död buss: 20 får inget svar. Stängningen får inte hänga på det.
-    ecu = FakeKLineEcu({})  # inget svar på 20
+    # Silent/dead bus: 20 gets no response. The close must not hang on it.
+    ecu = FakeKLineEcu({})  # no response to 20
     s = _WithSession(KWP2000(KLine(ecu, timeout=0.01)))
     with s:
         s.release()
@@ -134,52 +134,52 @@ def test_release_closes_even_when_stop_fails():
 
 
 def test_establish_clears_stale_link_before_init():
-    # En länk som lämnats öppen (kraschad process, tidigare körning) får modulen att
-    # svara 7F 81 10 på StartCommunication. Vi river den med 82 FÖRE varje försök.
+    # A link left open (crashed process, previous run) makes the module
+    # answer 7F 81 10 on StartCommunication. We tear it down with 82 BEFORE every attempt.
     ecu, s = _dummy({_init_req(): _sess(b"\xc1\x57\x8f"), _sess(b"\x82"): _sess(b"\xc2")})
     with s:
-        assert s.establish().startswith(b"\xc1\x57\x8f")  # burst från C1 (+ checksumma)
-    assert ecu.sent[0] == _sess(b"\x82")    # rensning först …
-    assert ecu.sent[1] == _init_req()       # … sedan init
+        assert s.establish().startswith(b"\xc1\x57\x8f")  # burst from C1 (+ checksum)
+    assert ecu.sent[0] == _sess(b"\x82")    # cleanup first …
+    assert ecu.sent[1] == _init_req()       # … then init
 
 
 def test_establish_progress_reports_the_burst_on_each_failed_try():
-    # Bursten (t.ex. "03 7f 81 10 13") ska synas i anslutningsloggen för VARJE
-    # misslyckat försök — annars går det inte att se om rejecten fanns från start.
-    ecu, s = _dummy({})                     # inget svar på vare sig 82 eller init
+    # The burst (e.g. "03 7f 81 10 13") should appear in the connection log for EVERY
+    # failed attempt — otherwise you can't tell whether the reject was there from the start.
+    ecu, s = _dummy({})                     # no response to either 82 or init
     msgs: "list[str]" = []
     with s:
         with pytest.raises(KWP2000Error):
             s.establish(progress=msgs.append)
     tries = [m for m in msgs if m.startswith("no response yet")]
-    assert len(tries) == 2                  # attempts=2 i _Dummy
+    assert len(tries) == 2                  # attempts=2 in _Dummy
     assert all("burst" in m for m in tries)
 
 
 def test_stale_link_is_cleared_once_not_between_tries():
-    # Pausen mellan försöken måste vara TYST. Skickar vi 82 före varje försök
-    # nollställs modulens väntan och den släpper aldrig sin länk (mätt i sniffen:
-    # varje lyckad SLABS-init kom efter 25–28 s utan trafik mot modulen).
-    ecu, s = _dummy({})                      # inget svar → alla försök misslyckas
+    # The pause between attempts must be SILENT. If we send 82 before every attempt
+    # the module's wait is reset and it never releases its link (measured in the sniff:
+    # every successful SLABS init came after 25–28 s of no traffic to the module).
+    ecu, s = _dummy({})                      # no response → all attempts fail
     with pytest.raises(KWP2000Error):
         with s:
             s.establish()
     stops = [f for f in ecu.sent if f == _sess(b"\x82")]
-    assert len(stops) == 1                   # exakt en rensning, före tystnaden
-    assert ecu.sent[0] == _sess(b"\x82")     # och den kom först av allt
+    assert len(stops) == 1                   # exactly one cleanup, before the silence
+    assert ecu.sent[0] == _sess(b"\x82")     # and it came first of all
 
 
 def test_end_session_leaves_the_port_open_but_release_closes_it():
-    # Delad port: tools/slabs_probe.py läser TD5 först och testar SEDAN SLABS på
-    # samma transport. Avslutas TD5 med release() stängs porten, och varje följande
-    # initförsök "misslyckas" utan att en byte gått ut — ett testfel som ser ut som
-    # en tyst modul (bilen 2026-08-19, 6,5 min bortkastade). end_session() får
-    # därför avsluta sessionen UTAN att stänga.
+    # Shared port: tools/slabs_probe.py reads TD5 first and THEN tests SLABS on
+    # the same transport. If TD5 is ended with release() the port closes, and every following
+    # init attempt "fails" without a byte going out — a test error that looks like
+    # a silent module (car 2026-08-19, 6.5 min wasted). end_session() may
+    # therefore end the session WITHOUT closing.
     ecu = FakeKLineEcu({_sess(b"\x20"): _sess(b"\x60"), _sess(b"\x82"): _sess(b"\xc2")})
     s = _WithSession(KWP2000(KLine(ecu)))
     s.open()
     s.end_session()
     assert ecu.sent == [_sess(b"\x20"), _sess(b"\x82")]
-    assert ecu.is_open is True          # porten lever vidare för nästa modul
+    assert ecu.is_open is True          # the port lives on for the next module
     s.release()
     assert ecu.is_open is False

@@ -1,18 +1,18 @@
-"""Td5-felkoder: avkodning av statusblocket från ReadDataByLocalIdentifier 0x3B.
+"""Td5 fault codes: decoding of the status block from ReadDataByLocalIdentifier 0x3B.
 
-Blocket (bytes efter ``61 3B``) är bitkodat — varje bit motsvarar ett fel.
-Felindex = offset*8 + bit (bit 0 = mask 0x01). Kartan är BELAGD ur Ekaitza_Itzali
-(get_faults + fault_code_text) och **korsvaliderad mot reference tool v1.12** — båda
-källorna ger samma namn på samma offset/bit. Det är protokollfakta om ECU:ns
-diagnostik, ingen kod kopierad — se THIRD_PARTY_LICENSES.md. Uppenbara källstavfel
-rättade (peck→peak, crack→crank, inlett→inlet).
+The block (bytes after ``61 3B``) is bit-coded — each bit corresponds to a fault.
+Fault index = offset*8 + bit (bit 0 = mask 0x01). The map is PROVEN from Ekaitza_Itzali
+(get_faults + fault_code_text) and **cross-validated against reference tool v1.12** — both
+sources give the same name for the same offset/bit. It is protocol fact about the ECU's
+diagnostics, no code copied — see THIRD_PARTY_LICENSES.md. Obvious source typos
+corrected (peck→peak, crack→crank, inlett→inlet).
 
-Statussuffix (från reference tool-distinktionen, mer precist än Ekaitzas grova L/C):
-**(Logged Low)** = lagrat, signal låg (kortslutning/låg spänning) — offset 0–1 för
-givarkretsarna; **(Logged High)** = lagrat, signal hög (bruten krets) — offset 2–3;
-**(Current)** = aktuellt fel just nu; **(Logged)** = lagrat historiskt (drivsteg
-m.m., där Low/High inte gäller). Okända satta bitar rapporteras generiskt så inget
-tappas tyst (namntabellen saknar text för vissa bitar — odefinierade i källan).
+Status suffix (from the reference tool distinction, more precise than Ekaitza's coarse L/C):
+**(Logged Low)** = stored, signal low (short circuit/low voltage) — offset 0–1 for
+the sensor circuits; **(Logged High)** = stored, signal high (open circuit) — offset 2–3;
+**(Current)** = fault present right now; **(Logged)** = stored historically (drive
+stages etc., where Low/High does not apply). Unknown set bits are reported generically so
+nothing is dropped silently (the name table lacks text for some bits — undefined in the source).
 """
 from __future__ import annotations
 
@@ -21,16 +21,16 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Fault:
-    offset: int  # byte-offset i blocket (0 = första byten efter 61 3B)
-    mask: int    # bitmask i den byten (bit 0 = 0x01 … bit 7 = 0x80)
+    offset: int  # byte offset in the block (0 = first byte after 61 3B)
+    mask: int    # bitmask within that byte (bit 0 = 0x01 … bit 7 = 0x80)
     name: str
 
 
-# Statusblocket är 35 bytes (offset 0–34). Den toleranta läsningen kan släpa med
-# ramens checksumma/glitch efter blocket — de ska INTE avkodas som fel.
+# The status block is 35 bytes (offset 0–34). The tolerant read may drag along
+# the frame's checksum/glitch after the block — those must NOT be decoded as faults.
 FAULT_BLOCK_LEN = 35
 
-# Felkarta ur Ekaitza + reference tool v1.12 (210 namngivna bitar, offset 0–34). BELAGD.
+# Fault map from Ekaitza + reference tool v1.12 (210 named bits, offset 0–34). PROVEN.
 FAULTS: "list[Fault]" = [
     Fault(0, 0x01, "egr inlet throttle diagnostics (Logged Low)"),
     Fault(0, 0x02, "turbocharger wastegate diagnostics (Logged Low)"),
@@ -246,13 +246,13 @@ FAULTS: "list[Fault]" = [
 
 
 def decode_faults(block: bytes) -> "list[str]":
-    """Returnera en lista med aktiva fel ur statusblocket.
+    """Return a list of active faults from the status block.
 
-    Kända bitar (i :data:`FAULTS`) ges sitt namn. Satta bitar utan känd mappning
-    rapporteras generiskt som ``byte<off>.bit<n>`` så att en okänd felbit aldrig
-    försvinner tyst.
+    Known bits (in :data:`FAULTS`) are given their name. Set bits without a known
+    mapping are reported generically as ``byte<off>.bit<n>`` so an unknown fault bit
+    never disappears silently.
     """
-    block = block[:FAULT_BLOCK_LEN]  # kapa bort ev. checksumma/glitch efter blocket
+    block = block[:FAULT_BLOCK_LEN]  # trim off any checksum/glitch after the block
     active: "list[str]" = []
     known_mask: "dict[int, int]" = {}
     for f in FAULTS:

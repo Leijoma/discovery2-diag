@@ -1,10 +1,10 @@
-"""Td5 livedata via bibliotekets toleranta läge — tunn wrapper.
+"""Td5 live data via the library's tolerant mode — thin wrapper.
 
     PYTHONPATH=src python3 tools/td5_tolerant.py /dev/cu.usbserial-12345678
 
-Hela den bevisade sekvensen (tolerant burst-läsning + unlock) bor nu i d2diag:
+The whole proven sequence (tolerant burst read + unlock) now lives in d2diag:
     Td5(KWP2000(KLine(SerialTransport(...)), tolerant=True)).establish()
-Kräver en färsk ECU (tändningscykel precis innan). Tändning på, motorn AV.
+Requires a fresh ECU (an ignition cycle just before). Ignition on, engine OFF.
 """
 import sys
 
@@ -21,36 +21,36 @@ def main() -> int:
         try:
             c1 = td5.establish()
         except KWP2000Error as exc:
-            print(f"Uppkoppling misslyckades: {exc}")
-            print(">> Kör en tändningscykel och kör om.")
+            print(f"Connection failed: {exc}")
+            print(">> Run an ignition cycle and try again.")
             return 1
-        print(f"UPPKOPPLAD & UPPLÅST — C1 {c1.hex(' ')}\n--- livedata ---")
+        print(f"CONNECTED & UNLOCKED — C1 {c1.hex(' ')}\n--- live data ---")
         for lid in LIDS:
             try:
                 vals = td5.read_lid(lid)
             except (NegativeResponse, KWP2000Error) as exc:
                 print(f"21 {lid:02X}: {exc}")
                 continue
-            except Exception as exc:  # noqa: BLE001 — brusskadad läsning, hoppa
+            except Exception as exc:  # noqa: BLE001 — noise-corrupted read, skip
                 print(f"21 {lid:02X}: {type(exc).__name__}")
                 continue
             body = ", ".join(f"{k}={v:.2f}" for k, v in vals.items())
             print(f"21 {lid:02X}: {body}")
 
-        print("\n--- felkoder (21 3B) ---")
+        print("\n--- fault codes (21 3B) ---")
         try:
             faults = td5.read_faults()
         except (NegativeResponse, KWP2000Error) as exc:
-            print(f"  felläsning misslyckades: {exc}")
+            print(f"  fault read failed: {exc}")
         else:
             named = [f for f in faults if not f.startswith("byte")]
             for f in named:
                 print(f"  {f}")
             if not named:
-                print("  inga namngivna fel")
+                print("  no named faults")
             generic = [f for f in faults if f.startswith("byte")]
             if generic:
-                print(f"  ({len(generic)} odefinierade bitar: {', '.join(generic)})")
+                print(f"  ({len(generic)} undefined bits: {', '.join(generic)})")
     return 0
 
 

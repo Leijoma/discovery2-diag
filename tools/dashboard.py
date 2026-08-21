@@ -1,18 +1,18 @@
-"""Starta realtidsdashboarden.
+"""Start the realtime dashboard.
 
-    # mock-data (ingen bil) — för UI-utveckling / förhandsvisning:
+    # mock data (no car) — for UI development / preview:
     PYTHONPATH=src python3 tools/dashboard.py --mock
 
-    # riktig Td5 mot bilen:
+    # real Td5 against the car:
     PYTHONPATH=src python3 tools/dashboard.py --serial /dev/cu.usbserial-12345678
 
-Öppna sedan http://localhost:8080 (eller Pi:ns adress i bilen från mobilen).
+Then open http://localhost:8080 (or the Pi's address in the car from your phone).
 """
 import argparse
 import os
 import sys
 
-# Gör verktyget körbart som "python3 tools/dashboard.py" utan PYTHONPATH=src.
+# Make the tool runnable as "python3 tools/dashboard.py" without PYTHONPATH=src.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 from d2diag.web import (  # noqa: E402
@@ -54,23 +54,24 @@ def main() -> int:
                     help="extra directory of .md files to show in the Docs tab (repeatable)")
     ap.add_argument("--sniff", metavar="PORT",
                     help="ESP32 sniff port for the Map tab (passive RX-only; reference tool polls)")
-    ap.add_argument("--replay", metavar="FIL",
+    ap.add_argument("--replay", metavar="FILE",
                     help="replay a sniff log in the Map tab (for testing without a vehicle)")
     ap.add_argument("--raw-log", action="store_true",
                     help="log ALL raw TX/RX to logs/raw-<module>-<time>.log (for mapping). "
                          "Appends across reconnects; one file per module per run.")
     args = ap.parse_args()
 
-    # Rå busslogg (TX/RX) för mappning — av som standard, på med --raw-log.
+    # Raw bus log (TX/RX) for mapping — off by default, on with --raw-log.
     _repo = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     raw_log_dir = os.path.join(_repo, "logs") if args.raw_log else None
-    # Bränsledatorns livstidssumma persistas här (överlever omstart). Gitignoreras.
+    # The fuel computer's lifetime total is persisted here (survives restart). Gitignored.
     fuel_state_path = os.path.join(_repo, "fuel_totals.json")
 
-    # Både mock- och live-varianter byggs för varje modul; läget (mock/live) väljs
-    # i UI:t och kan bytas i drift. Live-källor autodetekterar porten (``auto``) om
-    # ingen anges → felar mjukt vid poll om kabeln saknas. Flaggorna sätter bara
-    # STARTläget. Multi-modul: bara EN modul aktiv åt gången (K-line = delad buss).
+    # Both mock and live variants are built for each module; the mode (mock/live) is
+    # chosen in the UI and can be switched at runtime. Live sources autodetect the port
+    # (``auto``) if none is given → fail softly at poll time if the cable is missing. The
+    # flags only set the START mode. Multi-module: only ONE module active at a time
+    # (K-line = shared bus).
     port = args.serial or "auto"
     variants = {
         "motor": {"mock": MockDataSource(),
@@ -97,22 +98,22 @@ def main() -> int:
         from d2diag.web.logger import SnapshotLogger
         logger = SnapshotLogger(log_path, min_interval=args.log_interval)
 
-    from d2diag.menus import MENUS  # modul-menyregister för Karta-fliken
-    from d2diag.web.docs import DocLibrary  # markdown-vy för Dokument-fliken
+    from d2diag.menus import MENUS  # module menu registry for the Map tab
+    from d2diag.web.docs import DocLibrary  # markdown view for the Docs tab
 
-    # Dokument-fliken speglar de KANONISKA källfilerna (ingen kopia):
-    #   Facit = felkodsordboken i register-repot (syskonmapp 'Discovery 2/')
-    #   Referens = diag-repots references/*.md
+    # The Docs tab mirrors the CANONICAL source files (not a copy):
+    #   Answer key = the fault-code dictionary in the register repo (sibling folder 'Discovery 2/')
+    #   Reference = the diag repo's references/*.md
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     dict_path = args.dict_path or os.path.join(
         os.path.dirname(repo_root), "Discovery 2", "discovery2_reference tool_fault_dictionary.md")
     docs = DocLibrary()
-    docs.add_file(dict_path, title="reference tool felkodsordbok (facit)", group="Facit")
-    docs.add_dir(os.path.join(repo_root, "references"), group="Referens")
+    docs.add_file(dict_path, title="reference tool fault-code dictionary (answer key)", group="Answer key")
+    docs.add_dir(os.path.join(repo_root, "references"), group="Reference")
     for extra in args.docs:
         docs.add_dir(extra, group="Extra")
 
-    # Mappning-fliken: passiv sniff-feed (live ESP32 eller uppspelad logg).
+    # Map tab: passive sniff feed (live ESP32 or replayed log).
     sniffer = None
     if args.sniff:
         from d2diag.web.sniffer import SnifferFeed
@@ -120,11 +121,11 @@ def main() -> int:
         print(f"Sniff (live): {args.sniff} → Map tab")
     elif args.replay:
         from d2diag.web.sniffer import SnifferFeed
-        # loopande uppspelning så färskhets-badgen visar "LIVE" i förhandsvisningen
+        # looping replay so the freshness badge shows "LIVE" in the preview
         sniffer = SnifferFeed.from_file(args.replay, delay=0.008, loop=True)
         print(f"Sniff (replay): {args.replay} → Map tab (freshness demo)")
 
-    # Märkta live-fångster (Fångst-fliken) → durabelt JSONL-dataset.
+    # Labeled live captures (Capture tab) → durable JSONL dataset.
     captures_path = os.path.join(repo_root, "logs", "labeled_captures.jsonl")
     os.makedirs(os.path.dirname(captures_path), exist_ok=True)
 

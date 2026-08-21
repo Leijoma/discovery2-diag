@@ -1,17 +1,18 @@
-"""Passiv K-line-sniffer MED markörer — för sniffning av ett lånat verktyg (reference tool).
+"""Passive K-line sniffer WITH markers — for sniffing a borrowed tool (reference tool).
 
-    PYTHONPATH=src python3 tools/sniff_session.py PORT [gap_ms] [utfil]
+    PYTHONPATH=src python3 tools/sniff_session.py PORT [gap_ms] [outfile]
 
-Som ``sniff.py`` (RX-only, ramar på tystnadsgap, Ekaitza-stil hexlogg) men med en
-avgörande funktion: **du kan skriva markörer** som stämplas in i loggen i realtid.
-Skriv t.ex. ``SLABS läs felkoder`` + Enter precis innan du kör funktionen i
-reference tool-menyn → loggen får en tidsstämplad ``>>> ``-rad mellan ramarna. Då kan
-bytes paras ihop med rätt åtgärd efteråt (läs/rensa-cykeln blir läsbar).
+Like ``sniff.py`` (RX-only, frames on silence gaps, Ekaitza-style hex log) but with
+one crucial feature: **you can type markers** that get stamped into the log in real
+time. Type e.g. ``SLABS read faults`` + Enter just before you run the function in the
+reference tool's menu → the log gets a timestamped ``>>> `` line between the frames.
+Then the bytes can be paired with the right action afterwards (the read/clear cycle
+becomes readable).
 
-*** RX ONLY — sänder ALDRIG. *** Sniffern lyssnar bara; att sända skulle störa/
-skada reference tool-sessionen. Kör stillastående, tändning på (SLABS tappar comms >8 km/h).
+*** RX ONLY — NEVER transmits. *** The sniffer only listens; transmitting would
+disturb/damage the reference tool session. Run stationary, ignition on (SLABS loses comms >8 km/h).
 
-Kommandon medan den kör:  <valfri text> + Enter = markör · ``q`` + Enter = avsluta.
+Commands while running:  <any text> + Enter = marker · ``q`` + Enter = quit.
 """
 import sys
 import threading
@@ -26,7 +27,7 @@ _stop = threading.Event()
 
 
 def _emit(fh, t0: float, text: str) -> None:
-    """Skriv en rad till konsol + fil, trådsäkert."""
+    """Write a line to console + file, thread-safely."""
     line = f"[{time.monotonic() - t0:9.3f}s] {text}"
     with _lock:
         print(line, flush=True)
@@ -35,11 +36,11 @@ def _emit(fh, t0: float, text: str) -> None:
 
 
 def _sniffer(ser: "serial.Serial", fh, t0: float, gap: float) -> None:
-    """RX-only-loop: samla bytes till ram på tystnadsgap, logga hex + annotering."""
+    """RX-only loop: collect bytes into a frame on silence gaps, log hex + annotation."""
     cur = bytearray()
     last = None
     while not _stop.is_set():
-        b = ser.read(1)  # SÄND ALDRIG — bara läs
+        b = ser.read(1)  # NEVER TRANSMIT — read only
         now = time.monotonic()
         if b:
             cur += b
@@ -50,7 +51,7 @@ def _sniffer(ser: "serial.Serial", fh, t0: float, gap: float) -> None:
             cur = bytearray()
             last = None
     if cur:
-        _emit(fh, t0, bytes(cur).hex(" ") + "   (ofullständig vid avslut)")
+        _emit(fh, t0, bytes(cur).hex(" ") + "   (incomplete at exit)")
 
 
 def main() -> int:
@@ -70,8 +71,8 @@ def main() -> int:
     t0 = time.monotonic()
 
     banner = (
-        f"PASSIV sniff+markör @ 10400 baud → {outfile}\n"
-        "RX ONLY — sänder aldrig. Skriv text+Enter = markör, 'q'+Enter = avsluta."
+        f"PASSIVE sniff+marker @ 10400 baud → {outfile}\n"
+        "RX ONLY — never transmits. Type text+Enter = marker, 'q'+Enter = quit."
     )
     print(banner)
     fh.write(f"=== SESSION {time.strftime('%Y-%m-%d %H:%M:%S')} — port {port} ===\n")
@@ -88,17 +89,17 @@ def main() -> int:
                 break
             if line.strip().lower() in ("q", "quit", "exit"):
                 break
-            _emit(fh, t0, f">>> {line.strip() or '(markör)'}")
+            _emit(fh, t0, f">>> {line.strip() or '(marker)'}")
     except KeyboardInterrupt:
         pass
     finally:
         _stop.set()
         th.join(timeout=1.0)
         with _lock:
-            fh.write(f"=== SLUT {time.strftime('%H:%M:%S')} ===\n")
+            fh.write(f"=== END {time.strftime('%H:%M:%S')} ===\n")
             fh.close()
         ser.close()
-    print(f"\nklart → {outfile}")
+    print(f"\ndone → {outfile}")
     return 0
 
 

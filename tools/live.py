@@ -1,8 +1,8 @@
-"""Öppna en Td5-session och läs livedata (avkodat) ur kända identifiers.
+"""Open a Td5 session and read live data (decoded) from known identifiers.
 
     PYTHONPATH=src python3 tools/live.py /dev/ttyUSB0
 
-Kör med tändning på men motorn AV (mindre brus på K-line).
+Run with ignition on but the engine OFF (less noise on the K-line).
 """
 import sys
 import time
@@ -18,17 +18,17 @@ def open_session(kline: KLine, tries: int = 12) -> bool:
         try:
             sc = kline.fast_init()
         except KLineTimeout:
-            print(f"  init {i + 1}: brus/timeout, försöker igen")
+            print(f"  init {i + 1}: noise/timeout, retrying")
             continue
         if sc[:1] == b"\xc1":
-            print(f"  init {i + 1}: C1 — färsk session, nyckelbytes {sc[1:].hex(' ')}")
+            print(f"  init {i + 1}: C1 — fresh session, key bytes {sc[1:].hex(' ')}")
             return True
         if sc[:1] == b"\x7f":
-            # generalReject = sessionen är redan öppen (vi missade C1 i bruset).
-            # Fortsätt — sessionen finns.
-            print(f"  init {i + 1}: 7F — session redan öppen, kör vidare")
+            # generalReject = the session is already open (we missed C1 in the noise).
+            # Continue — the session exists.
+            print(f"  init {i + 1}: 7F — session already open, continuing")
             return True
-        print(f"  init {i + 1}: oväntat {sc.hex(' ') or 'tomt'}")
+        print(f"  init {i + 1}: unexpected {sc.hex(' ') or 'empty'}")
     return False
 
 
@@ -39,22 +39,22 @@ def main() -> int:
     td5 = Td5(kwp)
     with kline:
         if not open_session(kline):
-            print("Kunde inte öppna session.")
+            print("Could not open session.")
             return 1
-        print("session öppen (C1)")
+        print("session open (C1)")
         try:
             td5.start_session()
             print("StartDiagnosticSession 10 A0 OK")
         except NegativeResponse as exc:
-            print(f"StartDiagnosticSession nekad: {exc}")
+            print(f"StartDiagnosticSession denied: {exc}")
             return 1
 
-        print("--- livedata ---")
+        print("--- live data ---")
         for lid in LIDS:
             try:
                 data = kwp.read_local_identifier(lid)
             except NegativeResponse as exc:
-                print(f"21 {lid:02X}: nekad (NRC 0x{exc.nrc:02X})")
+                print(f"21 {lid:02X}: denied (NRC 0x{exc.nrc:02X})")
                 continue
             except Exception as exc:  # noqa: BLE001
                 print(f"21 {lid:02X}: {type(exc).__name__}")

@@ -1,12 +1,12 @@
-"""Deklarativ signalstore — enda sanningskällan för LID-fältmappningar.
+"""Declarative signal store — the single source of truth for LID field mappings.
 
-En ``<modul>.json`` per ECU beskriver varje fält (offset, typ, skala, bias, enhet,
-konfidens, gränser, ev. bit/tillstånd). Både **avkodarna** (Td5/Slabs/UI) och
-**automap** läser samma fil, och en bekräftad mappning skrivs tillbaka med
-:func:`upsert_field` — så hand-inklistrandet av ``Signal(...)``-rader försvinner.
+One ``<module>.json`` per ECU describes each field (offset, type, scale, bias, unit,
+confidence, limits, optional bit/state). Both the **decoders** (Td5/Slabs/UI) and
+**automap** read the same file, and a confirmed mapping is written back with
+:func:`upsert_field` — so the hand-pasting of ``Signal(...)`` rows goes away.
 
-Konfidens: ``belagt`` (verifierat mot bilen) vs ``kandidat`` (härlett/overifierat).
-Håll isär det (jfr projektkonventionen "skilj på belagt och slutsatsdraget").
+Confidence: ``belagt`` (verified against the car) vs ``kandidat`` (derived/unverified).
+Keep them apart (cf. the project convention "distinguish proven from inferred").
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from pathlib import Path
 _DIR = Path(__file__).resolve().parent
 
 
-# ---- byte-läsare -------------------------------------------------------- #
+# ---- byte readers ------------------------------------------------------- #
 def _u8(d: bytes, o: int) -> int:
     return d[o]
 
@@ -48,9 +48,9 @@ _WIDTH = {"u8": 1, "u16": 2, "u16le": 2, "s16": 2, "s16le": 2, "bit": 1}
 
 @dataclass(frozen=True)
 class Signal:
-    """Ett avkodbart fält i en LID. Fältordningen är bakåtkompatibel med den gamla
-    ``td5.identifiers.Signal`` (namn, lid, offset, kind, scale, bias, unit) — nya
-    fält har defaultvärden och bryter inte positionell konstruktion."""
+    """A decodable field in a LID. The field order is backward-compatible with the old
+    ``td5.identifiers.Signal`` (name, lid, offset, kind, scale, bias, unit) — new
+    fields have default values and don't break positional construction."""
 
     name: str
     lid: int
@@ -61,12 +61,12 @@ class Signal:
     unit: str = ""
     confidence: str = "belagt"
     limits: "tuple[float, float] | None" = None
-    bit: "int | None" = None                       # för kind="bit"
-    states: "dict[int, str] | None" = None          # rå värde → etikett (bit/state)
+    bit: "int | None" = None                       # for kind="bit"
+    states: "dict[int, str] | None" = None          # raw value → label (bit/state)
     source: str = ""
 
     def decode(self, data: bytes) -> float:
-        """Numeriskt värde (bit → 0.0/1.0) så ``dict[str, float]``-kontraktet håller."""
+        """Numeric value (bit → 0.0/1.0) so the ``dict[str, float]`` contract holds."""
         if self.kind == "bit":
             raw = (data[self.offset] >> (self.bit or 0)) & 1
         else:
@@ -74,7 +74,7 @@ class Signal:
         return raw * self.scale + self.bias
 
     def decode_named(self, data: bytes) -> "str | None":
-        """Tillståndsetikett ur ``states`` (för UI), annars ``None``."""
+        """State label from ``states`` (for the UI), otherwise ``None``."""
         if not self.states:
             return None
         if self.kind == "bit":
@@ -87,7 +87,7 @@ class Signal:
         return len(data) >= self.offset + _WIDTH.get(self.kind, 2)
 
 
-# ---- ladda / spara ------------------------------------------------------ #
+# ---- load / save -------------------------------------------------------- #
 def _record_to_signal(r: dict) -> Signal:
     states = r.get("states")
     if states:
@@ -114,7 +114,7 @@ def _path(module: str) -> Path:
 
 
 def load_records(module: str) -> "list[dict]":
-    """Rå JSON-poster för en modul (tom lista om filen saknas)."""
+    """Raw JSON records for a module (empty list if the file is missing)."""
     p = _path(module)
     if not p.exists():
         return []
@@ -125,20 +125,20 @@ _CACHE: "dict[str, list[Signal]]" = {}
 
 
 def load_signals(module: str) -> "list[Signal]":
-    """Ladda en moduls signaler som :class:`Signal`-objekt (cachas per modul;
-    cachen rensas av :func:`upsert_field`). Live-avkodare kan alltså anropa detta
-    ofta utan att läsa filen varje gång."""
+    """Load a module's signals as :class:`Signal` objects (cached per module;
+    the cache is cleared by :func:`upsert_field`). Live decoders can therefore call this
+    often without reading the file every time."""
     if module not in _CACHE:
         _CACHE[module] = [_record_to_signal(r) for r in load_records(module)]
     return _CACHE[module]
 
 
 def upsert_field(module: str, record: dict) -> None:
-    """Skriv en bekräftad/kandidat-mappning till storen (write-back).
+    """Write a confirmed/candidate mapping to the store (write-back).
 
-    Ersätter en befintlig post med samma ``(lid, offset, name)``, annars append.
-    Default ``confidence="kandidat"``. Atomär omskrivning (temp + rename) så filen
-    aldrig blir halvskriven."""
+    Replaces an existing record with the same ``(lid, offset, name)``, otherwise appends.
+    Default ``confidence="kandidat"``. Atomic rewrite (temp + rename) so the file
+    never ends up half-written."""
     def _norm_lid(v) -> str:
         return f"{(int(v, 16) if isinstance(v, str) else int(v)):02X}"
 
@@ -160,7 +160,7 @@ def upsert_field(module: str, record: dict) -> None:
             json.dump(rows, f, ensure_ascii=False, indent=2)
             f.write("\n")
         os.replace(tmp, p)
-        _CACHE.pop(module, None)  # invalidera så nästa load ser den nya posten
+        _CACHE.pop(module, None)  # invalidate so the next load sees the new record
     finally:
         if os.path.exists(tmp):
             os.remove(tmp)

@@ -1,10 +1,10 @@
-"""Tester för capture-parsningen (protokollbibliotekets grund)."""
+"""Tests for the capture parsing (the foundation of the protocol library)."""
 from d2diag.sniff import capture
 from d2diag.sniff.library import build_library
 
 
 def test_split_frames_validates_checksum():
-    # 02 21 09 2c = giltig (02+21+09=2c); följt av svaret 04 61 09 02 fa 6a
+    # 02 21 09 2c = valid (02+21+09=2c); followed by the response 04 61 09 02 fa 6a
     b = [int(x, 16) for x in "02 21 09 2c 04 61 09 02 fa 6a".split()]
     frames, consumed = capture.split_frames(b)
     assert consumed == len(b) and len(frames) == 2
@@ -13,7 +13,7 @@ def test_split_frames_validates_checksum():
 
 
 def test_split_frames_rejects_bad_checksum():
-    frames, consumed = capture.split_frames([0x02, 0x21, 0x09, 0xff])  # fel cs
+    frames, consumed = capture.split_frames([0x02, 0x21, 0x09, 0xff])  # wrong cs
     assert frames == [] and consumed == 0
 
 
@@ -27,7 +27,7 @@ def test_kwp_transactions_pairs_req_resp(tmp_path):
     log = tmp_path / "c.log"
     log.write_text(
         "=== SESSION ===\n"
-        "[1] 81 13 f7 81 0c\n"                       # TD5 fast init → modul=td5
+        "[1] 81 13 f7 81 0c\n"                       # TD5 fast init → module=td5
         ">>> read fuelling\n"
         "[2] 02 21 09 2c 04 61 09 02 fa 6a\n",       # 21 09 → 61 09 02 fa
         encoding="utf-8",
@@ -44,6 +44,6 @@ def test_build_library_merges_auto_and_known(tmp_path):
     log.write_text("[1] 81 13 f7 81 0c\n[2] 02 21 09 2c 04 61 09 02 fa 6a\n", encoding="utf-8")
     lib = build_library([str(log)])
     assert "td5" in lib["modules"] and lib["modules"]["td5"]["transactions"]
-    # curerade icke-KWP-fakta finns med
+    # curated non-KWP facts are included
     assert lib["modules"]["bcu"]["eka_read"] == "21 cc"
     assert lib["modules"]["autobox"]["functions"]["read_faults"] == "72 05 04 00 73"

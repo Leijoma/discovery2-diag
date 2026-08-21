@@ -1,12 +1,12 @@
-"""SerialTransport — bytes över en seriell K-Line-adapter (USB KKL / FTDI).
+"""SerialTransport — bytes over a serial K-Line adapter (USB KKL / FTDI).
 
-Detta är den *primära* transporten. Biblioteket körs på Raspberry Pi:n där
-KKL-kabeln sitter, så den seriella porten är lokal och den tidskänsliga
-K-Line-trafiken slipper ett nätverkshopp.
+This is the *primary* transport. The library runs on the Raspberry Pi where
+the KKL cable sits, so the serial port is local and the time-sensitive
+K-Line traffic avoids a network hop.
 
-Test utan hårdvara: använd url ``loop://`` (pyserials inbyggda ekoport), eller
-``socket://host:port``. ``serial_for_url`` hanterar både riktiga portar och
-test-url:er, så samma kod testas och körs.
+Testing without hardware: use the url ``loop://`` (pyserial's built-in echo port), or
+``socket://host:port``. ``serial_for_url`` handles both real ports and
+test urls, so the same code is tested and run.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import serial  # pyserial
 
 from .base import Transport
 
-# KWP2000 över K-Line kör 10400 baud, 8N1.
+# KWP2000 over K-Line runs 10400 baud, 8N1.
 DEFAULT_URL = "/dev/ttyUSB0"
 DEFAULT_BAUDRATE = 10400
 
@@ -66,12 +66,12 @@ class SerialTransport(Transport):
         return ser.read(size)
 
     # ------------------------------------------------------------------ #
-    # Seriell lågnivåkontroll som K-Line-lagret (nästa steg) behöver.
+    # Serial low-level control that the K-Line layer (next step) needs.
     #
-    # Transport-kontraktet är medvetet rent (bara send/receive). Men K-Line
-    # fast init och byte-timing kräver seriellt specifika grepp — att hålla
-    # linjen låg, byta baudrate, tömma buffertar. De exponeras HÄR och får
-    # användas ENBART av K-Line-lagret, aldrig av KWP2000/Td5.
+    # The Transport contract is deliberately clean (send/receive only). But K-Line
+    # fast init and byte timing require serial-specific tricks — holding
+    # the line low, changing the baudrate, flushing buffers. They are exposed HERE and may
+    # be used ONLY by the K-Line layer, never by KWP2000/Td5.
     # ------------------------------------------------------------------ #
     @property
     def baudrate(self) -> int:
@@ -84,10 +84,10 @@ class SerialTransport(Transport):
             self._ser.baudrate = value
 
     def send_break(self, duration: float = 0.025) -> None:
-        """Håll K-Line låg i ``duration`` sekunder via UART-break.
+        """Hold K-Line low for ``duration`` seconds via a UART break.
 
-        OBS: break-längden styrs av OS-schemaläggaren och jittrar på icke-realtids-
-        OS. Föredra :meth:`fast_init_low` för deterministisk init-puls.
+        NOTE: the break length is controlled by the OS scheduler and jitters on non-real-time
+        OSes. Prefer :meth:`fast_init_low` for a deterministic init pulse.
         """
         ser = self._require_open()
         ser.break_condition = True
@@ -95,58 +95,58 @@ class SerialTransport(Transport):
         ser.break_condition = False
 
     def fast_init_low(self, low_seconds: float = 0.025) -> float:
-        """Deterministisk låg-puls för ISO 14230 fast init — utan OS-timad break.
+        """Deterministic low pulse for ISO 14230 fast init — without an OS-timed break.
 
-        Sänk baudraten och skicka EN 0x00-byte: startbit + 8 nollor = 9 låga bitar
-        i rad. Pulslängden bestäms av UART:ens bitklocka (hårdvara), inte av OS:ets
-        schemaläggare, så den är stabil även över USB. 9 bitar / ``low_seconds``
-        ger baudraten (≈360 baud för 25 ms).
+        Lower the baudrate and send ONE 0x00 byte: start bit + 8 zeros = 9 low bits
+        in a row. The pulse length is set by the UART's bit clock (hardware), not by the OS
+        scheduler, so it is stable even over USB. 9 bits / ``low_seconds``
+        gives the baudrate (≈360 baud for 25 ms).
 
-        **Returnerar hur länge linjen redan varit HÖG när vi kommer tillbaka.**
-        UART-ramen avslutas med en stoppbit, som är hög — vid 360 baud är den
-        ~2,8 ms lång, och ``flush()`` väntar tills den sänts. TiniH har alltså redan
-        börjat innan anroparen hinner sova. Utan den här kompensationen blir den
-        verkliga höga perioden 25 + 2,8 ms i stället för 25 (påpekat av extern
-        granskning 2026-08-19).
+        **Returns how long the line has already been HIGH when we return.**
+        The UART frame ends with a stop bit, which is high — at 360 baud it is
+        ~2.8 ms long, and ``flush()`` waits until it has been sent. TiniH has therefore already
+        begun before the caller gets to sleep. Without this compensation the
+        real high period becomes 25 + 2.8 ms instead of 25 (pointed out by an external
+        review 2026-08-19).
         """
         ser = self._require_open()
         baud = max(1, round(9 / low_seconds))
 
-        # ⚠️ FTDI på LINUX (Raspberry Pi) klarar inte en så låg baudrate som 360.
-        # Kärnan/ftdi_sio klampar den, så 0x00-byten skickas på ~4500 baud och
-        # låg-pulsen blir bara ~2 ms i stället för 25 → ECU:n vaknar aldrig.
-        # Mätt i bilen 2026-08-21: baud-tricket gav low_ms 1.9–2.8 och ALDRIG C1;
-        # den OS-timade breaken gav low_ms 26 ms och C1 på första försöket.
-        # macOS klarar 360 baud fint, så där behåller vi den deterministiska
-        # baud-pulsen (mindre schemaläggar-jitter). loop:// (test) klarar båda.
+        # ⚠️ FTDI on LINUX (Raspberry Pi) can't handle a baudrate as low as 360.
+        # The kernel/ftdi_sio clamps it, so the 0x00 byte is sent at ~4500 baud and
+        # the low pulse becomes only ~2 ms instead of 25 → the ECU never wakes up.
+        # Measured in the car 2026-08-21: the baud trick gave low_ms 1.9–2.8 and NEVER C1;
+        # the OS-timed break gave low_ms 26 ms and C1 on the first attempt.
+        # macOS handles 360 baud fine, so there we keep the deterministic
+        # baud pulse (less scheduler jitter). loop:// (test) handles both.
         if sys.platform.startswith("linux"):
             self.send_break(low_seconds)
-            return 0.0  # ingen stoppbit att kompensera för — breaken är ren låg tid
+            return 0.0  # no stop bit to compensate for — the break is pure low time
 
         original = ser.baudrate
         try:
             ser.baudrate = baud
             ser.write(b"\x00")
-            ser.flush()  # blockera tills byten är fysiskt utsänd (inkl. stoppbiten)
+            ser.flush()  # block until the byte is physically sent (incl. the stop bit)
         finally:
             ser.baudrate = original
-        # Allt HÄRIFRÅN är tid då linjen redan är hög: stoppbiten plus det som
-        # baudrate-återställning och buffertrensning kostar (mätt 10–20 ms över USB).
-        # Räknas det inte med blir TiniH systematiskt för lång — och det var precis
-        # vad som höll oss utanför SLABS toleransfönster.
+        # Everything FROM HERE is time when the line is already high: the stop bit plus what
+        # the baudrate reset and buffer flush cost (measured 10–20 ms over USB).
+        # If it's not counted, TiniH becomes systematically too long — and that was exactly
+        # what kept us outside the SLABS tolerance window.
         t_high_started = time.perf_counter() - 1.0 / baud
-        ser.reset_input_buffer()  # kasta ekot av puls-byten
+        ser.reset_input_buffer()  # discard the echo of the pulse byte
         return time.perf_counter() - t_high_started
 
     @staticmethod
     def slow_init_bits(address: int) -> "list[int]":
-        """5-baud init-ram för ``address``: startbit(0), **8 databitar LSB-först**,
-        stoppbit(1) — 8N1, ingen paritet (KWP2000 slow init). Ren + testbar.
+        """5-baud init frame for ``address``: start bit(0), **8 data bits LSB-first**,
+        stop bit(1) — 8N1, no parity (KWP2000 slow init). Pure + testable.
 
-        RÄTTAT 2026-08-04: tidigare 7 databitar + felräknad "udda paritet" gav fel
-        byte för adresser med udda antal ettor (0x29→0xA9, 0x34→0xB4) — vilket hade
-        fått en slow-init-skanning att missa just de intressanta kandidaterna. 0x33
-        råkade bli rätt och dolde buggen."""
+        FIXED 2026-08-04: the previous 7 data bits + a miscalculated "odd parity" gave the wrong
+        byte for addresses with an odd number of ones (0x29→0xA9, 0x34→0xB4) — which would have
+        made a slow-init scan miss exactly the interesting candidates. 0x33
+        happened to come out right and hid the bug."""
         bits = [0]
         for i in range(8):
             bits.append((address >> i) & 1)
@@ -155,7 +155,7 @@ class SerialTransport(Transport):
 
     @staticmethod
     def parse_slow_init(raw: bytes) -> "tuple[int, int] | None":
-        """Plocka (KW1, KW2) ur ett slow-init-svar som börjar med 0x55. Ren + testbar."""
+        """Pick (KW1, KW2) out of a slow-init reply that starts with 0x55. Pure + testable."""
         if len(raw) >= 3 and raw[0] == 0x55:
             return raw[1], raw[2]
         return None
@@ -167,36 +167,36 @@ class SerialTransport(Transport):
         w4: float = 0.03,
         read_timeout: float = 0.5,
     ) -> bytes:
-        """ISO 9141 / ISO 14230 **5-baud slow init** — full handskakning.
+        """ISO 9141 / ISO 14230 **5-baud slow init** — full handshake.
 
-        1. Skicka adressbyten vid 5 baud genom att bit-banga break-villkoret
-           (linjen låg = break på, hög = break av; 200 ms/bit; OS-timing duger).
-        2. Läs ECU:ns ``0x55`` sync + KW1 + KW2 vid ordinarie baud.
-        3. Vänta W4 och skicka ``~KW2`` (invers). 4. Läs ``~address``-bekräftelsen.
+        1. Send the address byte at 5 baud by bit-banging the break condition
+           (line low = break on, high = break off; 200 ms/bit; OS timing is good enough).
+        2. Read the ECU's ``0x55`` sync + KW1 + KW2 at the regular baud.
+        3. Wait W4 and send ``~KW2`` (inverse). 4. Read the ``~address`` confirmation.
 
-        Returnerar ALLA mottagna bytes (sync + keybytes [+ eko + ~address]). Tomt
-        eller utan ledande 0x55 = ingen modul svarade på adressen. Använd
-        :meth:`parse_slow_init` för att plocka ut KW1/KW2.
+        Returns ALL received bytes (sync + key bytes [+ echo + ~address]). Empty
+        or without a leading 0x55 = no module answered on the address. Use
+        :meth:`parse_slow_init` to pick out KW1/KW2.
         """
         ser = self._require_open()
         bits = self.slow_init_bits(address)
-        ser.break_condition = False  # linjen idle (hög) före start
+        ser.break_condition = False  # line idle (high) before start
         ser.reset_input_buffer()
         time.sleep(bit_seconds)
         for bit in bits:
-            ser.break_condition = bit == 0  # 0 → break (låg), 1 → idle (hög)
+            ser.break_condition = bit == 0  # 0 → break (low), 1 → idle (high)
             time.sleep(bit_seconds)
-        ser.break_condition = False  # tillbaka till idle
-        ser.reset_input_buffer()  # kasta RX-skräp från vår egen bit-bang
+        ser.break_condition = False  # back to idle
+        ser.reset_input_buffer()  # discard RX garbage from our own bit-bang
         ser.timeout = read_timeout
         got = bytearray(ser.read(3))  # 0x55, KW1, KW2
         if len(got) >= 3 and got[0] == 0x55:
             kw2 = got[2]
             time.sleep(w4)
             ser.reset_input_buffer()
-            ser.write(bytes([(~kw2) & 0xFF]))  # ~KW2 tillbaka till ECU:n
+            ser.write(bytes([(~kw2) & 0xFF]))  # ~KW2 back to the ECU
             ser.flush()
-            got += ser.read(3)  # halvduplex-eko + ~address-bekräftelse
+            got += ser.read(3)  # half-duplex echo + ~address confirmation
         return bytes(got)
 
     def reset_input_buffer(self) -> None:
@@ -204,5 +204,5 @@ class SerialTransport(Transport):
 
     def _require_open(self) -> "serial.SerialBase":
         if not self._is_open or self._ser is None:
-            raise RuntimeError("SerialTransport är inte öppen — anropa open() först")
+            raise RuntimeError("SerialTransport is not open — call open() first")
         return self._ser

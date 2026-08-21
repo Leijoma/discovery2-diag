@@ -1,13 +1,14 @@
-"""Loggning av datasnapshots till fil (JSONL) för efteranalys.
+"""Logging of data snapshots to file (JSONL) for later analysis.
 
-En rad = ett JSON-objekt med tidsstämpel, status, signaler (namn→värde) och
-felkoder. Skrivningen throttlas (default var 2 s) men sker **alltid direkt när
-felkodsuppsättningen ändras** — så intermittenta fel (som kommer/går) fångas med
-exakt tidpunkt. Bra för att analysera en körning efteråt.
+One line = one JSON object with timestamp, status, signals (name→value) and
+fault codes. Writes are throttled (default every 2 s) but happen **always
+immediately when the set of fault codes changes** — so intermittent faults
+(coming/going) are captured with the exact time. Good for analysing a drive
+afterwards.
 
-:class:`CsvLogger` är den **användarvända** loggen: rå CSV av live-data (en kolumn
-per signal, enhet i kolumnnamnet) så man kan följa temperaturer, tryck, gaspedal
-m.m. i Excel/Sheets under en körning.
+:class:`CsvLogger` is the **user-facing** log: raw CSV of live data (one column
+per signal, unit in the column name) so you can follow temperatures, pressures,
+accelerator etc. in Excel/Sheets during a drive.
 """
 from __future__ import annotations
 
@@ -30,7 +31,7 @@ class SnapshotLogger:
             os.makedirs(directory, exist_ok=True)
 
     def log(self, snapshot: "dict") -> None:
-        """Skriv en rad när felkoder ELLER avvikelser ändras, annars throttlat."""
+        """Write a line when fault codes OR anomalies change, otherwise throttled."""
         faults = snapshot.get("faults", [])
         signals = snapshot.get("signals", {})
         anomalies = sorted(k for k, sg in signals.items() if sg.get("s") in ("low", "high"))
@@ -90,8 +91,8 @@ class CsvLogger:
         signals = snapshot.get("signals") or {}
         module = snapshot.get("module")
         if self._columns is not None and module != self._module:
-            # Modulbyte: de låsta kolumnerna tillhör den gamla modulen, så varje rad
-            # skulle bli tom. Rotera till en egen fil per modul i stället.
+            # Module switch: the locked columns belong to the old module, so every row
+            # would be empty. Rotate to a separate file per module instead.
             self._rotate(module)
         if self._columns is None:
             if not signals:
@@ -109,12 +110,12 @@ class CsvLogger:
         with open(self.path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(line)
             f.flush()
-            os.fsync(f.fileno())  # varje rad durabelt på SD-kortet (bilen bryter ström abrupt)
+            os.fsync(f.fileno())  # each row durable on the SD card (the car cuts power abruptly)
         self.rows += 1
 
     def _rotate(self, module: "str | None") -> None:
-        """Börja en ny fil för en ny modul: ``…-<modul>.csv``. Radräknaren fortsätter
-        (den räknar loggade rader, inte rader per fil)."""
+        """Start a new file for a new module: ``…-<module>.csv``. The row counter
+        continues (it counts logged rows, not rows per file)."""
         base = self.path[:-4] if self.path.endswith(".csv") else self.path
         base = base.rsplit("-", 1)[0] if self._module and base.endswith(f"-{self._module}") else base
         self.path = f"{base}-{module or 'unknown'}.csv"

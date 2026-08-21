@@ -1,21 +1,21 @@
-"""Auto Gearbox GS8.87.0 (Bosch, ZF4HP22-24) reference tool-meny + vår täckning.
+"""Auto Gearbox GS8.87.0 (Bosch, ZF4HP22-24) reference tool menu + our coverage.
 
-status: "ok" (bekräftat i vår kod), "maybe" (facit känd men rå ej fångad), "todo".
-Menyordning bevarad exakt från reference tool (se `references/reference_tool_master_menu.md`,
-avsnitt Auto Gearbox). **Eget protokoll (`72`-ramat)** — sniffat 2026-08-10:
-reference tool sa "unable to perform the function" MEN ECU:n SVARAR med datablock.
-Funktions-ID:n belagda (nedan); innehållstolkning väntar på lyckad session.
-Felkodslistan i dicten (39 RAVE P-koder) är official + forumbekräftad.
+status: "ok" (confirmed in our code), "maybe" (reference known but raw not captured), "todo".
+Menu order preserved exactly from the reference tool (see `references/reference_tool_master_menu.md`,
+Auto Gearbox section). **Own protocol (`72`-framed)** — sniffed 2026-08-10:
+the reference tool said "unable to perform the function" BUT the ECU RESPONDS with a data block.
+Function IDs proven (below); content interpretation awaits a successful session.
+The fault code list in the dictionary (39 RAVE P-codes) is official + forum-confirmed.
 """
 
 AUTOBOX_MENU = [
-    {"cat": "Felkoder", "items": [
-        {"name": "Läs fel (Faults - Read)", "status": "maybe",
-         "ref": "cmd 72 05 04 00 73 belagt (ECU svarar 72 09 60 …); dicten 39 P-koder; innehåll TBD"},
-        {"name": "Radera fel (Faults - Clear)", "status": "maybe", "ref": "cmd 72 04 05 73 belagt"},
+    {"cat": "Fault codes", "items": [
+        {"name": "Read faults (Faults - Read)", "status": "maybe",
+         "ref": "cmd 72 05 04 00 73 proven (ECU responds 72 09 60 …); dictionary 39 P-codes; content TBD"},
+        {"name": "Clear faults (Faults - Clear)", "status": "maybe", "ref": "cmd 72 04 05 73 proven"},
     ]},
     {"cat": "Inputs — general (26)", "items": [
-        # inputs läses via 72 05 0B 00 (pressure) / 72 05 0B 03 (general); svar 72 16 60 … (bulk)
+        # inputs are read via 72 05 0B 00 (pressure) / 72 05 0B 03 (general); response 72 16 60 … (bulk)
 
         {"name": "1. Throttle position (%)", "status": "todo", "ref": ""},
         {"name": "2. Engine torque (%)", "status": "todo", "ref": ""},
@@ -44,12 +44,12 @@ AUTOBOX_MENU = [
         {"name": "25. Adaptive program 2", "status": "todo", "ref": ""},
         {"name": "26. Adaptive program 3", "status": "todo", "ref": ""},
     ]},
-    {"cat": "Outputs — tester ⚠️", "items": [
-        {"name": "Outputs (ej dokumenterade)", "status": "todo",
-         "ref": "meny ej transkriberad — screenshota/sniffa; ⚠️ solenoider"},
+    {"cat": "Outputs — tests ⚠️", "items": [
+        {"name": "Outputs (not documented)", "status": "todo",
+         "ref": "menu not transcribed — screenshot/sniff; ⚠️ solenoids"},
     ]},
     {"cat": "Utility", "items": [
-        {"name": "Utility (ej dokumenterade)", "status": "todo",
-         "ref": "adaptioner/reset — meny ej transkriberad; ⚠️ skriver"},
+        {"name": "Utility (not documented)", "status": "todo",
+         "ref": "adaptations/reset — menu not transcribed; ⚠️ writes"},
     ]},
 ]

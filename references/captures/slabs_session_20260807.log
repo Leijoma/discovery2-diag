@@ -1,10 +1,10 @@
 === SESSION 2026-08-07 14:50:04 — /dev/cu.usbserial-0001 ===
-# kline_sniff RX-only @10400 invert, GPIO16 ��� sander ALDRIG
->>> konnectar reference tool
+# kline_sniff RX-only @10400 invert, GPIO16 — NEVER transmits
+>>> connecting reference tool
 [    29326] 00
 [    29373] 81 29 f7 81 22
 >>> reading faluts
->>> tändning av fungerade ej
+>>> ignition off did not work
 [    54252] 00
 [    54309] 81 29 f7 81 22 00 03 c1 57 8f aa
 [    54479] 02 1a 8a a6
@@ -43,7 +43,7 @@
 [    82834] 01 3e 3f 00 01 7e 7f
 [    84029] 02 1a 8b a7 00 37 5a 8b 4b 52 54 45 34 39 42 30 00 30 30 30 30 30 30 30 30 00 48 44 54 45 31 36 41 30 00 45 42 54 45 38 37 41 30 00 43 44 54 45 39 31 41 30 00 4b 57 54 50 31 31 41 30 c2
 [    84145] 02 1a 8d a9
-[    84201] 00 13 5a 8d 53 41 4c 4c 54 47 4d 39 34 59 41 32 35 37 32 35 32 4c
+[    84201] 00 13 5a 8d 53 41 4c 4c 58 58 58 58 58 58 58 58 58 58 58 58 58 58
 [    84326] 02 21 46 69 00 04 61 46 78 76 99
 [    84442] 02 21 59 7c
 [    84480] 00 06 61 59 00 0f 0f 0f ed

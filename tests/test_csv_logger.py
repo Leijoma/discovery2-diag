@@ -75,10 +75,11 @@ def test_server_start_stop_csv_commands(tmp_path):
 
 
 def test_csv_commands_do_not_queue_behind_the_poller(tmp_path):
-    # CSV-start/stopp rör inte K-line och ska svara direkt. Köades de i pollertråden
-    # fick de vänta ut en pågående etablering (SLABS ≈ 20 s) och timeoutade på 8 s
-    # i UI:t — trots att de sedan lyckades. Här körs INGEN pollertråd: hade
-    # kommandot köats hade det timeoutat, nu svarar det inline.
+    # CSV start/stop does not touch K-line and should respond immediately. If they
+    # were queued on the poll thread they had to wait out an ongoing establishment
+    # (SLABS ≈ 20 s) and timed out at 8 s in the UI — even though they then succeeded.
+    # Here NO poll thread runs: had the command been queued it would have timed out;
+    # now it responds inline.
     import time as _time
 
     from d2diag.web import MockDataSource
@@ -90,17 +91,18 @@ def test_csv_commands_do_not_queue_behind_the_poller(tmp_path):
         r = srv.enqueue_command({"action": "start_csv"})
         elapsed = _time.monotonic() - t0
         assert r["ok"] and srv._csv is not None
-        assert elapsed < 1.0                      # inte 8 s timeout
-        assert srv._commands.empty()              # gick aldrig via kön
+        assert elapsed < 1.0                      # not an 8 s timeout
+        assert srv._commands.empty()              # never went through the queue
         assert srv.enqueue_command({"action": "stop_csv"})["ok"] and srv._csv is None
     finally:
         srv.server_close()
 
 
 def test_csv_rotates_to_a_new_file_on_module_switch(tmp_path):
-    # Kolumnerna låses vid första datan. Byter man modul tillhör de fel modul och
-    # varje rad blir tom — 446 rader TD5-kolumner utan ett enda höjdvärde
-    # (bilen 2026-08-19). Nu roteras filen istället, en per modul.
+    # The columns are locked at the first data. If you switch module they belong to
+    # the wrong module and every row goes empty — 446 rows of TD5 columns without a
+    # single height value (the car 2026-08-19). Now the file is rotated instead, one
+    # per module.
     from d2diag.web.logger import CsvLogger
 
     p = tmp_path / "livedata-20260819-101325.csv"
@@ -117,5 +119,5 @@ def test_csv_rotates_to_a_new_file_on_module_switch(tmp_path):
     motor_rows = pathlib.Path(first).read_text().strip().splitlines()
     slabs_rows = pathlib.Path(log.path).read_text().strip().splitlines()
     assert "rpm (rpm)" in motor_rows[0] and len(motor_rows) == 2
-    assert "height_left" in slabs_rows[0] and len(slabs_rows) == 3   # header + 2 rader
+    assert "height_left" in slabs_rows[0] and len(slabs_rows) == 3   # header + 2 rows
     assert "149" in slabs_rows[1] and "150" in slabs_rows[2]

@@ -12,7 +12,7 @@
       0,
       4800
     ],
-    "source": "fuelling verifierat mot bilen (RDL 016)"
+    "source": "fuelling verified against the car (RDL 016)"
   },
   {
     "name": "speed",
@@ -27,7 +27,7 @@
       0,
       200
     ],
-    "source": "fuelling verifierat mot bilen"
+    "source": "fuelling verified against the car"
   },
   {
     "name": "battery",
@@ -42,7 +42,7 @@
       11.5,
       15.5
     ],
-    "source": "u16/1000 V, verifierat mot bilen"
+    "source": "u16/1000 V, verified against the car"
   },
   {
     "name": "coolant_temp",
@@ -57,7 +57,7 @@
       -40,
       105
     ],
-    "source": "21 1A@0 u16/10−273.2; verifierat 2026-08-03 (59.2 °C)"
+    "source": "21 1A@0 u16/10−273.2; verified 2026-08-03 (59.2 °C)"
   },
   {
     "name": "air_temp",
@@ -72,7 +72,7 @@
       -30,
       80
     ],
-    "source": "21 1A@4, samma temp-skala"
+    "source": "21 1A@4, same temperature scale"
   },
   {
     "name": "ext_temp",
@@ -87,7 +87,7 @@
       -40,
       50
     ],
-    "source": "21 1A@8; extern temp-givare. Givaren finns INTE pa Td5-ECU:n (RDL016) → konstant 0x1088 = 150.0 °C, en spokavlasning. Bekraftat i bilen 2026-08-21: verklig utetemp ~17 °C (bilens egen kluster-givare via BCU), var 150 = falskt. Granser [-40,50] satta sa 150 flaggas suspect/overstruken. Vardet betyder inget."
+    "source": "21 1A@8; external temperature sensor. The sensor is NOT present on the Td5 ECU (RDL016) → constant 0x1088 = 150.0 °C, a phantom reading. Confirmed in the car 2026-08-21: actual outside temp ~17 °C (the car's own cluster sensor via BCU), so 150 = false. Limits [-40,50] set so 150 is flagged suspect/struck-through. The value means nothing."
   },
   {
     "name": "fuel_temp",
@@ -102,7 +102,7 @@
       -30,
       90
     ],
-    "source": "21 1A@12, samma temp-skala"
+    "source": "21 1A@12, same temperature scale"
   },
   {
     "name": "accel_way1",
@@ -117,7 +117,7 @@
       0.0,
       5.1
     ],
-    "source": "21 1B@0 u16/1000 V. Track 1: ~0,3–0,5 V i vila → ~4,7 V full gas. Bekräftat mot bilen."
+    "source": "21 1B@0 u16/1000 V. Track 1: ~0.3–0.5 V at rest → ~4.7 V full throttle. Confirmed against the car."
   },
   {
     "name": "accel_way2",
@@ -132,7 +132,7 @@
       0.0,
       5.1
     ],
-    "source": "21 1B@2 u16/1000 V. Track 2 rör sig SPEGELVÄNT mot track 1: ~4,7 V i vila → 0,3 V vid full gas. Bekräftat mot bilen (way1 låg medan way2 hög)."
+    "source": "21 1B@2 u16/1000 V. Track 2 moves MIRRORED to track 1: ~4.7 V at rest → 0.3 V at full throttle. Confirmed against the car (way1 low while way2 high)."
   },
   {
     "name": "accel_way3",
@@ -147,7 +147,7 @@
       0.0,
       5.1
     ],
-    "source": "21 1B@4 u16/1000 V; gaspedal track 3. BELAGT i bilen 2026-08-20: rör sig 0→2,23 V vid pådrag → bilen är Euro 3 (NNN). Speglar way1/way2."
+    "source": "21 1B@4 u16/1000 V; accelerator pedal track 3. PROVEN in the car 2026-08-20: moves 0→2.23 V on application → the car is Euro 3 (NNN). Mirrors way1/way2."
   },
   {
     "name": "accel_supply",
@@ -162,7 +162,7 @@
       4.9,
       5.1
     ],
-    "source": "21 1B@6 u16/1000 V (5V-referens). Ska ligga stenhårt 5,0 V ±0,1; dipp = kortslutning i pedalkablaget. Verifierat 5,01 V."
+    "source": "21 1B@6 u16/1000 V (5V reference). Should sit rock-solid at 5.0 V ±0.1; a dip = short in the pedal wiring. Verified 5.01 V."
   },
   {
     "name": "manifold_press",
@@ -177,7 +177,7 @@
       0.8,
       2.6
     ],
-    "source": "21 1C@0 u16/10000 bar = TURBO/laddtryck (reference tool 'Turbo Pressure'). Tomgång ~1,0 bar (atmosfär); full last 2,0–2,2 bar absolut; ECU:ns overboost-cut > 2,42 bar. BEKRÄFTAT 2026-08-03 (1,0→1,2 bar)."
+    "source": "21 1C@0 u16/10000 bar = TURBO/boost pressure (reference tool 'Turbo Pressure'). Idle ~1.0 bar (atmospheric); full load 2.0–2.2 bar absolute; the ECU's overboost cut > 2.42 bar. CONFIRMED 2026-08-03 (1.0→1.2 bar)."
   },
   {
     "name": "maf_raw",
@@ -189,7 +189,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 1C@4. INTE luftmassa — biltest 2026-08-20: läser 57 vid tändning-på och 0 hela tiden motorn GÅR (tvärtemot MAF). Min tidigare 'Air Flow'-omklassning var FEL. Okänt statusfält. Riktiga MAF-LID:en är ÄNNU OMAPPAD — kräver råsvep av LID:er medan man gasar (differential)."
+    "source": "21 1C@4. NOT air mass — car test 2026-08-20: reads 57 at ignition-on and 0 the whole time the engine is RUNNING (opposite of MAF). My earlier 'Air Flow' reclassification was WRONG. Unknown status field. The real MAF LID is STILL UNMAPPED — requires a raw sweep of LIDs while blipping the throttle (differential)."
   },
   {
     "name": "rpm_error",
@@ -204,7 +204,7 @@
       -300,
       300
     ],
-    "source": "21 21@0 s16; tomgångsregulatorns avvikelse (mål − faktisk). BELAGT: ≈0 vid tomgång (bilen 2026-08-20: snitt −4 vid 700–900 rpm), växer med varvtalet vid pådrag (~2150 vid 3000 rpm) — förväntat, bara meningsfullt vid TOMGÅNG. Ej fel."
+    "source": "21 21@0 s16; idle governor deviation (target − actual). PROVEN: ≈0 at idle (car 2026-08-20: average −4 at 700–900 rpm), grows with engine speed under load (~2150 at 3000 rpm) — expected, only meaningful at IDLE. Not a fault."
   },
   {
     "name": "ambient_press_1",
@@ -249,7 +249,7 @@
       -12,
       12
     ],
-    "source": "21 40@0 s16; cylinderbalans 1. BELAGT (labeled_captures 40='korrekt'); värden −6…+2 över captures."
+    "source": "21 40@0 s16; cylinder balance 1. PROVEN (labeled_captures 40='correct'); values −6…+2 across captures."
   },
   {
     "name": "balance_2",
@@ -264,7 +264,7 @@
       -12,
       12
     ],
-    "source": "21 40@2 s16; cylinderbalans 2. BELAGT (labeled_captures 40='korrekt'); värden −6…+2 över captures."
+    "source": "21 40@2 s16; cylinder balance 2. PROVEN (labeled_captures 40='correct'); values −6…+2 across captures."
   },
   {
     "name": "balance_3",
@@ -279,7 +279,7 @@
       -12,
       12
     ],
-    "source": "21 40@4 s16; cylinderbalans 3. BELAGT (labeled_captures 40='korrekt'); värden −6…+2 över captures."
+    "source": "21 40@4 s16; cylinder balance 3. PROVEN (labeled_captures 40='correct'); values −6…+2 across captures."
   },
   {
     "name": "balance_4",
@@ -294,7 +294,7 @@
       -12,
       12
     ],
-    "source": "21 40@6 s16; cylinderbalans 4. BELAGT (labeled_captures 40='korrekt'); värden −6…+2 över captures."
+    "source": "21 40@6 s16; cylinder balance 4. PROVEN (labeled_captures 40='correct'); values −6…+2 across captures."
   },
   {
     "name": "balance_5",
@@ -309,7 +309,7 @@
       -12,
       12
     ],
-    "source": "21 40@8 s16; cylinderbalans 5. BELAGT (labeled_captures 40='korrekt'); värden −6…+2 över captures."
+    "source": "21 40@8 s16; cylinder balance 5. PROVEN (labeled_captures 40='correct'); values −6…+2 across captures."
   },
   {
     "name": "maf",
@@ -324,7 +324,7 @@
       0,
       650
     ],
-    "source": "21 1D byte5 u8 kg/hr — MAF (luftmassa). HITTAD via lid_sweep 2026-08-21: tomgang 69, 2000 rpm 184, foljer belastning (2.7x). Matchar publicerade Td5 reference tool-intervall (tomgang 55-65, 2000 rpm 185-200; overboost-cut ~618-650). OBS: matchat mot forum-intervall, ej reference tool-avlast pa RDL016 sjalv. Givaren FRISK (resistans pin1-2=17k OK, 12V pa pin3, live foljer rpm)."
+    "source": "21 1D byte5 u8 kg/hr — MAF (air mass). FOUND via lid_sweep 2026-08-21: idle 69, 2000 rpm 184, follows load (2.7x). Matches published Td5 reference tool ranges (idle 55-65, 2000 rpm 185-200; overboost-cut ~618-650). NOTE: matched against forum ranges, not read off a reference tool on RDL016 itself. The sensor is HEALTHY (resistance pin1-2=17k OK, 12V on pin3, live follows rpm)."
   },
   {
     "name": "injection_qty",
@@ -339,6 +339,6 @@
       0,
       90
     ],
-    "source": "21 1D@6 u16 x0.01 mg/stroke = INJEKTIONSMANGD. BELAGT (falt) via bilprov 2026-08-21 med avsiktliga overrun-lyft: tomgang 11.1, last 23.9, OVERRUN 4.7 mg/stroke (faller under tomgang = branslecut) = entydig fuelling-signatur. Ger rimlig live-ekonomi ~7.6 L/100km. Ekaitza kallar 21 1D 'fuel-usage'. OBS: exakta SKALAN (x0.01) ar matchad mot SimonRafferty-referens, ej korslast mot fabriksverktyg pa RDL016 — plausibel men finjusterbar. Driver bransledatorn (fuel_rate/economy, kandidat)."
+    "source": "21 1D@6 u16 x0.01 mg/stroke = INJECTION QUANTITY. PROVEN (field) via car test 2026-08-21 with deliberate overrun lifts: idle 11.1, load 23.9, OVERRUN 4.7 mg/stroke (falls below idle = fuel cut) = unambiguous fuelling signature. Gives a plausible live economy ~7.6 L/100km. Ekaitza calls 21 1D 'fuel-usage'. NOTE: the exact SCALE (x0.01) is matched against the SimonRafferty reference, not cross-checked against a factory tool on RDL016 — plausible but fine-tunable. Drives the trip computer (fuel_rate/economy, candidate)."
   }
 ]

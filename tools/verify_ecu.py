@@ -1,14 +1,14 @@
-"""Aktiv READ-ONLY-verifiering mot en ECU (kräver SÄNDANDE kabel).
+"""Active READ-ONLY verification against an ECU (requires a TRANSMITTING cable).
 
-Etablerar session, läser felkoder och live-data — **skriver ingenting** (utom
-valfri summer bakom ``--buzzer`` + bekräftelse). Verifierar att vårt d2diag-lager
-pratar rätt med bilen och att avkodningen stämmer.
+Establishes a session, reads fault codes and live data — **writes nothing** (except
+an optional buzzer behind ``--buzzer`` + confirmation). Verifies that our d2diag layer
+talks to the car correctly and that the decoding is right.
 
     PYTHONPATH=src python3 tools/verify_ecu.py td5   /dev/cu.usbserial-XXXX
     PYTHONPATH=src python3 tools/verify_ecu.py slabs /dev/cu.usbserial-XXXX
     PYTHONPATH=src python3 tools/verify_ecu.py slabs /dev/cu.usbserial-XXXX --buzzer
 
-Tändning PÅ, bilen stillastående. SLABS-comms dör över ~8–20 km/h.
+Ignition ON, car stationary. SLABS comms die above ~8–20 km/h.
 """
 import argparse
 import os

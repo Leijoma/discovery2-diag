@@ -1,4 +1,4 @@
-"""Tester för KWP2000-lagret mot en simulerad ECU (ingen hårdvara)."""
+"""Tests for the KWP2000 layer against a simulated ECU (no hardware)."""
 import pytest
 
 from d2diag.kline import KLine, encode
@@ -48,4 +48,4 @@ def test_response_pending_then_final_without_resend():
     ecu, kwp = _stack({_frame(b"\x21\x08"): pending + final})
     with kwp:
         assert kwp.read_local_identifier(0x08) == b"\x11\x22"
-    assert len(ecu.sent) == 1  # bara EN förfrågan skickades
+    assert len(ecu.sent) == 1  # only ONE request was sent

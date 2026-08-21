@@ -1,11 +1,11 @@
-"""K-Line-lagret: fast init, ram-I/O, eko-hantering, timeout och retries.
+"""The K-Line layer: fast init, frame I/O, echo handling, timeout and retries.
 
-Ligger ovanpå en :class:`~d2diag.transport.base.Transport` och under KWP2000.
-K-Line är halv-duplex: varje sänd byte ekar tillbaka och sväljs innan svaret läses.
+Sits on top of a :class:`~d2diag.transport.base.Transport` and below KWP2000.
+K-Line is half-duplex: every sent byte echoes back and is swallowed before the reply is read.
 
-Td5-flödet: ``fast_init()`` skickar den *adresserade* StartCommunication-ramen;
-därefter körs sessionen med *oadresserade* ramar via ``request()``. ``read_frame``
-hanterar båda formaten automatiskt (avläser formatbytens adressbitar).
+Td5 flow: ``fast_init()`` sends the *addressed* StartCommunication frame;
+after that the session runs with *unaddressed* frames via ``request()``. ``read_frame``
+handles both formats automatically (reads the address bits of the format byte).
 """
 from __future__ import annotations
 
@@ -24,26 +24,26 @@ from .frame import (
 
 DEFAULT_START_COMMUNICATION = b"\x81"
 
-# ISO 14230-2 fast init: linjen låg 25 ms (TiniL), sedan hög 25 ms, sedan
+# ISO 14230-2 fast init: line low 25 ms (TiniL), then high 25 ms, then
 # StartCommunication.
 _FAST_INIT_LOW = 0.025
 _FAST_INIT_HIGH = 0.025
 
 
 def _precise_wait(seconds: float) -> None:
-    """Vänta ``seconds`` med sub-millisekundsprecision.
+    """Wait ``seconds`` with sub-millisecond precision.
 
-    ``time.sleep`` överskjuter: uppmätt på macOS ger ``sleep(25 ms)`` i själva
-    verket 25,3–32,0 ms (median 29,1). För TiniH, som ISO 14230-2 sätter till
-    25 ms ± 1, är det för trubbigt. Vi sover därför bara fram till 2 ms före målet
-    och snurrar sista biten — 25 ms brända CPU-cykler en gång per anslutningsförsök
-    är ett billigt pris för en puls inom toleransen.
+    ``time.sleep`` overshoots: measured on macOS, ``sleep(25 ms)`` actually
+    gives 25.3–32.0 ms (median 29.1). For TiniH, which ISO 14230-2 sets to
+    25 ms ± 1, that is too blunt. We therefore sleep only up to 2 ms before the target
+    and spin the last bit — 25 ms of burned CPU cycles once per connection attempt
+    is a cheap price for a pulse within tolerance.
     """
     if seconds <= 0:
         return
     deadline = time.perf_counter() + seconds
-    # Grovsömn bara för långa väntor: en sleep() kan överskjuta 5–7 ms, så för
-    # init-pulsens 25 ms skulle den ensam missa målet. Snurra hela vägen i stället.
+    # Coarse sleep only for long waits: a sleep() can overshoot 5–7 ms, so for
+    # the init pulse's 25 ms it alone would miss the target. Spin the whole way instead.
     coarse = seconds - 0.050
     if coarse > 0:
         time.sleep(coarse)
@@ -77,26 +77,26 @@ class KLine:
         self._source = source
         self._timeout = timeout
         self._echo = echo
-        # P4 — inter-byte-tid i testarens förfrågan. ISO 14230-2 anger 5–20 ms, och
-        # muki01-referensen (bekräftad korrekt) skickar en byte i taget med 5 ms
-        # emellan. Vi har alltid skickat hela ramen i ett svep (~1 ms/byte vid
-        # 10400 baud), vilket en strikt ECU kan vägra parsa. 0.0 = gammalt beteende.
+        # P4 — inter-byte time in the tester's request. ISO 14230-2 specifies 5–20 ms, and
+        # the muki01 reference (confirmed correct) sends one byte at a time with 5 ms
+        # in between. We have always sent the whole frame in one sweep (~1 ms/byte at
+        # 10400 baud), which a strict ECU may refuse to parse. 0.0 = old behaviour.
         self.write_gap = write_gap
-        # ISO 14230-2 fast init: TiniL = 25 ms ± 1 låg, sedan 25 ms ± 1 hög, sedan
-        # StartCommunication. Låg-pulsen är hårdvarutimad (baud-drop), men den HÖGA
-        # perioden är time.sleep() och det som händer efteråt — flush + USB-write —
-        # ligger utanför vår kontroll. En FTDI/CH340 buffrar dessutom med sin
-        # latency timer (default 16 ms), så den faktiska tiden till första byten kan
-        # bli 25–45 ms i stället för 25. Därav justerbart, och mätt: se last_pulse.
+        # ISO 14230-2 fast init: TiniL = 25 ms ± 1 low, then 25 ms ± 1 high, then
+        # StartCommunication. The low pulse is hardware-timed (baud drop), but the HIGH
+        # period is time.sleep() and what happens afterwards — flush + USB write —
+        # is outside our control. An FTDI/CH340 also buffers with its
+        # latency timer (default 16 ms), so the actual time to the first byte can
+        # become 25–45 ms instead of 25. Hence adjustable, and measured: see last_pulse.
         self.init_low = init_low
         self.init_high = init_high
-        # W5 — buss-idle före fast init. ISO 14230-2 anger 300 ms; vi hade inget alls.
-        # 0.0 = av (gammalt beteende); sätt 0.3–1.0 för att eliminera W5 som variabel.
+        # W5 — bus-idle before fast init. ISO 14230-2 specifies 300 ms; we had nothing at all.
+        # 0.0 = off (old behaviour); set 0.3–1.0 to eliminate W5 as a variable.
         self.init_idle = init_idle
         self.last_pulse: "dict" = {}
-        self._rxbuf = bytearray()  # kvarvarande bytes mellan ramar (resync)
+        self._rxbuf = bytearray()  # leftover bytes between frames (resync)
 
-    # ---- livscykel ---------------------------------------------------- #
+    # ---- lifecycle ---------------------------------------------------- #
     def open(self) -> None:
         self._t.open()
 
@@ -112,18 +112,18 @@ class KLine:
 
     # ---- init --------------------------------------------------------- #
     def _fast_init_pulse(self) -> None:
-        """Den fysiska init-pulsen: linjen låg ``init_low``, sedan hög ``init_high``.
+        """The physical init pulse: line low ``init_low``, then high ``init_high``.
 
-        Mäter vad som FAKTISKT hände (``last_pulse``) — nominella värden säger inget
-        om en USB-serieport där drivrutin och OS lägger på egen fördröjning.
+        Measures what ACTUALLY happened (``last_pulse``) — nominal values say nothing
+        about a USB serial port where the driver and OS add their own delay.
         """
         if self.init_idle:
-            time.sleep(self.init_idle)   # W5: låt bussen vara tyst före pulsen
+            time.sleep(self.init_idle)   # W5: let the bus stay quiet before the pulse
         t0 = time.perf_counter()
         self._flush_input()
-        # Deterministisk låg-puls: föredra baud-drop (0x00 @ ~360 baud) framför
-        # OS-timad break, vars längd jittrar på icke-realtids-OS och gör att Td5:an
-        # aldrig går in i diag-läge (03 7F 81 10 = generalReject).
+        # Deterministic low pulse: prefer baud drop (0x00 @ ~360 baud) over an
+        # OS-timed break, whose length jitters on non-real-time OSes and makes the Td5
+        # never enter diag mode (03 7F 81 10 = generalReject).
         already_high = 0.0
         pulse = getattr(self._t, "fast_init_low", None)
         if pulse is not None:
@@ -132,12 +132,12 @@ class KLine:
             send_break = getattr(self._t, "send_break", None)
             if send_break is None:
                 raise KLineError(
-                    "transporten saknar fast_init_low()/send_break() — krävs för fast init"
+                    "transport lacks fast_init_low()/send_break() — required for fast init"
                 )
             send_break(self.init_low)
         t1 = time.perf_counter()
-        # Dra av den tid linjen REDAN varit hög (UART-stoppbiten efter puls-byten),
-        # annars blir TiniH systematiskt för lång.
+        # Subtract the time the line has ALREADY been high (the UART stop bit after the pulse
+        # byte), otherwise TiniH becomes systematically too long.
         _precise_wait(max(0.0, self.init_high - already_high))
         t2 = time.perf_counter()
         self.last_pulse = {"low_ms": round((t1 - t0) * 1000, 1),
@@ -145,11 +145,11 @@ class KLine:
                            "pre_high_ms": round(already_high * 1000, 1)}
 
     def fast_init(self, start_communication: bytes = DEFAULT_START_COMMUNICATION) -> bytes:
-        """Kör fast init (adresserad StartCommunication) och returnerar svarets
-        datafält (t.ex. nyckelbytes). Strikt ram-läsning."""
+        """Run fast init (addressed StartCommunication) and return the reply's
+        data field (e.g. key bytes). Strict frame reading."""
         self._fast_init_pulse()
-        # Ingen retry: StartCommunication ska skickas EN gång. Lyckas den öppnas
-        # sessionen; en omsändning avvisas då (generalReject "redan i session").
+        # No retry: StartCommunication must be sent ONCE. If it succeeds the session
+        # opens; a retransmit is then rejected (generalReject "already in session").
         return self.request(start_communication, addressed=True, retries=0)
 
     def fast_init_tolerant(
@@ -158,13 +158,13 @@ class KLine:
         functional: bool = False,
         source: "int | None" = None,
     ) -> bytes:
-        """Fast init med tolerant burst-läsning: sök 0xC1 i hela svarsbursten.
+        """Fast init with tolerant burst reading: search for 0xC1 in the whole reply burst.
 
-        Returnerar bursten från och med 0xC1 (C1 + nyckelbytes, ev. följt av
-        glitch). Höjer :class:`KLineTimeout` om inget C1 syns. Poängen: en
-        brusskadad C1-ram (t.ex. ``03 c1 38 0e f8 00``) INNEHÅLLER ändå 0xC1, så
-        vi ser "session öppen" på första försöket och slipper init-om-loopen som
-        annars öppnar sessionen upprepat och låser ECU:n (``7F`` generalReject).
+        Returns the burst from 0xC1 onward (C1 + key bytes, possibly followed by
+        a glitch). Raises :class:`KLineTimeout` if no C1 appears. The point: a
+        noise-damaged C1 frame (e.g. ``03 c1 38 0e f8 00``) still CONTAINS 0xC1, so
+        we see "session open" on the first attempt and avoid the re-init loop that
+        otherwise opens the session repeatedly and locks the ECU (``7F`` generalReject).
         """
         self._fast_init_pulse()
         t_send = time.perf_counter()
@@ -173,40 +173,40 @@ class KLine:
                        addressed=True, functional=functional)
         raw = self.converse(start_communication, addressed=True,
                             functional=functional, source=source)
-        # to_frame_ms = tiden från pulsens slut tills sändningen FAKTISKT startade.
-        # (Ett tidigare försök drog av send_ms från hela converse() och mätte därför
-        # burst-läsningen — därav orimliga 130–170 ms.)
+        # to_frame_ms = the time from the end of the pulse until the send ACTUALLY started.
+        # (An earlier attempt subtracted send_ms from the whole converse() and therefore measured
+        # the burst read — hence the absurd 130–170 ms.)
         start = getattr(self, "_last_send_start", None)
         if start is not None:
             self.last_pulse["to_frame_ms"] = round((start - t_send) * 1000, 2)
         self.last_pulse["send_ms"] = getattr(self, "_last_send_ms", 0.0)
-        # HOPPA ÖVER EKOT innan vi söker C1. Halv-duplex ekar allt vi sänder, och
-        # en FUNKTIONELL ram börjar själv på 0xC1 — utan detta hittar sökningen
-        # vårt eget eko och rapporterar "session established" på tomma bussen
-        # (bilen 2026-08-19: `C1! c1 29 f1 81` = ekot, kvittensen 1A 8A föll).
+        # SKIP THE ECHO before we search for C1. Half-duplex echoes everything we send, and
+        # a FUNCTIONAL frame itself begins with 0xC1 — without this the search finds
+        # our own echo and reports "session established" on an empty bus
+        # (car 2026-08-19: `C1! c1 29 f1 81` = the echo, the 1A 8A acknowledgement was dropped).
         i = raw.find(frame)
         if i >= 0:
             search, offset = raw[i + len(frame):], i + len(frame)
         elif functional:
-            # Ekot glitchade. Sök ändå inte i de första bytes där det låg — ett
-            # 0xC1 där är med största sannolikhet vårt eget.
+            # The echo glitched. Still don't search the first bytes where it was — a
+            # 0xC1 there is most likely our own.
             search, offset = raw[len(frame):], len(frame)
         else:
-            search, offset = raw, 0   # fysiskt eko (0x8n) innehåller inget 0xC1
+            search, offset = raw, 0   # a physical echo (0x8n) contains no 0xC1
         j = search.find(0xC1)
         if j < 0:
-            # Var tydlig med att ekot är bortsett: en funktionell ram BÖRJAR på 0xC1,
-            # så "ingen C1 i bursten" läste fel mot en burst som syns börja med c1.
+            # Be explicit that the echo is skipped: a functional frame BEGINS with 0xC1,
+            # so "no C1 in the burst" read wrong against a burst that appears to start with c1.
             raise KLineTimeout(
-                f"inget svar efter ekot (eko {frame.hex(' ')}, "
-                f"burst {raw.hex(' ') or 'tom'})")
+                f"no response after the echo (echo {frame.hex(' ')}, "
+                f"burst {raw.hex(' ') or 'empty'})")
         return raw[offset + j:]
 
     def slow_init(self, address: int) -> "tuple[int, int]":
-        """5-baud slow init mot en modul (t.ex. SLABS — motorn använder fast init).
+        """5-baud slow init to a module (e.g. SLABS — the engine uses fast init).
 
-        Returnerar keybytes (KW1, KW2). Höjer :class:`KLineTimeout` om ingen modul
-        svarar (inget 0x55 i svaret). Kräver att transporten stöder ``slow_init``.
+        Returns key bytes (KW1, KW2). Raises :class:`KLineTimeout` if no module
+        answers (no 0x55 in the reply). Requires the transport to support ``slow_init``.
         """
         slow = getattr(self._t, "slow_init", None)
         parse = getattr(self._t, "parse_slow_init", None)
@@ -217,15 +217,15 @@ class KLine:
         kw = parse(raw)
         if kw is None:
             raise KLineTimeout(
-                f"ingen slow-init-respons på 0x{address:02X}: {raw.hex(' ') or 'tomt'}"
+                f"no slow-init response on 0x{address:02X}: {raw.hex(' ') or 'empty'}"
             )
         return kw
 
     # ---- request/response --------------------------------------------- #
     def request(self, data: bytes, retries: int = 2, addressed: bool = False) -> bytes:
-        """Skicka ett datafält, returnera svarets datafält. Försöker om vid
-        timeout eller trasig ram. Sessionstrafik är oadresserad (``addressed=False``);
-        fast init använder ``addressed=True``."""
+        """Send a data field, return the reply's data field. Retries on
+        timeout or a broken frame. Session traffic is unaddressed (``addressed=False``);
+        fast init uses ``addressed=True``."""
         frame = encode(data, self._target, self._source, addressed=addressed)
         last: Exception | None = None
         for _ in range(retries + 1):
@@ -233,14 +233,14 @@ class KLine:
             self._send(frame)
             try:
                 if self._echo:
-                    self.read_frame()  # konsumera vårt eget eko (första giltiga ram)
-                return self.read_frame().data  # svaret = nästa giltiga ram
+                    self.read_frame()  # consume our own echo (first valid frame)
+                return self.read_frame().data  # the reply = next valid frame
             except (KLineTimeout, ChecksumError, FrameError) as exc:
                 last = exc
         assert last is not None
         raise last
 
-    # ---- tolerant burst-I/O (brusiga billiga KKL-kablar) -------------- #
+    # ---- tolerant burst I/O (noisy cheap KKL cables) ------------------ #
     def converse(
         self,
         data: bytes,
@@ -250,12 +250,12 @@ class KLine:
         functional: bool = False,
         source: "int | None" = None,
     ) -> bytes:
-        """Skicka ett datafält och läs HELA svarsbursten rått (eko + svar +
-        ev. glitchbytes) — utan checksum-avvisning.
+        """Send a data field and read the WHOLE reply burst raw (echo + reply +
+        any glitch bytes) — without checksum rejection.
 
-        Motsatsen till :meth:`request`: här valideras ingen ram. Callern söker
-        själv efter förväntad svarsbyte i bursten. Avsett för billiga KKL-kablar
-        där turnaround-glitch shreddar enstaka ramar men rätt byte ändå finns med.
+        The opposite of :meth:`request`: no frame is validated here. The caller
+        searches the burst for the expected reply byte itself. Intended for cheap KKL cables
+        where the turnaround glitch shreds individual frames but the right byte is still present.
         """
         frame = encode(data, self._target, self._source if source is None else source,
                        addressed=addressed, functional=functional)
@@ -264,8 +264,8 @@ class KLine:
         return self._burst_read(gap, overall)
 
     def _burst_read(self, gap: float, overall: float) -> bytes:
-        """Samla bytes tills det blir tyst i ``gap`` s (inter-byte-gap), dock högst
-        ``overall`` s totalt. muki01-stil: läs hela bursten, tolka den sedan."""
+        """Collect bytes until it goes quiet for ``gap`` s (inter-byte gap), but at most
+        ``overall`` s total. muki01 style: read the whole burst, then interpret it."""
         buf = bytearray()
         start = time.monotonic()
         got = False
@@ -275,13 +275,13 @@ class KLine:
                 buf += chunk
                 got = True
             elif got:
-                break  # tystnad efter data → bursten är klar
+                break  # silence after data → the burst is done
             else:
-                time.sleep(0.002)  # väntar fortfarande på första byten
+                time.sleep(0.002)  # still waiting for the first byte
         return bytes(buf)
 
     def _send(self, frame: bytes) -> None:
-        """Sänd en ram, med P4-mellanrum mellan byten om ``write_gap`` är satt."""
+        """Send a frame, with a P4 gap between bytes if ``write_gap`` is set."""
         t0 = time.perf_counter()
         self._last_send_start = t0
         try:
@@ -296,27 +296,27 @@ class KLine:
         for i, b in enumerate(frame):
             self._t.send(bytes([b]))
             if i + 1 < len(frame):
-                _precise_wait(self.write_gap)  # sleep(5 ms) överskjuter grovt
+                _precise_wait(self.write_gap)  # sleep(5 ms) overshoots coarsely
 
     def read_frame(self, timeout: "float | None" = None) -> DecodedFrame:
-        """Läs och avkoda en ram — robust mot skräp i början.
+        """Read and decode a frame — robust against garbage at the start.
 
-        K-line är halv-duplex, och vid vändningen (vår TX → ECU:ns svar) kan en
-        glitch-byte (t.ex. 0xF8/0x00) smyga in före den riktiga ramen. Istället
-        för att strikt tolka första byten som formatbyte samlar vi bytes och
-        returnerar första ram med **giltig checksumma**. Bytes efter ramen (t.ex.
-        ett efterföljande svar vid responsePending) sparas till nästa anrop.
+        K-line is half-duplex, and at the turnaround (our TX → the ECU's reply) a
+        glitch byte (e.g. 0xF8/0x00) can sneak in before the real frame. Instead
+        of strictly interpreting the first byte as the format byte we collect bytes and
+        return the first frame with a **valid checksum**. Bytes after the frame (e.g.
+        a following reply during responsePending) are saved for the next call.
         """
         deadline = time.monotonic() + (self._timeout if timeout is None else timeout)
         while True:
             frame, consumed = self._scan_for_frame(self._rxbuf)
             if frame is not None:
-                del self._rxbuf[:consumed]  # ta bort ev. glitch + ramen
+                del self._rxbuf[:consumed]  # remove any glitch + the frame
                 return frame
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise KLineTimeout(
-                    f"timeout: ingen giltig ram (buffert: {bytes(self._rxbuf).hex(' ')})"
+                    f"timeout: no valid frame (buffer: {bytes(self._rxbuf).hex(' ')})"
                 )
             chunk = self._t.receive(64, timeout=remaining)
             if chunk:
@@ -326,8 +326,8 @@ class KLine:
 
     @staticmethod
     def _scan_for_frame(buf: "bytearray") -> "tuple[DecodedFrame | None, int]":
-        """Sök första giltiga ramen i bufferten. Returnerar (ram, antal bytes att
-        förbruka t.o.m. ramen) eller (None, 0) om ingen komplett giltig ram finns."""
+        """Search for the first valid frame in the buffer. Returns (frame, number of bytes to
+        consume up to and including the frame) or (None, 0) if no complete valid frame exists."""
         n = len(buf)
         for start in range(n):
             fmt = buf[start]
@@ -336,7 +336,7 @@ class KLine:
             if mode in (0b10, 0b11):
                 idx += 2  # Tgt + Src
             elif mode != 0b00:
-                continue  # ostött adressläge — skräp, hoppa fram
+                continue  # unsupported address mode — garbage, skip ahead
             length = fmt & 0x3F
             if length == 0:
                 if idx >= n:
@@ -344,17 +344,17 @@ class KLine:
                 length = buf[idx]
                 idx += 1
             if length < 1:
-                continue  # tom ram = falskt positivt i brus, hoppa
+                continue  # empty frame = false positive in noise, skip
             end = idx + length
             if end + 1 > n:
-                continue  # ofullständig för den här startpunkten
+                continue  # incomplete for this start point
             try:
                 return decode(bytes(buf[start : end + 1])), end + 1
             except (FrameError, ChecksumError):
                 continue
         return None, 0
 
-    # ---- lågnivå ------------------------------------------------------ #
+    # ---- low level ---------------------------------------------------- #
     def _flush_input(self) -> None:
         self._rxbuf.clear()
         flush = getattr(self._t, "reset_input_buffer", None)

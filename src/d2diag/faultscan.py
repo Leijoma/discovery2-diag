@@ -1,18 +1,18 @@
-"""Basic mode — läs felkoder från samtliga moduler sekventiellt.
+"""Basic mode — read fault codes from all modules sequentially.
 
-K-line är en delad buss → en modul åt gången: etablera → läs fel → stäng, sedan
-nästa. Returnerar en normaliserad rapport ``[{module, status, faults, note}]`` där
-``status`` ∈ ``ok`` (inga fel) / ``faults`` / ``error`` (kunde inte läsa).
+K-line is a shared bus → one module at a time: establish → read faults → close, then
+the next. Returns a normalized report ``[{module, status, faults, note}]`` where
+``status`` ∈ ``ok`` (no faults) / ``faults`` / ``error`` (could not read).
 
-TD5 och SLABS är belagda och testade. Airbag (0x5B) är **experimentellt** (read-only,
-overifierat live). ACE/EAT/BCU saknar comms-klass → listas som ``ej implementerad``.
+TD5 and SLABS are proven and tested. Airbag (0x5B) is **experimental** (read-only,
+unverified live). ACE/EAT/BCU have no comms class → listed as ``not implemented``.
 """
 from __future__ import annotations
 
 import time
 from typing import Callable
 
-# Moduler som ännu inte har en läsande comms-klass (proprietära protokoll).
+# Modules that don't yet have a reading comms class (proprietary protocols).
 _UNIMPLEMENTED = [
     ("ACE", "active suspension — proprietary bulk protocol, not read in code yet"),
     ("Auto Gearbox", "EAT 72-framed — ECU responds but decoding not finished"),
@@ -32,7 +32,7 @@ def _err(module: str, exc: "Exception", *, note: str = "") -> "dict":
 
 def read_all(mode: str, port: str = "auto",
              sleep: "Callable[[float], None]" = time.sleep) -> "list[dict]":
-    """Läs felkoder från alla moduler. ``mode`` = 'mock' | 'live'."""
+    """Read fault codes from all modules. ``mode`` = 'mock' | 'live'."""
     rows = _mock_report() if mode != "live" else _live_report(port, sleep)
     for name, note in _UNIMPLEMENTED:
         rows.append({"module": name, "status": "unimplemented", "faults": [], "note": note})
@@ -40,7 +40,7 @@ def read_all(mode: str, port: str = "auto",
 
 
 def _mock_report() -> "list[dict]":
-    """RDL 016-baslinjen (belagt) som demodata utan bil."""
+    """The RDL 016 baseline (proven) as demo data without a car."""
     return [
         _row("TD5", []),
         _row("SLABS", ["020: front right wheel speed sensor — output too low (Logged)",
@@ -59,7 +59,7 @@ def _live_report(port: str, sleep: "Callable[[float], None]") -> "list[dict]":
     try:
         real_port = resolve_serial_port(port)
     except FileNotFoundError as exc:
-        # ingen kabel → markera alla tre som ej lästa, samma orsak
+        # no cable → mark all three as unread, same cause
         return [_err(m, exc) for m in ("TD5", "SLABS", "Airbag")]
 
     rows = []
@@ -73,10 +73,10 @@ def _live_report(port: str, sleep: "Callable[[float], None]") -> "list[dict]":
             faults = [f for f in t.read_faults() if not f.startswith("byte")]
             rows.append(_row("TD5", faults))
         finally:
-            t.release()  # stäng sessionen rent — nästa modul initar på samma buss
+            t.release()  # close the session cleanly — the next module inits on the same bus
     except Exception as exc:  # noqa: BLE001
         rows.append(_err("TD5", exc))
-    sleep(0.5)  # låt bussen tystna mellan moduler
+    sleep(0.5)  # let the bus go quiet between modules
 
     # --- SLABS ------------------------------------------------------------ #
     try:
@@ -86,12 +86,12 @@ def _live_report(port: str, sleep: "Callable[[float], None]") -> "list[dict]":
         s.open()
         try:
             s.establish()
-            f = s.read_faults()  # {"loggade":[…], "aktuella":[…]}
+            f = s.read_faults()  # {"loggade":[…], "aktuella":[…]}  (logged / current)
             faults = [x + " (Logged)" for x in f.get("loggade", [])] + \
                      [x + " (Current)" for x in f.get("aktuella", [])]
             rows.append(_row("SLABS", faults))
         finally:
-            s.release()  # stäng sessionen rent — nästa modul initar på samma buss
+            s.release()  # close the session cleanly — the next module inits on the same bus
     except Exception as exc:  # noqa: BLE001
         rows.append(_err("SLABS", exc))
     sleep(0.5)
@@ -107,7 +107,7 @@ def _live_report(port: str, sleep: "Callable[[float], None]") -> "list[dict]":
             faults = [f"{r['number']:03d}: {r['status_text']}" for r in a.read_faults()]
             rows.append(_row("Airbag", faults, note="experimental"))
         finally:
-            a.release()  # stäng sessionen rent — nästa modul initar på samma buss
+            a.release()  # close the session cleanly — the next module inits on the same bus
     except Exception as exc:  # noqa: BLE001
         rows.append(_err("Airbag", exc, note="experimental (may need SecurityAccess we can't do)"))
 

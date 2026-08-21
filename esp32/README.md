@@ -1,26 +1,26 @@
 # ESP32 — K-Line
 
-Firmware för Td5-diagnostik direkt från en ESP32 (alternativ till Pi + USB KKL).
+Firmware for Td5 diagnostics directly from an ESP32 (alternative to Pi + USB KKL).
 
 ## kline_test/
 
-Bring-up-sketch. UART2 på **GPIO16 (RX)** / **GPIO17 (TX)**, 10400 8N1.
+Bring-up sketch. UART2 on **GPIO16 (RX)** / **GPIO17 (TX)**, 10400 8N1.
 
-**Kräver en K-Line-transceiver mellan ESP32 och K-line (12 V)** — t.ex. L9637D.
-Koppla aldrig 12 V direkt till ESP32-pinnarna. Antar icke-inverterande transceiver;
-sätt `KLINE_INVERT = true` i sketchen om din interface inverterar.
+**Requires a K-Line transceiver between the ESP32 and the K-line (12 V)** — e.g. L9637D.
+Never connect 12 V directly to the ESP32 pins. Assumes a non-inverting transceiver;
+set `KLINE_INVERT = true` in the sketch if your interface inverts.
 
-Gör vid boot en självtest (skickar en byte, kollar transceiverns eko — kräver att
-K-line-sidan är matad med 12 V + pull-up). Skicka sedan valfritt tecken i
-seriemonitorn (115200) för att köra fast init + StartCommunication
-(`81 13 F7 81 0C`) och skriva ut TX/ECHO/RX i hex.
+Runs a self-test at boot (sends a byte, checks the transceiver's echo — requires the
+K-line side to be powered with 12 V + pull-up). Then send any character in the serial
+monitor (115200) to run fast init + StartCommunication
+(`81 13 F7 81 0C`) and print TX/ECHO/RX in hex.
 
-### Flasha
+### Flash
 
-Arduino IDE: välj din ESP32-board + port, öppna `kline_test/kline_test.ino`, ladda upp.
-Öppna seriemonitorn på 115200.
+Arduino IDE: select your ESP32 board + port, open `kline_test/kline_test.ino`, upload.
+Open the serial monitor at 115200.
 
-Eller `arduino-cli`:
+Or `arduino-cli`:
 
 ```
 arduino-cli compile -b esp32:esp32:esp32 esp32/kline_test

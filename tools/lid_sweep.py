@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""LID-svep för Td5 — **read-only** jakt på dynamiska fält (t.ex. riktiga MAF).
+"""LID sweep for Td5 — **read-only** hunt for dynamic fields (e.g. the real MAF).
 
-Läser råbytes för en lista LID:er i hög takt, avkodar varje u16 på jämna
-offset, och skriver live + en JSONL-logg. Vid avslut sammanfattas **spannet**
-(min→max) per LID/offset. Ett fält som varierar mycket när du blippar gasen är
-en luftmassa-/lastkandidat; ett som ligger still är en konstant/status.
+Reads raw bytes for a list of LIDs at a high rate, decodes every u16 at even
+offsets, and prints live + a JSONL log. On exit it summarizes the **span**
+(min→max) per LID/offset. A field that varies a lot when you blip the throttle is
+an air-mass/load candidate; one that sits still is a constant/status.
 
-Bakgrund: ``maf_raw`` (1C@4) visade sig INTE vara luftmassa (biltest 2026-08-20:
-57 vid tändning-på, 0 medan motorn går). Riktiga MAF-LID:en är omappad. MAF:ens
-signatur är ≈0 med motorn av, stiger med varvtal, och hoppar direkt vid pådrag —
-kör svepet på tomgång och blippa gasen så syns det i spann-sammanfattningen.
+Background: ``maf_raw`` (1C@4) turned out NOT to be air mass (car test 2026-08-20:
+57 at ignition-on, 0 while the engine runs). The real MAF LID is unmapped. The MAF's
+signature is ≈0 with the engine off, rises with rpm, and jumps immediately on throttle —
+run the sweep at idle and blip the throttle so it shows up in the span summary.
 
-Endast tjänst ``21`` (ReadDataByLocalIdentifier) — inga skrivningar.
+Service ``21`` (ReadDataByLocalIdentifier) only — no writes.
 
     PYTHONPATH=src python3 tools/lid_sweep.py --serial auto
     PYTHONPATH=src python3 tools/lid_sweep.py --lids 1C,1B,1A,1D,1E --hz 4 --seconds 40
@@ -35,19 +35,19 @@ from d2diag.td5 import Td5  # noqa: E402
 from d2diag.transport import SerialTransport  # noqa: E402
 from d2diag.web.sources import resolve_serial_port  # noqa: E402
 
-# Standard: RPM (09) som korrelations-referens + "luft/bränsle"-kvarteret där MAF
-# rimligen bor, plus några grannar. MAF ska FÖLJA varvtalet → 09 måste vara med.
+# Default: RPM (09) as the correlation reference + the "air/fuel" quarter where the
+# MAF plausibly lives, plus a few neighbors. The MAF must FOLLOW the rpm → 09 must be included.
 _DEFAULT_LIDS = "09,1C,1B,1A,1D,1E,1F,20"
-_RPM_KEY = "09@0"   # 21 09 u16 = varvtal; referens att korrelera mot
+_RPM_KEY = "09@0"   # 21 09 u16 = rpm; the reference to correlate against
 
 
 def _u16s(raw: bytes) -> "list[int]":
-    """Alla u16 (big-endian) på jämna offset — så varje 2-byte-fält syns."""
+    """All u16 (big-endian) at even offsets — so every 2-byte field shows up."""
     return [int.from_bytes(raw[i:i + 2], "big") for i in range(0, len(raw) - 1, 2)]
 
 
 def _pearson(xs: "list[float]", ys: "list[float]") -> "float | None":
-    """Pearson-korrelation utan numpy. None om för få/konstanta värden."""
+    """Pearson correlation without numpy. None if too few/constant values."""
     pts = [(x, y) for x, y in zip(xs, ys) if x is not None and y is not None]
     n = len(pts)
     if n < 3:
@@ -67,10 +67,10 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--serial", default="auto")
     ap.add_argument("--lids", default=_DEFAULT_LIDS,
-                    help=f"komma-separerade LID:er i hex (default {_DEFAULT_LIDS})")
-    ap.add_argument("--hz", type=float, default=4.0, help="läsningar per sekund (default 4)")
+                    help=f"comma-separated LIDs in hex (default {_DEFAULT_LIDS})")
+    ap.add_argument("--hz", type=float, default=4.0, help="reads per second (default 4)")
     ap.add_argument("--seconds", type=float, default=0.0,
-                    help="stoppa efter N s (0 = tills Ctrl-C)")
+                    help="stop after N s (0 = until Ctrl-C)")
     args = ap.parse_args()
 
     lids = [int(x, 16) for x in args.lids.replace(" ", "").split(",") if x]
@@ -81,21 +81,21 @@ def main() -> int:
     try:
         port = resolve_serial_port(args.serial)
     except FileNotFoundError as exc:
-        print(f"ingen kabel: {exc}")
+        print(f"no cable: {exc}")
         return 1
 
     t = Td5(KWP2000(KLine(SerialTransport(port, timeout=1.0)), tolerant=True))
     t.open()
     span: "dict[str, list[int]]" = {}   # "1C@2" -> [min, max]
-    samples: "list[dict]" = []          # per cykel: {key: värde} för korrelation
+    samples: "list[dict]" = []          # per cycle: {key: value} for correlation
     fh = open(out_path, "w", encoding="utf-8")
     period = 1.0 / max(0.1, args.hz)
     n = 0
     try:
-        print(f"LID-svep {stamp} — etablerar Td5-session …")
+        print(f"LID sweep {stamp} — establishing Td5 session …")
         t.establish(progress=lambda m: print(f"  {m}"))
-        print(f"✓ uppkopplad. Loggar → {out_path}")
-        print("  Blippa gasen medan det rullar; Ctrl-C för sammanfattning.\n")
+        print(f"✓ connected. Logging → {out_path}")
+        print("  Blip the throttle while it's rolling; Ctrl-C for the summary.\n")
         t0 = time.perf_counter()
         while True:
             row: "dict[str, str]" = {}
@@ -125,7 +125,7 @@ def main() -> int:
                 break
             time.sleep(period)
     except KeyboardInterrupt:
-        print("\n(avbrutet)")
+        print("\n(aborted)")
     finally:
         try:
             t.release()
@@ -137,14 +137,14 @@ def main() -> int:
             pass
         fh.close()
 
-    # --- Korrelation mot RPM: MAF ska FÖLJA varvtalet. Detta är discriminatorn:
-    # temp-fält har också spann men korrelerar inte med rpm. ---
+    # --- Correlation against RPM: the MAF must FOLLOW the rpm. This is the discriminator:
+    # temp fields also have a span but do not correlate with rpm. ---
     rpm = [c.get(_RPM_KEY) for c in samples]
     rpm_vals = [x for x in rpm if x is not None]
     rpm_moved = rpm_vals and (max(rpm_vals) - min(rpm_vals) >= 100)
     if rpm_moved:
-        print(f"\n=== korrelation mot RPM ({_RPM_KEY}) — MAF-kandidat överst ===")
-        print(f"    (rpm rörde sig {min(rpm_vals)}→{max(rpm_vals)} över {n} sampel)")
+        print(f"\n=== correlation against RPM ({_RPM_KEY}) — MAF candidate on top ===")
+        print(f"    (rpm moved {min(rpm_vals)}→{max(rpm_vals)} over {n} samples)")
         corrs = []
         for key in span:
             if key == _RPM_KEY:
@@ -153,19 +153,19 @@ def main() -> int:
             if c is not None:
                 corrs.append((key, c, span[key][1] - span[key][0]))
         for key, c, sp in sorted(corrs, key=lambda x: abs(x[1]), reverse=True):
-            mark = "  <== följer RPM starkt" if abs(c) >= 0.9 else ("  < möjlig" if abs(c) >= 0.7 else "")
-            print(f"  {key:8}  r={c:+.3f}  spann {sp:6}{mark}")
-        print("\n  MAF = högst positiv r mot RPM (och rör sig med gaspådrag).")
+            mark = "  <== follows RPM strongly" if abs(c) >= 0.9 else ("  < possible" if abs(c) >= 0.7 else "")
+            print(f"  {key:8}  r={c:+.3f}  span {sp:6}{mark}")
+        print("\n  MAF = highest positive r against RPM (and moves with throttle).")
     else:
-        print("\n⚠ RPM rörde sig inte (motorn av eller inga blipp) — kan inte korrelera.")
-        print("  Kör om med MOTORN IGÅNG och blippa gasen 2000–2500 rpm några gånger.")
+        print("\n⚠ RPM did not move (engine off or no blips) — cannot correlate.")
+        print("  Run again with the ENGINE RUNNING and blip the throttle to 2000–2500 rpm a few times.")
 
-    # Spann-tabell (dynamik oavsett rpm) — behålls som referens.
-    print(f"\n=== spann per fält ({n} läsningar) — störst rörelse överst ===")
+    # Span table (dynamics regardless of rpm) — kept as a reference.
+    print(f"\n=== span per field ({n} reads) — most movement on top ===")
     for key, (lo, hi) in sorted(span.items(), key=lambda kv: kv[1][1] - kv[1][0], reverse=True):
         bar = "#" * min(40, (hi - lo) // 50) if hi > lo else ""
-        print(f"  {key:8}  min {lo:6}  max {hi:6}  spann {hi-lo:6}  {bar}")
-    print(f"\nRådata: {out_path}")
+        print(f"  {key:8}  min {lo:6}  max {hi:6}  span {hi-lo:6}  {bar}")
+    print(f"\nRaw data: {out_path}")
     return 0
 
 

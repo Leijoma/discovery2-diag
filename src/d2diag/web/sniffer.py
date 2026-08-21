@@ -1,10 +1,10 @@
-"""Passiv sniff-feed för Mappning-/Karta-fliken.
+"""Passive sniff feed for the Mapping/Map tab.
 
-En bakgrundstråd matar en :class:`~d2diag.sniff.decoder.LidStore` med rader från
-antingen en riktig ESP32-serieport (live, RX-only) eller en uppspelad loggfil
-(för utveckling/demo utan bil). Webbservern läser ``snapshot()`` — som även bär
-**färskhet** (ramar/s, ålder på senaste ram, status) så gränssnittet kan visa om
-det verkligen är live-data eller en död/stillastående port.
+A background thread feeds a :class:`~d2diag.sniff.decoder.LidStore` with lines from
+either a real ESP32 serial port (live, RX-only) or a replayed log file (for
+development/demo without a car). The web server reads ``snapshot()`` — which also
+carries **freshness** (frames/s, age of the last frame, status) so the interface can
+show whether it's really live data or a dead/stationary port.
 """
 from __future__ import annotations
 
@@ -22,9 +22,9 @@ class SnifferFeed:
         self._delay = delay
         self._loop = loop
         self.source = source
-        self.status = "startar"      # startar | live | tom | fel
+        self.status = "starting"     # starting | live | empty | error
         self.error: "str | None" = None
-        self.lines = 0               # all bustrafik (inkl. keepalives) — heartbeat
+        self.lines = 0               # all bus traffic (incl. keepalives) — heartbeat
         self._last_activity: "float | None" = None
         self._stop = threading.Event()
         self._thread: "threading.Thread | None" = None
@@ -41,22 +41,22 @@ class SnifferFeed:
                     if self._stop.is_set():
                         return
                     b = parse_hex_line(line)
-                    if b:  # NÅGON bustrafik (även keepalive) = levande buss
+                    if b:  # ANY bus traffic (even keepalive) = live bus
                         self.lines += 1
                         self._last_activity = time.monotonic()
                         self.status = "live"
                         self.store.ingest_bytes(b)
                     if self._delay:
                         self._stop.wait(self._delay)
-            except Exception as exc:  # noqa: BLE001 — t.ex. seriell frånkoppling
-                self.status = "fel"
+            except Exception as exc:  # noqa: BLE001 — e.g. serial disconnect
+                self.status = "error"
                 self.error = f"{type(exc).__name__}: {exc}"
-                self._stop.wait(2.0)  # backa av, försök återansluta
+                self._stop.wait(2.0)  # back off, try to reconnect
                 continue
-            # factory tog slut (t.ex. filuppspelning klar)
+            # the factory ran out (e.g. file replay finished)
             if not self._loop:
-                if self.status == "startar":
-                    self.status = "tom"
+                if self.status == "starting":
+                    self.status = "empty"
                 return
 
     def stop(self) -> None:
@@ -73,10 +73,10 @@ class SnifferFeed:
         })
         return snap
 
-    # ---- konstruktorer ------------------------------------------------- #
+    # ---- constructors -------------------------------------------------- #
     @classmethod
     def from_file(cls, path: str, delay: float = 0.003, loop: bool = True) -> "SnifferFeed":
-        """Spela upp en sniff-logg (för att testa vyn utan bil)."""
+        """Replay a sniff log (to test the view without a car)."""
         def factory():
             with open(path, encoding="utf-8", errors="replace") as fh:
                 yield from fh
@@ -84,11 +84,11 @@ class SnifferFeed:
 
     @classmethod
     def from_serial(cls, port: str, baud: int = 115200) -> "SnifferFeed":
-        """Live från ESP32-sniffern (kline_sniff.ino) — RX-only, sänder aldrig.
+        """Live from the ESP32 sniffer (kline_sniff.ino) — RX-only, never transmits.
 
-        Öppnar porten på nytt vid frånkoppling (``_run`` fångar och återförsöker)."""
+        Reopens the port on disconnect (``_run`` catches and retries)."""
         def factory():
-            import serial  # lokalt så mock/replay funkar utan pyserial
+            import serial  # local so mock/replay work without pyserial
             ser = serial.serial_for_url(port, baudrate=baud, timeout=0.2)
             try:
                 while True:

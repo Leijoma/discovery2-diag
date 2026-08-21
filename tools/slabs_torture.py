@@ -1,37 +1,37 @@
 #!/usr/bin/env python3
-"""SLABS-tortyr (snäll): mät vad som faktiskt påverkar anslutningen.
+"""SLABS torture (gentle): measure what actually affects the connection.
 
-`slabs_probe.py` svarar på "kommer vi in just nu?". Det här skriptet svarar på
-"VAD gör att vi kommer in?" — genom att köra många korta försök och variera EN
-sak i taget:
+`slabs_probe.py` answers "are we getting in right now?". This script answers
+"WHAT makes us get in?" — by running many short attempts and varying ONE thing at
+a time:
 
-  * **tyst period före init** (``--gaps``) — hur länge måste bussen vara tyst?
-  * **TD5-session före** (``--td5 both``) — värmer motorsessionen upp bussen?
-  * **adressläge** — fysisk/F7, funktionell/F1, funktionell/F7
+  * **quiet period before init** (``--gaps``) — how long must the bus be silent?
+  * **TD5 session first** (``--td5 both``) — does the engine session warm up the bus?
+  * **address mode** — physical/F7, functional/F1, functional/F7
 
-Ordningen **blandas** (seedad, seeden loggas) så att tid, temperatur och
-batteridrift inte sammanfaller med ett visst tillstånd — annars mäter man klockan
-i stället för hypotesen.
+The order is **shuffled** (seeded, the seed is logged) so that time, temperature and
+battery drain don't coincide with a particular state — otherwise you're measuring
+the clock instead of the hypothesis.
 
-Snällt mot bilen: inga ställdon, korta hållperioder, och varje session avslutas
-rent med ``82`` (StopCommunication) så nästa försök inte möts av ``7F 81 10``.
+Gentle on the car: no actuators, short hold periods, and every session ends cleanly
+with ``82`` (StopCommunication) so the next attempt isn't met with ``7F 81 10``.
 
-Resultatet skrivs som JSONL (en rad per försök) + en sammanfattning per faktor:
+Results are written as JSONL (one line per attempt) + a summary per factor:
 
     PYTHONPATH=src python3 tools/slabs_torture.py --rounds 3
     PYTHONPATH=src python3 tools/slabs_torture.py --gaps 0,5,15,30 --hold 15
     PYTHONPATH=src python3 tools/slabs_torture.py --td5 both --rounds 4
 
-Kör STILLASTÅENDE.
+Run STATIONARY.
 
-**Data ackumuleras mellan körningar.** Varje körning skriver en egen JSONL, och
-``--summary`` slår ihop dem. Kör därför hellre flera KORTA block än ett långt —
-motorn ska inte gå på tomgång i tjugo minuter. Med ``--max-minutes`` stannar
-skriptet av sig självt och sammanfattar det som hanns med.
+**Data accumulates across runs.** Each run writes its own JSONL, and ``--summary``
+merges them. So prefer several SHORT blocks over one long one — the engine
+shouldn't idle for twenty minutes. With ``--max-minutes`` the script stops on its
+own and summarizes what it managed.
 
-Statistiken kräver ungefär 50 försök per strömläge för att kunna skilja 30 % från
-7 % (Fishers exakta test på materialet 2026-08-19 gav p = 0,27 — inte
-signifikant). Det blir ~3 block à 5 minuter per läge.
+The statistics need roughly 50 attempts per power mode to distinguish 30 % from
+7 % (Fisher's exact test on the 2026-08-19 material gave p = 0.27 — not
+significant). That's ~3 blocks of 5 minutes per mode.
 """
 from __future__ import annotations
 
@@ -55,16 +55,16 @@ from d2diag.td5 import Td5  # noqa: E402
 from d2diag.transport import LoggingTransport, SerialTransport  # noqa: E402
 from d2diag.web.sources import resolve_serial_port  # noqa: E402
 
-# (funktionellt läge, testar-adress, måladress). Init-ramen är
-# <fmt> <mål> <källa> 81 <cs>, där fmt = 0x81 fysiskt / 0xC1 funktionellt och
-# checksumman är summan av de fyra föregående. Frågan vi mäter: måste det vara
-# EN specifik följd, eller duger flera?
+# (functional mode, tester address, target address). The init frame is
+# <fmt> <target> <source> 81 <cs>, where fmt = 0x81 physical / 0xC1 functional and
+# the checksum is the sum of the four preceding bytes. The question we measure: must
+# it be ONE specific sequence, or do several work?
 #
-# Läget 2026-08-19: fysisk/F7, funktionell/F1 och funktionell/F7 har alla gett
-# kontakt minst en gång — alltså krävs ingen enda specifik följd. fysisk/F1 har
-# aldrig lyckats (0 av 8 försök), och broadcast till 0x33 är otestat: det är den
-# ram muki01-referensen använder (C1 33 F1 81 66) och den adresserar alla
-# OBD-moduler funktionellt i stället för SLABS fysiska adress 0x29.
+# State 2026-08-19: physical/F7, functional/F1 and functional/F7 have all made
+# contact at least once — so no single specific sequence is required. physical/F1 has
+# never succeeded (0 of 8 attempts), and broadcast to 0x33 is untested: it's the
+# frame the muki01 reference uses (C1 33 F1 81 66) and it addresses all OBD modules
+# functionally instead of SLABS's physical address 0x29.
 VARIANTS = {
     "fysisk/F7":          (False, 0xF7, SLABS_ADDRESS),
     "funktionell/F1":     (True,  0xF1, SLABS_ADDRESS),
@@ -99,13 +99,13 @@ def record(**row) -> None:
 
 
 def quiet(seconds: float) -> None:
-    """Vänta UTAN att skicka något — varje byte nollställer modulens väntan."""
+    """Wait WITHOUT sending anything — every byte resets the module's wait."""
     if seconds > 0:
         time.sleep(seconds)
 
 
 def td5_context(transport) -> "dict":
-    """Kort TD5-session: läs rpm/fart/batteri, avsluta rent UTAN att stänga porten."""
+    """Short TD5 session: read rpm/speed/battery, end cleanly WITHOUT closing the port."""
     td5 = Td5(KWP2000(KLine(transport, target=0x13), tolerant=True))
     ctx: "dict" = {}
     try:
@@ -116,30 +116,30 @@ def td5_context(transport) -> "dict":
         ctx = {"td5_error": f"{type(exc).__name__}"}
     finally:
         try:
-            td5.end_session()  # 20 + 82, porten delas med SLABS-försöken
+            td5.end_session()  # 20 + 82, the port is shared with the SLABS attempts
         except Exception:  # noqa: BLE001
             pass
     return ctx
 
 
 def attempt(transport, variant: str, hold: float) -> "dict":
-    """Ett initförsök + kort hållperiod. Returnerar mätresultatet som dict."""
+    """One init attempt + short hold period. Returns the measurement result as a dict."""
     functional, source, target = VARIANTS[variant]
-    # Init går mot måladressen (0x29 eller broadcast 0x33); sessionen därefter är
-    # oadresserad, så SLABS-objektet pratar med den modul som svarade.
+    # Init goes to the target address (0x29 or broadcast 0x33); the session afterwards
+    # is unaddressed, so the SLABS object talks to whichever module responded.
     kwp = KWP2000(KLine(transport, target=target), tolerant=True)
     slabs = Slabs(kwp)
     try:
         kwp.start_communication(tolerant=True, functional=functional, source=source)
     except KLineTimeout:
-        return {"result": "tyst"}
+        return {"result": "silent"}
     except Exception as exc:  # noqa: BLE001
-        return {"result": "lokalt_fel", "error": f"{type(exc).__name__}: {exc}"}
-    # Kvittens: ett C1 kan vara vårt eget eko eller brus. 1A 8A avgör.
+        return {"result": "local_error", "error": f"{type(exc).__name__}: {exc}"}
+    # Acknowledgement: a C1 could be our own echo or noise. 1A 8A settles it.
     try:
         slabs.read_ecu_id(0x8A)
     except Exception:  # noqa: BLE001
-        return {"result": "falsk_c1"}
+        return {"result": "false_c1"}
 
     reads = misses = 0
     t0 = time.monotonic()
@@ -160,19 +160,20 @@ def attempt(transport, variant: str, hold: float) -> "dict":
             if misses >= 3:
                 break
     try:
-        slabs.end_session()  # 82 — lämna inte länken öppen till nästa försök
+        slabs.end_session()  # 82 — don't leave the link open into the next attempt
     except Exception:  # noqa: BLE001
         pass
-    return {"result": "träff", "reads": reads, "misses": misses,
+    return {"result": "hit", "reads": reads, "misses": misses,
             "held": round(time.monotonic() - t0, 1)}
 
 
 def summarise(paths: "list[str]") -> int:
-    """Läs ihop flera körningar och korstabulera träffkvot per strömläge.
+    """Read several runs together and cross-tabulate hit rate per power mode.
 
-    Poängen med tre lägen (motor igång / tändning med laddare / tändning utan):
-    laddaren ger hög spänning UTAN att motorn går, vilket skiljer spänning från
-    motorstatus — den enda fråga mätningen 2026-08-19 inte kunde svara på.
+    The point of three modes (engine running / ignition with charger / ignition
+    without): the charger gives high voltage WITHOUT the engine running, which
+    separates voltage from engine status — the one question the 2026-08-19
+    measurement couldn't answer.
     """
     rows = []
     for pattern in paths:
@@ -180,16 +181,23 @@ def summarise(paths: "list[str]") -> int:
             with open(path, encoding="utf-8") as fh:
                 rows += [json.loads(line) for line in fh if line.strip()]
     if not rows:
-        print("inga rader hittades")
+        print("no rows found")
         return 1
 
+    # Back-compat: runs before 2026-08-21 wrote the result codes in Swedish. Map
+    # them to the current English codes so older JSONL still summarises correctly.
+    _LEGACY = {"träff": "hit", "tyst": "silent",
+               "lokalt_fel": "local_error", "falsk_c1": "false_c1"}
+    for r in rows:
+        r["result"] = _LEGACY.get(r.get("result"), r.get("result"))
+
     def rate(rs):
-        hits = sum(1 for r in rs if r.get("result") == "träff")
+        hits = sum(1 for r in rs if r.get("result") == "hit")
         return f"{hits:3}/{len(rs):-3} ({100 * hits / len(rs):3.0f}%)"
 
-    print(f"{len(rows)} försök från {len(paths)} mönster\n")
-    for key, title in (("label", "strömläge"), ("gap", "tyst period"),
-                       ("variant", "variant"), ("td5_first", "TD5 före")):
+    print(f"{len(rows)} attempts from {len(paths)} patterns\n")
+    for key, title in (("label", "power mode"), ("gap", "quiet period"),
+                       ("variant", "variant"), ("td5_first", "TD5 first")):
         groups = defaultdict(list)
         for r in rows:
             groups[r.get(key)].append(r)
@@ -198,7 +206,7 @@ def summarise(paths: "list[str]") -> int:
         print(f"  per {title}:")
         for k in sorted(groups, key=str):
             v = [r["battery"] for r in groups[k] if r.get("battery")]
-            volt = f"   batteri {min(v):.2f}–{max(v):.2f} V" if v else ""
+            volt = f"   battery {min(v):.2f}–{max(v):.2f} V" if v else ""
             print(f"    {str(k):16} {rate(groups[k])}{volt}")
         print()
     return 0
@@ -209,27 +217,27 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--serial", default="auto")
-    ap.add_argument("--rounds", type=int, default=3, help="varv genom hela matrisen")
+    ap.add_argument("--rounds", type=int, default=3, help="passes through the whole matrix")
     ap.add_argument("--gaps", default="5,15,30",
-                    help="tysta perioder att testa, sekunder (default 5,15,30)")
+                    help="quiet periods to test, seconds (default 5,15,30)")
     ap.add_argument("--hold", type=float, default=15.0,
-                    help="hållperiod vid träff, sekunder (default 15)")
+                    help="hold period on a hit, seconds (default 15)")
     ap.add_argument("--variants", default="fysisk/F7,funktionell/F1,funktionell/F7",
-                    help=f"kommaseparerat. Tillgängliga: {', '.join(VARIANTS)}")
+                    help=f"comma-separated. Available: {', '.join(VARIANTS)}")
     ap.add_argument("--td5", choices=("never", "always", "both"), default="both",
-                    help="TD5-session före SLABS: aldrig / alltid / båda (default both)")
-    ap.add_argument("--seed", type=int, default=None, help="seed för ordningen")
+                    help="TD5 session before SLABS: never / always / both (default both)")
+    ap.add_argument("--seed", type=int, default=None, help="seed for the order")
     ap.add_argument("--max-minutes", type=float, default=None,
-                    help="stoppa när så här många minuter gått (motorn ska inte gå "
-                         "på tomgång i onödan). Resultatet sammanfattas ändå.")
+                    help="stop after this many minutes (the engine shouldn't idle "
+                         "unnecessarily). The result is summarized anyway.")
     ap.add_argument("--td5-every", type=int, default=5,
-                    help="läs motorkontext var N:e försök i stället för varje (default 5). "
-                         "Sparar ~7 s per försök; åldern på kontexten loggas.")
+                    help="read engine context every Nth attempt instead of every one (default 5). "
+                         "Saves ~7 s per attempt; the age of the context is logged.")
     ap.add_argument("--label", default="",
-                    help="strömläge för körningen, t.ex. motor / laddare / tandning. "
-                         "Sparas på varje rad så körningarna kan jämföras efteråt.")
+                    help="power mode for the run, e.g. engine / charger / ignition. "
+                         "Saved on each row so the runs can be compared afterwards.")
     ap.add_argument("--summary", nargs="+", metavar="JSONL",
-                    help="summera tidigare körningar i stället för att mäta")
+                    help="summarize earlier runs instead of measuring")
     args = ap.parse_args()
 
     if args.summary:
@@ -247,28 +255,28 @@ def main() -> int:
     _jsonl = open(f"logs/slabs_torture-{stamp}.jsonl", "w", encoding="utf-8")
 
     trials = [(g, v, t) for g in gaps for v in variants for t in td5_modes] * args.rounds
-    rng.shuffle(trials)   # blandad ordning: tid/temperatur ska inte följa tillståndet
+    rng.shuffle(trials)   # shuffled order: time/temperature shouldn't track the state
 
-    # grov uppskattning: tyst period + init + ev. hållperiod + andning, plus TD5
-    # -kontexten som numera bara läses var N:e försök
+    # rough estimate: quiet period + init + optional hold period + breathing, plus the
+    # TD5 context which is now only read every Nth attempt
     per_td5 = 7.0 / max(1, args.td5_every)
     est = sum(g + 2 + args.hold * 0.3 + 1 + per_td5 for g, _, t in trials) / 60
-    say(f"SLABS-tortyr {stamp} — seed {seed}" + (f" — läge: {args.label}" if args.label else ""))
-    say(f"{len(trials)} försök · gap {gaps} · varianter {variants} · TD5 {td5_modes}")
-    budget = f" (stoppar efter {args.max_minutes:.0f} min)" if args.max_minutes else ""
-    say(f"uppskattad tid: ~{est:.0f} min{budget}. Stillastående. Ctrl-C sparar resultatet.")
+    say(f"SLABS torture {stamp} — seed {seed}" + (f" — mode: {args.label}" if args.label else ""))
+    say(f"{len(trials)} attempts · gap {gaps} · variants {variants} · TD5 {td5_modes}")
+    budget = f" (stops after {args.max_minutes:.0f} min)" if args.max_minutes else ""
+    say(f"estimated time: ~{est:.0f} min{budget}. Stationary. Ctrl-C saves the result.")
 
     try:
         port = resolve_serial_port(args.serial)
     except FileNotFoundError as exc:
-        say(f"ingen kabel: {exc}")
+        say(f"no cable: {exc}")
         return 1
     transport = LoggingTransport(SerialTransport(port, timeout=1.0),
                                  logfile=f"logs/slabs_torture-{stamp}.raw.log")
     try:
         transport.open()
     except Exception as exc:  # noqa: BLE001
-        say(f"kunde inte öppna {port}: {exc}")
+        say(f"could not open {port}: {exc}")
         return 1
 
     results = []
@@ -278,11 +286,11 @@ def main() -> int:
     try:
         for i, (gap, variant, use_td5) in enumerate(trials, 1):
             if args.max_minutes and (time.monotonic() - t_start) / 60 >= args.max_minutes:
-                say(f"\ntidsbudgeten ({args.max_minutes:.0f} min) slut — stoppar här. "
-                    f"Kör fler block senare och slå ihop med --summary.")
+                say(f"\ntime budget ({args.max_minutes:.0f} min) spent — stopping here. "
+                    f"Run more blocks later and merge with --summary.")
                 break
-            # Motorkontexten kostar ~7 s. Läs den var N:e försök och återanvänd
-            # däremellan — spänningen rör sig långsamt, och åldern loggas.
+            # The engine context costs ~7 s. Read it every Nth attempt and reuse it
+            # in between — the voltage moves slowly, and the age is logged.
             if use_td5 and (i == 1 or (i - 1) % max(1, args.td5_every) == 0):
                 last_ctx = td5_context(transport)
                 last_ctx_at = time.monotonic()
@@ -296,32 +304,32 @@ def main() -> int:
             results.append(row)
             record(**row)
             rpm = ctx.get("rpm")
-            motor = "?" if rpm is None else ("igång" if rpm else "av")
+            motor = "?" if rpm is None else ("running" if rpm else "off")
             say(f"[{i:3}/{len(trials)}] gap {gap:4.0f}s · {variant:15} · td5 "
-                f"{'ja ' if use_td5 else 'nej'} · motor {motor:5} → {r['result']}"
-                + (f"  ({r.get('reads')} läsningar)" if r.get("result") == "träff" else ""))
-            if r["result"] == "lokalt_fel":
-                say(f"   ✗ avbryter: {r.get('error')}")
+                f"{'yes' if use_td5 else 'no '} · engine {motor:7} → {r['result']}"
+                + (f"  ({r.get('reads')} reads)" if r.get("result") == "hit" else ""))
+            if r["result"] == "local_error":
+                say(f"   ✗ aborting: {r.get('error')}")
                 break
-            quiet(1.0)  # låt bussen andas mellan försöken
+            quiet(1.0)  # let the bus breathe between attempts
     except KeyboardInterrupt:
-        say("\navbrutet — sammanfattar det vi hann mäta")
+        say("\naborted — summarizing what we managed to measure")
     finally:
         try:
             transport.close()
         except Exception:  # noqa: BLE001
             pass
 
-    say("\n=== SAMMANFATTNING ===")
+    say("\n=== SUMMARY ===")
     if not results:
         return 1
 
     def rate(rows):
-        hits = sum(1 for r in rows if r["result"] == "träff")
+        hits = sum(1 for r in rows if r["result"] == "hit")
         return f"{hits}/{len(rows)} ({100 * hits / len(rows):.0f}%)"
 
-    for label, key in (("tyst period", "gap"), ("variant", "variant"),
-                       ("TD5 före", "td5_first")):
+    for label, key in (("quiet period", "gap"), ("variant", "variant"),
+                       ("TD5 first", "td5_first")):
         groups = defaultdict(list)
         for r in results:
             groups[r[key]].append(r)
@@ -331,19 +339,19 @@ def main() -> int:
 
     with_rpm = [r for r in results if r.get("rpm") is not None]
     if with_rpm:
-        say("\n  per motorläge (bara försök med TD5-kontext):")
+        say("\n  per engine mode (attempts with TD5 context only):")
         for on in (True, False):
             rows = [r for r in with_rpm if bool(r["rpm"]) is on]
             if rows:
                 v = [r["battery"] for r in rows if r.get("battery")]
-                volt = f"  batteri {min(v):.2f}–{max(v):.2f} V" if v else ""
-                say(f"    {'igång' if on else 'av':16} {rate(rows)}{volt}")
+                volt = f"  battery {min(v):.2f}–{max(v):.2f} V" if v else ""
+                say(f"    {'running' if on else 'off':16} {rate(rows)}{volt}")
 
-    held = [r for r in results if r["result"] == "träff"]
+    held = [r for r in results if r["result"] == "hit"]
     if held:
-        say(f"\n  stabilitet: {sum(r['reads'] for r in held)} läsningar, "
-            f"{sum(r['misses'] for r in held)} tappade i {len(held)} sessioner")
-    say(f"\nrådata: logs/slabs_torture-{stamp}.jsonl")
+        say(f"\n  stability: {sum(r['reads'] for r in held)} reads, "
+            f"{sum(r['misses'] for r in held)} dropped in {len(held)} sessions")
+    say(f"\nraw data: logs/slabs_torture-{stamp}.jsonl")
     return 0
 
 

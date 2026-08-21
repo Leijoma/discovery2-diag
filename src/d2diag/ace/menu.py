@@ -1,29 +1,29 @@
-"""ACE (Lucas) reference tool-meny + vår täckning — driver Karta-fliken.
+"""ACE (Lucas) reference tool menu + our coverage — drives the Map tab.
 
-status: "ok" (bekräftat i vår kod/avkodning), "maybe" (facit/text känd men rå ej
-fångad av oss), "todo" (ej mappat än). `ref` = LID/rutin/kommando eller nästa steg.
-Menyordning bevarad exakt från reference tool (se `references/reference_tool_master_menu.md`,
-avsnitt ACE). Inget är "ok" än — ACE är ännu inte sniffad.
+status: "ok" (confirmed in our code/decoding), "maybe" (reference/text known but raw not
+captured by us), "todo" (not mapped yet). `ref` = LID/routine/command or next step.
+Menu order preserved exactly from the reference tool (see `references/reference_tool_master_menu.md`,
+ACE section). Nothing is "ok" yet — ACE has not been sniffed yet.
 
-⚠️ ACE-caveat: reference tools ventilkoder är opålitliga (tryckgivarfel visas som
-"control valve"-fel). Outputs aktiverar riktiga ventiler/varningslampa och Utility
-kalibrerar/oljeluftar — kör bara stillastående och läs live först.
+⚠️ ACE caveat: the reference tool's valve codes are unreliable (pressure sensor faults show up as
+"control valve" faults). Outputs activate real valves/warning lamp and Utility
+calibrates/bleeds oil — only run stationary and read live first.
 """
 
 ACE_MENU = [
-    {"cat": "Felkoder", "items": [
-        {"name": "Läs fel (Faults - Read)", "status": "maybe",
-         "ref": "dicten 0001–0048; 04-02/04/05 + 06-01 sett RDL 016 via reference tool; rå ej sniffad"},
-        {"name": "Radera fel (Faults - Clear)", "status": "todo", "ref": "sniffa separat från Read"},
+    {"cat": "Fault codes", "items": [
+        {"name": "Read faults (Faults - Read)", "status": "maybe",
+         "ref": "dictionary 0001–0048; 04-02/04/05 + 06-01 seen RDL 016 via reference tool; raw not sniffed"},
+        {"name": "Clear faults (Faults - Clear)", "status": "todo", "ref": "sniff separately from Read"},
     ]},
     {"cat": "Inputs — live", "items": [
         {"name": "1. Engine Speed (rpm)", "status": "todo", "ref": ""},
         {"name": "2. Road Speed (km/h)", "status": "todo", "ref": ""},
         {"name": "3. Battery Voltage (V)", "status": "todo", "ref": ""},
-        {"name": "4. DCV1 Current (A)", "status": "todo", "ref": "riktningsventil 1"},
-        {"name": "5. DCV2 Current (A)", "status": "todo", "ref": "riktningsventil 2"},
-        {"name": "6. PCV Current (A)", "status": "todo", "ref": "tryckreglerventil"},
-        {"name": "7. Pressure Sensor (bar)", "status": "todo", "ref": "nyckel för ventil-caveat"},
+        {"name": "4. DCV1 Current (A)", "status": "todo", "ref": "direction valve 1"},
+        {"name": "5. DCV2 Current (A)", "status": "todo", "ref": "direction valve 2"},
+        {"name": "6. PCV Current (A)", "status": "todo", "ref": "pressure control valve"},
+        {"name": "7. Pressure Sensor (bar)", "status": "todo", "ref": "key to the valve caveat"},
         {"name": "8. Residual Pressure (bar)", "status": "todo", "ref": ""},
         {"name": "9. System Pressure (bar)", "status": "todo", "ref": ""},
         {"name": "10. Upper Lateral Accelerometer", "status": "todo", "ref": ""},
@@ -37,15 +37,15 @@ ACE_MENU = [
         {"name": "1. Main relay (Force ON)", "status": "todo", "ref": ""},
         {"name": "2. Main relay (Force OFF)", "status": "todo", "ref": ""},
         {"name": "3. Warning Lamp (ON/OFF)", "status": "todo", "ref": ""},
-        {"name": "4. Dir. Control Valve 1 (ON/OFF)", "status": "todo", "ref": "⚠️ aktiverar ventil"},
-        {"name": "5. Dir. Control Valve 2 (ON/OFF)", "status": "todo", "ref": "⚠️ aktiverar ventil"},
+        {"name": "4. Dir. Control Valve 1 (ON/OFF)", "status": "todo", "ref": "⚠️ activates valve"},
+        {"name": "5. Dir. Control Valve 2 (ON/OFF)", "status": "todo", "ref": "⚠️ activates valve"},
     ]},
     {"cat": "Utility ⚠️", "items": [
-        {"name": "1. Calib. Accelerometer 1", "status": "todo", "ref": "⚠️ skriver kalibrering"},
-        {"name": "2. Calib. Accelerometer 2", "status": "todo", "ref": "⚠️ skriver kalibrering"},
-        {"name": "3. Set Calibrated", "status": "todo", "ref": "⚠️ skriver"},
-        {"name": "4. Oil Bleeding Step 1", "status": "todo", "ref": "⚠️ aktiv procedur"},
-        {"name": "5. Oil Bleeding Step 2", "status": "todo", "ref": "⚠️ aktiv procedur"},
-        {"name": "6. Oil Bleeding Step 3", "status": "todo", "ref": "⚠️ aktiv procedur"},
+        {"name": "1. Calib. Accelerometer 1", "status": "todo", "ref": "⚠️ writes calibration"},
+        {"name": "2. Calib. Accelerometer 2", "status": "todo", "ref": "⚠️ writes calibration"},
+        {"name": "3. Set Calibrated", "status": "todo", "ref": "⚠️ writes"},
+        {"name": "4. Oil Bleeding Step 1", "status": "todo", "ref": "⚠️ active procedure"},
+        {"name": "5. Oil Bleeding Step 2", "status": "todo", "ref": "⚠️ active procedure"},
+        {"name": "6. Oil Bleeding Step 3", "status": "todo", "ref": "⚠️ active procedure"},
     ]},
 ]

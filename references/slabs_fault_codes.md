@@ -1,25 +1,25 @@
-# Discovery 2 SLABS (Wabco) — felkodslista
+# Discovery 2 SLABS (Wabco) — fault code list
 
-Numrerade feltyper för SLABS-ECU:n (self-levelling + ABS). Källa:
+Numbered fault types for the SLABS ECU (self-levelling + ABS). Source:
 [rswsolutions.com — Discovery II ABS Codes](https://rswsolutions.com/category/discovery-ii-abs-codes/)
-(paginerad, hämtad 2026-08-07). reference tool-guiden anger "up to 47 different faults";
-rsw listar fler numrerade poster (012–114) — troligen inkl. länk-/motorrelaterade.
+(paginated, retrieved 2026-08-07). The reference tool guide states "up to 47 different faults";
+rsw lists more numbered entries (012–114) — probably including link-/engine-related ones.
 
-> ⚠️ **Detta är DISPLAY-numren (verktygets), inte nödvändigtvis råa K-line-index.**
-> Precis som för Td5 måste vi korsvalidera **rå fault-byte/bit ↔ nummer ↔ text**
-> genom att **sniffa reference toolen** när den läser SLABS-felkoder (fånga både råbytes
-> och den visade koden samtidigt). Först då kan `d2diag`-SLABS-avkodaren byggas.
+> ⚠️ **These are the DISPLAY numbers (the tool's), not necessarily raw K-line indices.**
+> Just as for Td5, we must cross-validate **raw fault byte/bit ↔ number ↔ text**
+> by **sniffing the reference tool** while it reads SLABS fault codes (capture both the raw bytes
+> and the displayed code at the same time). Only then can the `d2diag` SLABS decoder be built.
 
-## Systematisk struktur (viktig ledtråd)
-Koderna är regelbundna → råindex lär mappa systematiskt. Per **8 ventiler**
-(4 hjul × in/ut) och per **feltyp** finns en kod:
+## Systematic structure (important clue)
+The codes are regular → the raw indices likely map systematically. Per **8 valves**
+(4 wheels × in/out) and per **fault type** there is a code:
 open circuit → short to gnd → short to supply → **drive** short to supply.
-Samma för **4 hjulhastighetsgivare** (electric fail / output low / bad output),
-**pump-relä**, **bromsljus-relä** och **pump** (monitor/sticking/running).
+Same for the **4 wheel-speed sensors** (electric fail / output low / bad output),
+**pump relay**, **brake-light relay** and **pump** (monitor/sticking/running).
 
 ## Full lista
 
-| Kod | Beskrivning |
+| Code | Description |
 |---|---|
 | 012 | Pump Fail — Monitor Line |
 | 013 | Pump Fail — Pump Not Running When On |
@@ -69,7 +69,7 @@ Samma för **4 hjulhastighetsgivare** (electric fail / output low / bad output),
 | 077 | Rear Left Out Valve — Short to Supply |
 | 080 | Pump Relay — Short To Supply |
 | 081 | Brake Light Relay — Short to Supply |
-| ~082–089 | Sensor — Bad Output (Front Right / Rear Left / Front Left / Rear Right) *(exakta nummer ej fångade — verifiera)* |
+| ~082–089 | Sensor — Bad Output (Front Right / Rear Left / Front Left / Rear Right) *(exact numbers not captured — verify)* |
 | 090 | Front Right In Valve — Drive Short to Supply |
 | 091 | Front Right Out Valve — Drive Short to Supply |
 | 092 | Front Left In Valve — Drive Short to Supply |
@@ -86,8 +86,8 @@ Samma för **4 hjulhastighetsgivare** (electric fail / output low / bad output),
 | 113 | Shuttle Valve Switch Dynamic Failure |
 | 114 | Shuttle Valve Switch Electrical Failure |
 
-## Tre-amigos-koppling
-"Tre amigos" (ABS + TC + HDC-lampor) tänds vid många av dessa — särskilt
-**hjulhastighetsgivar-fel** (044–047 low, 064–067 electric fail, ~082–089 bad
-output) och **shuttle valve** (016, 111, 113, 114). Vid sniffen: läs SLABS-felkoder
-och notera vilka som är **Current** vs **Intermittent** + räknare → korsa mot denna lista.
+## Three-amigos link
+The "three amigos" (ABS + TC + HDC lamps) light up for many of these — especially
+**wheel-speed sensor faults** (044–047 low, 064–067 electric fail, ~082–089 bad
+output) and the **shuttle valve** (016, 111, 113, 114). During the sniff: read SLABS fault codes
+and note which are **Current** vs **Intermittent** + counter → cross against this list.

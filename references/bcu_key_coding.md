@@ -1,42 +1,43 @@
-# BCU — EKA-kod (läsa/sätta) + nyckelkodning (mål & research)
+# BCU — EKA code (read/set) + key coding (goal & research)
 
-Valeo BCU (immobiliser/centralelektronik). Slow init, permanent matad. Ännu **ej
-sniffad** — detta är målbild + plan. Två nivåer, olika risk.
+Valeo BCU (immobiliser/body electronics). Slow init, permanently powered. Not yet
+**sniffed** — this is the target and plan. Two levels, different risk.
 
-## ⭐ HUVUDMÅL: läsa EKA-koden (LÅGRISK — läsoperation)
-**EKA (Emergency Key Access)** = en 4-siffrig kod. Känner man den kommer man
-**förbi immobilisern** via förardörrens nödöppningsprocedur (utan reference tool, om bilen
-låst sig). Att **läsa** koden ur BCU:n är en ren läsning → **ofarligt**.
+## ⭐ MAIN GOAL: read the EKA code (LOW RISK — read operation)
+**EKA (Emergency Key Access)** = a 4-digit code. If you know it, you get **past the
+immobiliser** via the driver's door emergency-unlock procedure (without a reference
+tool, if the car has locked itself out). **Reading** the code out of the BCU is a
+pure read → **harmless**.
 
-**reference tool-metoden (att sniffa):**
-1. Koppla in, **tändning läge II**.
-2. Meny → **Valeo Body Control Unit**.
-3. Bläddra i sidled → **"Read-set EKA"** → ENT.
-4. Bilens **4-siffriga EKA-kod visas**.
-5. (Valfritt) MOD → skriv över med t.ex. `1-2-3-4` så man aldrig låser sig ute.
+**reference tool method (to sniff):**
+1. Connect, **ignition position II**.
+2. Menu → **Valeo Body Control Unit**.
+3. Scroll sideways → **"Read-set EKA"** → ENT.
+4. The car's **4-digit EKA code is displayed**.
+5. (Optional) MOD → overwrite with e.g. `1-2-3-4` so you can never lock yourself out.
 
-**Vår plan (medan reference toolen finns):**
-1. Sniffa **BCU-init** (slow init-adress ~0x40 + keybytes; jfr slow-svepet).
-2. Sniffa **"Read-set EKA"-läsningen** → fånga exakt request + svaret som bär de 4
-   siffrorna. Ren läsning → säkert att fånga och att implementera.
-3. Implementera `bcu.read_eka()` i ett `d2diag.bcu`-lager.
-4. (Sekundärt) `bcu.set_eka(code)` — en definierad *write* men återställbar (byt till
-   känt värde). Bakom explicit bekräftelse.
+**Our plan (while the reference tool is available):**
+1. Sniff **BCU init** (slow-init address ~0x40 + keybytes; cf. the slow sweep).
+2. Sniff the **"Read-set EKA" read** → capture the exact request and the response
+   carrying the 4 digits. Pure read → safe to capture and to implement.
+3. Implement `bcu.read_eka()` in a `d2diag.bcu` layer.
+4. (Secondary) `bcu.set_eka(code)` — a defined *write* but reversible (change to a
+   known value). Behind an explicit confirmation.
 
-## Tändnings-egenhet (verifiera vid BCU-sniff)
-Metoden ovan säger **tändning läge II** för EKA. Men BCU:n svarar generellt även med
-tändning AV, och användaren minns en sekvens "**tändning av → init → tändning på**"
-för någon funktion. **Fånga init:en i olika tändningslägen** vid loggning och notera
-vad EKA-läsningen faktiskt kräver.
+## Ignition quirk (verify during BCU sniff)
+The method above says **ignition position II** for EKA. But the BCU generally
+responds even with ignition OFF, and the user recalls a sequence "**ignition off →
+init → ignition on**" for some function. **Capture the init in different ignition
+positions** while logging, and note what the EKA read actually requires.
 
-## ⚠️ SEKUNDÄRT (HÖGRISK): nyckel-/transponderprogrammering
-Att programmera in en helt **ny nyckel** är den riktiga brick-zonen:
+## ⚠️ SECONDARY (HIGH RISK): key/transponder programming
+Programming in a completely **new key** is the real brick zone:
 > *"A LOCKED BCU CANNOT BE UNLOCKED BY DIAGNOSTIC METHODS."*
-Görs bara med **EKA känd + reservnyckel + stabil ström**, aldrig avbruten. Kräver
-sniff av en riktig nyckel-session + ev. säkerhetsalgoritm (seed→key). **Först när
-EKA-läsning + BCU-läsprotokollet är på plats.**
+Only done with **EKA known + spare key + stable power**, never interrupted. Requires
+a sniff of a real key session + possibly a security algorithm (seed→key). **Only once
+the EKA read + the BCU read protocol are in place.**
 
 ## Status
-BCU ej sniffad. Känt: slow init, permanent matad, läses av denna bils reference tool 1.
-**Nästa:** logga BCU med ESP32-tappen — init + **Read-set EKA** + övriga läs-funktioner.
-Se [[valeo_bcu_capabilities.md]], `references/d2_diagnostic_overview.md`.
+BCU not sniffed. Known: slow init, permanently powered, read by this car's reference
+tool 1. **Next:** log the BCU with the ESP32 tap — init + **Read-set EKA** + the other
+read functions. See [[valeo_bcu_capabilities.md]], `references/d2_diagnostic_overview.md`.

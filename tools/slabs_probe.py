@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""SLABS-prob: testa init-varianter systematiskt och logga ALLT.
+"""SLABS probe: test init variants systematically and log EVERYTHING.
 
-Dashboarden är fel verktyg för att felsöka anslutningen — den kopplar om, byter
-modul och skriver över kontexten. Det här skriptet gör tvärtom: en kontrollerad
-sekvens, en variant i taget, med rå TX/RX till fil.
+The dashboard is the wrong tool for debugging the connection — it reconnects,
+switches modules and overwrites the context. This script does the opposite: one
+controlled sequence, one variant at a time, with raw TX/RX to file.
 
-Bakgrund (se references/slabs_protocol.md):
-  * Reference tool initierar FYSISKT med testar-adress 0xF7: ``81 29 F7 81 22``.
-  * Vår egen adressjakt 2026-08-05 fick svar från 0x29 ENBART i FUNKTIONELLT läge
-    med testar-adress 0xF1: ``C1 29 F1 81 5c`` → ``C1 57 8F``.
-  * muki01-referensen (bekräftad korrekt) initierar funktionellt: ``C1 33 F1 81 66``.
-  * Init lyckas i sniffen först efter 25–28 s UTAN trafik mot modulen.
+Background (see references/slabs_protocol.md):
+  * The reference tool inits PHYSICALLY with tester address 0xF7: ``81 29 F7 81 22``.
+  * Our own address hunt 2026-08-05 got a response from 0x29 ONLY in FUNCTIONAL mode
+    with tester address 0xF1: ``C1 29 F1 81 5c`` → ``C1 57 8F``.
+  * The muki01 reference (confirmed correct) inits functionally: ``C1 33 F1 81 66``.
+  * In the sniff the init only succeeds after 25–28 s WITHOUT traffic to the module.
 
-Skriptet mäter därför båda adresslägena med tysta perioder emellan, och läser
-motorkontext (varvtal/fart/batteri) före testet så ett tyst försök går att tolka
-i efterhand — SLABS vägrar comms >8–20 km/h.
+The script therefore measures both address modes with quiet periods in between, and
+reads engine context (rpm/speed/battery) before the test so a silent attempt can be
+interpreted afterwards — SLABS refuses comms >8–20 km/h.
 
-Kör stillastående med tändning på:
+Run stationary with ignition on:
 
-    PYTHONPATH=src python3 tools/slabs_probe.py                  # autodetektera kabel
+    PYTHONPATH=src python3 tools/slabs_probe.py                  # auto-detect cable
     PYTHONPATH=src python3 tools/slabs_probe.py --quiet 30 --hold 120
     PYTHONPATH=src python3 tools/slabs_probe.py --no-td5 --rounds 2
 """
@@ -41,12 +41,12 @@ from d2diag.td5 import Td5  # noqa: E402
 from d2diag.transport import LoggingTransport, SerialTransport  # noqa: E402
 from d2diag.web.sources import resolve_serial_port  # noqa: E402
 
-# (namn, funktionell, testar-adress) — ordningen är testordningen.
+# (name, functional, tester address) — the order is the test order.
 VARIANTS = (
-    ("fysisk/F7  (reference tool)", False, 0xF7),
-    ("funktionell/F1 (jakt+muki01)", True, 0xF1),
-    ("funktionell/F7", True, 0xF7),
-    ("fysisk/F1", False, 0xF1),
+    ("physical/F7  (reference tool)", False, 0xF7),
+    ("functional/F1 (hunt+muki01)", True, 0xF1),
+    ("functional/F7", True, 0xF7),
+    ("physical/F1", False, 0xF1),
 )
 
 _log_fh = None
@@ -60,8 +60,8 @@ def say(msg: str) -> None:
         _log_fh.flush()
 
 
-def quiet(seconds: float, why: str = "tyst period") -> None:
-    """Vänta UTAN att skicka något. Varje byte nollställer modulens väntan."""
+def quiet(seconds: float, why: str = "quiet period") -> None:
+    """Wait WITHOUT sending anything. Every byte resets the module's wait."""
     if seconds <= 0:
         return
     say(f"  … {why} {seconds:.0f}s")
@@ -69,57 +69,57 @@ def quiet(seconds: float, why: str = "tyst period") -> None:
 
 
 def engine_context(transport, sleep_after: float) -> "dict | None":
-    """Läs rpm/fart/batteri ur TD5 och släpp sessionen rent (20 + 82).
+    """Read rpm/speed/battery from TD5 and release the session cleanly (20 + 82).
 
-    Ger tolkningsbar kontext till ett tyst SLABS-försök: stod bilen stilla?
-    Gick motorn? Vad låg spänningen på?
+    Gives interpretable context to a silent SLABS attempt: was the car stationary?
+    Was the engine running? What was the voltage?
     """
     td5 = Td5(KWP2000(KLine(transport, target=0x13), tolerant=True))
     try:
         td5.establish()
     except Exception as exc:  # noqa: BLE001
-        say(f"  TD5 svarade inte ({type(exc).__name__}) — kabel/tändning?")
+        say(f"  TD5 didn't respond ({type(exc).__name__}) — cable/ignition?")
         return None
     try:
         vals = td5.read_all()
         ctx = {k: vals.get(k) for k in ("rpm", "speed", "battery")}
-        say(f"  TD5: rpm {ctx.get('rpm')}, fart {ctx.get('speed')} km/h, "
-            f"batteri {ctx.get('battery')} V")
-        # Mätt 2026-08-19 (8 körningar): motorn igång gav 3 träffar av 4, motorn av
-        # bara 1 av 4. Ingen skarp spänningströskel, men klart starkaste faktorn.
+        say(f"  TD5: rpm {ctx.get('rpm')}, speed {ctx.get('speed')} km/h, "
+            f"battery {ctx.get('battery')} V")
+        # Measured 2026-08-19 (8 runs): engine running gave 3 hits out of 4, engine off
+        # only 1 out of 4. No sharp voltage threshold, but clearly the strongest factor.
         if not ctx.get("rpm"):
-            say("  ⚠️  MOTORN ÄR AV. SLABS svarade bara i 1 av 4 körningar så — "
-                "starta motorn för bästa chans (SLS:s normala driftfall).")
+            say("  ⚠️  ENGINE IS OFF. SLABS responded in only 1 of 4 runs — "
+                "start the engine for the best chance (SLS's normal operating case).")
         if (ctx.get("speed") or 0) > 5:
-            say("  ⚠️  BILEN RULLAR. SLABS vägrar comms >8–20 km/h — stanna först.")
+            say("  ⚠️  THE CAR IS ROLLING. SLABS refuses comms >8–20 km/h — stop first.")
         return ctx
     except Exception as exc:  # noqa: BLE001
-        say(f"  TD5 läsfel: {type(exc).__name__}: {exc}")
+        say(f"  TD5 read error: {type(exc).__name__}: {exc}")
         return None
     finally:
-        # end_session() = 20 + 82. INTE release()/close(): porten delas med
-        # SLABS-försöken, och en stängd port får varje följande init att "misslyckas"
-        # utan att en enda byte gått ut på bussen.
+        # end_session() = 20 + 82. NOT release()/close(): the port is shared with
+        # the SLABS attempts, and a closed port makes every following init "fail"
+        # without a single byte having gone out on the bus.
         try:
             td5.end_session()
         except Exception:  # noqa: BLE001
             pass
-        quiet(sleep_after, "låt bussen tystna efter TD5")
+        quiet(sleep_after, "let the bus fall silent after TD5")
 
 
 def try_init(transport, name: str, functional: bool, source: int,
              write_gap: float = 0.0, init_high: float = 0.025,
              init_idle: float = 0.0) -> "Slabs | None":
-    """Ett enda initförsök med en given variant. Returnerar en levande Slabs eller None.
+    """A single init attempt with a given variant. Returns a live Slabs or None.
 
-    ``write_gap`` är P4 — inter-byte-tiden i vår förfrågan. ISO 14230-2 anger
-    5–20 ms och muki01-referensen använder 5 ms, medan vi alltid skickat hela ramen
-    i ett svep. Det är en otestad hypotes om varför reference tool kommer in på
-    första försöket och vi behöver flera.
+    ``write_gap`` is P4 — the inter-byte time in our request. ISO 14230-2 specifies
+    5–20 ms and the muki01 reference uses 5 ms, whereas we've always sent the whole
+    frame in one sweep. It's an untested hypothesis for why the reference tool gets in
+    on the first attempt and we need several.
     """
     frame = encode(b"\x81", SLABS_ADDRESS, source, addressed=True, functional=functional)
     tags = ("" if not write_gap else f" · P4 {write_gap*1000:.0f}ms") + \
-           ("" if abs(init_high - 0.025) < 1e-9 else f" · hög {init_high*1000:.0f}ms")
+           ("" if abs(init_high - 0.025) < 1e-9 else f" · high {init_high*1000:.0f}ms")
     say(f"  → {name}{tags}: {frame.hex(' ')}")
     kline = KLine(transport, target=SLABS_ADDRESS, write_gap=write_gap,
                   init_high=init_high, init_idle=init_idle)
@@ -128,36 +128,36 @@ def try_init(transport, name: str, functional: bool, source: int,
     try:
         c1 = kwp.start_communication(tolerant=True, functional=functional, source=source)
     except KLineTimeout as exc:
-        # Visa vad pulsen FAKTISKT blev — nominella värden säger inget om en USB-port.
-        say(f"     tyst · puls {kline.last_pulse} ({exc})")
+        # Show what the pulse ACTUALLY was — nominal values say nothing about a USB port.
+        say(f"     silent · pulse {kline.last_pulse} ({exc})")
         return None
     except Exception as exc:  # noqa: BLE001
-        # Allt annat är VÅRT fel (stängd port, trasig kabel). Det får aldrig
-        # rapporteras som "tyst" — då tolkas ett testfel som ett modulsvar.
-        say(f"     ✗ LOKALT FEL, inget skickades: {type(exc).__name__}: {exc}")
+        # Everything else is OUR fault (closed port, broken cable). It must never
+        # be reported as "silent" — that would read a test failure as a module response.
+        say(f"     ✗ LOCAL ERROR, nothing was sent: {type(exc).__name__}: {exc}")
         raise
-    say(f"     C1! {c1[:4].hex(' ')} · puls {kline.last_pulse}")
-    # Kvittens: reference tool skickar alltid 1A 8A först — och svaret skiljer en
-    # riktig session från ett C1 som bara låg i bruset.
+    say(f"     C1! {c1[:4].hex(' ')} · pulse {kline.last_pulse}")
+    # Acknowledgement: the reference tool always sends 1A 8A first — and the response
+    # tells a real session apart from a C1 that was just noise on the bus.
     try:
         ident = slabs.read_ecu_id(0x8A)
-        say(f"     kvittens 1A 8A → {ident[:8].hex(' ')}")
+        say(f"     ack 1A 8A → {ident[:8].hex(' ')}")
     except Exception as exc:  # noqa: BLE001
-        say(f"     INGEN kvittens på 1A 8A ({type(exc).__name__}) — troligen falskt positiv")
+        say(f"     NO ack on 1A 8A ({type(exc).__name__}) — probably a false positive")
         return None
     return slabs
 
 
 def hold(slabs: Slabs, seconds: float) -> None:
-    """Håll sessionen på 1 Hz (reference tools takt) och logga varje läsning."""
-    say(f"  håller sessionen i {seconds:.0f}s på 1 Hz …")
+    """Hold the session at 1 Hz (the reference tool's rate) and log every read."""
+    say(f"  holding the session for {seconds:.0f}s at 1 Hz …")
     t0 = time.monotonic()
     reads = misses = 0
     try:
         faults = slabs.read_faults()
-        say(f"  felkoder: {faults}")
+        say(f"  fault codes: {faults}")
     except Exception as exc:  # noqa: BLE001
-        say(f"  felkodsläsning misslyckades: {type(exc).__name__}")
+        say(f"  fault-code read failed: {type(exc).__name__}")
     while time.monotonic() - t0 < seconds:
         time.sleep(1.0)
         try:
@@ -171,46 +171,46 @@ def hold(slabs: Slabs, seconds: float) -> None:
         if raw:
             reads += 1
             if reads % 10 == 1 or misses:
-                say(f"   {time.monotonic() - t0:5.0f}s  höjder {raw[0]}/{raw[1]}"
-                    f"  ({reads} ok, {misses} tappade)")
+                say(f"   {time.monotonic() - t0:5.0f}s  heights {raw[0]}/{raw[1]}"
+                    f"  ({reads} ok, {misses} dropped)")
             misses = 0
         else:
             misses += 1
-            say(f"   {time.monotonic() - t0:5.0f}s  TYST ({misses} i rad)")
+            say(f"   {time.monotonic() - t0:5.0f}s  SILENT ({misses} in a row)")
             if misses >= 5:
-                say("  ✗ sessionen tappad")
+                say("  ✗ session lost")
                 return
-    say(f"  ✓ höll hela perioden: {reads} lyckade läsningar")
+    say(f"  ✓ held the whole period: {reads} successful reads")
 
 
 def main() -> int:
     global _log_fh
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--serial", default="auto", help="serieport (default: autodetektera)")
+    ap.add_argument("--serial", default="auto", help="serial port (default: auto-detect)")
     ap.add_argument("--quiet", type=float, default=30.0,
-                    help="tyst period mellan försöken i sekunder (default 30)")
+                    help="quiet period between attempts in seconds (default 30)")
     ap.add_argument("--hold", type=float, default=120.0,
-                    help="håll sessionen så här länge vid träff (default 120 s)")
-    ap.add_argument("--rounds", type=int, default=1, help="antal varv genom matrisen")
+                    help="hold the session this long on a hit (default 120 s)")
+    ap.add_argument("--rounds", type=int, default=1, help="number of passes through the matrix")
     ap.add_argument("--no-td5", action="store_true",
-                    help="hoppa över TD5-kontexten (ingen rpm/fart/batteri i loggen)")
+                    help="skip the TD5 context (no rpm/speed/battery in the log)")
     ap.add_argument("--init-idle", type=float, default=0.0,
-                    help="W5 — garanterad buss-idle i ms före varje init-puls "
-                         "(ISO: 300). 0 = av. Kör 1000 för att eliminera W5 som "
-                         "variabel under felsökning.")
+                    help="W5 — guaranteed bus idle in ms before each init pulse "
+                         "(ISO: 300). 0 = off. Use 1000 to eliminate W5 as a "
+                         "variable during debugging.")
     ap.add_argument("--init-highs", default="25",
-                    help="TiniH i ms — hur länge K-line hålls HÖG efter låg-pulsen "
-                         "innan StartCommunication skickas (ISO: 25 ms ± 1). "
-                         "Kommaseparerat för att svepa, t.ex. 15,25,35.")
+                    help="TiniH in ms — how long K-line is held HIGH after the low pulse "
+                         "before StartCommunication is sent (ISO: 25 ms ± 1). "
+                         "Comma-separated to sweep, e.g. 15,25,35.")
     ap.add_argument("--write-gaps", default="0,5",
-                    help="P4-värden att testa i ms (default 0,5). 0 = hela ramen i ett "
-                         "svep som hittills, 5 = muki01:s inter-byte-fördröjning.")
+                    help="P4 values to test in ms (default 0,5). 0 = whole frame in one "
+                         "sweep as so far, 5 = muki01's inter-byte delay.")
     ap.add_argument("--order", choices=("shuffle", "fixed"), default="shuffle",
-                    help="variantordning. SHUFFLE (default) krävs för att kunna skilja "
-                         "variantens effekt från försöksnumrets — med fast ordning är "
-                         "de perfekt sammanblandade (belagt 2026-08-19).")
-    ap.add_argument("--seed", type=int, default=None, help="seed för ordningen")
+                    help="variant order. SHUFFLE (default) is required to separate the "
+                         "variant's effect from the attempt number — with a fixed order "
+                         "they're perfectly confounded (proven 2026-08-19).")
+    ap.add_argument("--seed", type=int, default=None, help="seed for the order")
     args = ap.parse_args()
 
     seed = args.seed if args.seed is not None else int(time.time())
@@ -223,28 +223,28 @@ def main() -> int:
     try:
         port = resolve_serial_port(args.serial)
     except FileNotFoundError as exc:
-        say(f"ingen kabel hittad: {exc}")
+        say(f"no cable found: {exc}")
         return 1
 
-    say(f"SLABS-prob {stamp} — port {port} — ordning {args.order} (seed {seed})")
-    say(f"rå TX/RX → {raw_path}")
-    say("Kör STILLASTÅENDE med tändning på. SLABS vägrar comms >8–20 km/h.")
+    say(f"SLABS probe {stamp} — port {port} — order {args.order} (seed {seed})")
+    say(f"raw TX/RX → {raw_path}")
+    say("Run STATIONARY with ignition on. SLABS refuses comms >8–20 km/h.")
 
     transport = LoggingTransport(SerialTransport(port, timeout=1.0), logfile=raw_path)
     try:
         transport.open()
-    except Exception as exc:  # noqa: BLE001 — trasig/upptagen port ska ge ett svar, inte en trace
-        say(f"kunde inte öppna {port}: {type(exc).__name__}: {exc}")
-        say("sitter kabeln i? kör någon annan (dashboarden) mot porten samtidigt?")
+    except Exception as exc:  # noqa: BLE001 — a broken/busy port should give an answer, not a trace
+        say(f"could not open {port}: {type(exc).__name__}: {exc}")
+        say("is the cable plugged in? is anything else (the dashboard) using the port at the same time?")
         return 1
     results: "list[tuple[str, str]]" = []
     try:
         if not args.no_td5:
-            say("\n[kontext] läser motorn först (och släpper sessionen rent)")
+            say("\n[context] reading the engine first (and releasing the session cleanly)")
             engine_context(transport, args.quiet)
 
-        if not transport.is_open:   # property, inte metod
-            say("porten är stängd efter kontextfasen — avbryter (det vore inget mätvärde)")
+        if not transport.is_open:   # property, not a method
+            say("the port is closed after the context phase — aborting (that would be no measurement)")
             return 1
 
         wgaps = [float(g) / 1000 for g in args.write_gaps.split(",") if g.strip()]
@@ -253,35 +253,35 @@ def main() -> int:
             combos = [(n, f, s, w, h) for (n, f, s) in VARIANTS for w in wgaps for h in highs]
             if args.order == "shuffle":
                 rng.shuffle(combos)
-            say(f"\n[matris] varv {rnd}/{args.rounds} — {len(combos)} kombinationer")
+            say(f"\n[matrix] pass {rnd}/{args.rounds} — {len(combos)} combinations")
             for name, functional, source, wgap, high in combos:
-                label = f"{name} · P4 {wgap*1000:.0f}ms · hög {high*1000:.0f}ms"
+                label = f"{name} · P4 {wgap*1000:.0f}ms · high {high*1000:.0f}ms"
                 slabs = try_init(transport, name, functional, source, wgap, high,
                                  args.init_idle / 1000)
-                results.append((label, "TRÄFF" if slabs else "tyst"))
+                results.append((label, "HIT" if slabs else "silent"))
                 if slabs is not None:
                     hold(slabs, args.hold)
                     try:
-                        slabs.release()  # 82 — lämna inte länken öppen
+                        slabs.release()  # 82 — don't leave the link open
                     except Exception:  # noqa: BLE001
                         pass
-                    say("\n=== SAMMANFATTNING ===")
+                    say("\n=== SUMMARY ===")
                     for n, r in results:
                         say(f"  {r:6} {n}")
                     return 0
                 quiet(args.quiet)
     except KeyboardInterrupt:
-        say("\navbrutet")
+        say("\naborted")
     finally:
         try:
             transport.close()
         except Exception:  # noqa: BLE001
             pass
 
-    say("\n=== SAMMANFATTNING ===")
+    say("\n=== SUMMARY ===")
     for n, r in results:
         say(f"  {r:6} {n}")
-    say("ingen variant gav kontakt — se rålogg för exakta burstar")
+    say("no variant made contact — see the raw log for exact bursts")
     return 1
 
 

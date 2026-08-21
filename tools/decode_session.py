@@ -1,11 +1,11 @@
-"""Avkoda en esp32_read-logg (SLABS/KWP2000) grupperat per markör.
+"""Decode an esp32_read log (SLABS/KWP2000) grouped per marker.
 
     python3 tools/decode_session.py logs/session.log
 
-Läser `>>> markör`-rader och `[  t] hex …`-ramar. Delar varje rad i ramar via
-längd-prefix (`<len> <payload…> <cs>`, ledande 0x00 = gap hoppas), avkodar
-KWP2000-tjänster, dedupar per markör på (SID + första params) så live-poll-
-upprepningar kollapsar. Skriver en kompakt request→svar-karta per markör.
+Reads `>>> marker` rows and `[  t] hex …` frames. Splits each row into frames via
+the length prefix (`<len> <payload…> <cs>`, leading 0x00 = gap skipped), decodes
+KWP2000 services, dedupes per marker on (SID + first params) so live-poll
+repetitions collapse. Writes a compact request→response map per marker.
 """
 import re
 import sys
@@ -20,7 +20,7 @@ SVC = {
 
 
 def frames(b):
-    """Dela byte-lista i ramar via längd-prefix. Hoppa ledande 0x00 (gap)."""
+    """Split a byte list into frames via the length prefix. Skip leading 0x00 (gap)."""
     out, i, n = [], 0, len(b)
     while i < n:
         if b[i] == 0x00:
@@ -34,7 +34,7 @@ def frames(b):
 
 
 def decode(fr):
-    """→ (sig, text). sig = dedup-nyckel."""
+    """→ (sig, text). sig = dedup key."""
     if len(fr) < 3:
         return None, None
     pl = fr[1:1 + fr[0]]
@@ -77,7 +77,7 @@ def main():
             sig, text = decode(fr)
             if text is None or sig is None:
                 continue
-            # hoppa keepalive (TesterPresent) + rena minnespoll i sammanfattningen
+            # skip keepalive (TesterPresent) + pure memory polls in the summary
             if sig[0] in (0x3E, 0x7E):
                 continue
             if sig not in seen_set:

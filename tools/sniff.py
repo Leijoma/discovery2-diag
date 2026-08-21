@@ -1,15 +1,15 @@
-"""Passiv K-line-sniffer — lyssna på trafik mellan ett (lånat) verktyg och ECU:n.
+"""Passive K-line sniffer — listen to traffic between a (borrowed) tool and the ECU.
 
-    PYTHONPATH=src python3 tools/sniff.py /dev/cu.usbserial-XXXX [gap_ms] [utfil] [sekunder]
+    PYTHONPATH=src python3 tools/sniff.py /dev/cu.usbserial-XXXX [gap_ms] [outfile] [seconds]
 
-Kopplas in via en OBD-splitter (piggyback): lånat verktyg i ena grenen, denna
-lyssnare i den andra. Loggar varje meddelande (uppdelat på tystnadsgap) med
-tidsstämpel + annotering, och skriver Ekaitza-stil hex-rader till utfil.
+Connected via an OBD splitter (piggyback): the borrowed tool in one branch, this
+listener in the other. Logs each message (split on silence gaps) with a timestamp +
+annotation, and writes Ekaitza-style hex lines to the output file.
 
-*** RX ONLY — verktyget SÄNDER ALDRIG. *** Att sända skulle krocka med det lånade
-verktyget och förstöra sessionen. För GARANTERAD passivitet: använd ESP32 + L9637D
-i ren RX (KKL-kabeln är en transceiver som lyssnar när den inte sänder, men driver
-inte bussen aktivt i vila). Kör stillastående (SLABS tappar comms >8 km/h).
+*** RX ONLY — the tool NEVER TRANSMITS. *** Transmitting would collide with the
+borrowed tool and wreck the session. For GUARANTEED passivity: use ESP32 + L9637D
+in pure RX (the KKL cable is a transceiver that listens when it isn't sending, but
+doesn't drive the bus actively at rest). Run stationary (SLABS loses comms >8 km/h).
 """
 import sys
 import time
@@ -28,8 +28,8 @@ def main() -> int:
     ser = serial.serial_for_url(
         port, baudrate=10400, bytesize=8, parity="N", stopbits=1, timeout=gap
     )
-    print(f"PASSIV sniff @ 10400 baud, gap {gap*1000:.0f} ms → {outfile}")
-    print("RX ONLY — sänder aldrig. Ctrl-C avslutar.\n")
+    print(f"PASSIVE sniff @ 10400 baud, gap {gap*1000:.0f} ms → {outfile}")
+    print("RX ONLY — never transmits. Ctrl-C exits.\n")
 
     t0 = time.monotonic()
     cur = bytearray()
@@ -40,7 +40,7 @@ def main() -> int:
     log = open(outfile, "a", encoding="utf-8")
     try:
         while duration is None or (time.monotonic() - t0) < duration:
-            b = ser.read(1)  # SÄND ALDRIG — bara läs
+            b = ser.read(1)  # NEVER TRANSMIT — read only
             now = time.monotonic()
             if b:
                 if msg_start is None:
@@ -66,7 +66,7 @@ def main() -> int:
             log.write(bytes(cur).hex() + "\n")
         log.close()
         ser.close()
-    print(f"\n{n} meddelanden loggade → {outfile}")
+    print(f"\n{n} messages logged → {outfile}")
     return 0
 
 

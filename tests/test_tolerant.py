@@ -1,7 +1,7 @@
-"""Tester för det toleranta läget: burst-läsning som klarar brus där strikt fallerar.
+"""Tests for the tolerant mode: burst reading that handles noise where strict fails.
 
-Bevisar mot INSPELADE bytes (verklig bil 2026-08-03) och simulerad turnaround-
-glitch att biblioteket tar sig hela vägen till upplåst livedata.
+Proves against RECORDED bytes (real car 2026-08-03) and a simulated turnaround
+glitch that the library gets all the way to unlocked live data.
 """
 import pytest
 
@@ -17,11 +17,11 @@ from d2diag.td5 import Td5
 from d2diag.td5.keygen import key_bytes_from_seed
 from tests.fakes import FakeKLineEcu
 
-NOSLEEP = lambda *_: None  # noqa: E731 — injiceras i establish() så testerna är snabba
+NOSLEEP = lambda *_: None  # noqa: E731 — injected into establish() so the tests are fast
 
 
 def _sess(data: bytes) -> bytes:
-    """Oadresserad sessionsram (så ECU-svaren ser ut som på bilen)."""
+    """Unaddressed session frame (so the ECU responses look like on the car)."""
     return encode(data, addressed=False)
 
 
@@ -38,11 +38,11 @@ def test_converse_returns_echo_plus_response():
     ecu = FakeKLineEcu({req: resp})
     with KLine(ecu) as k:
         burst = k.converse(b"\x3e\x01")
-    assert burst == req + resp  # hela bursten rå: eko följt av svar
+    assert burst == req + resp  # the whole burst raw: echo followed by response
 
 
 def test_fast_init_tolerant_finds_c1_in_shredded_frame():
-    # C1 finns men ramen är sönderskjuten av turnaround-glitch (som på bilen).
+    # C1 is present but the frame is shredded by a turnaround glitch (as on the car).
     ecu = FakeKLineEcu({_init_req(): b"\x03\xc1\x38\x0e\xf8\x00"})
     with KLine(ecu) as k:
         out = k.fast_init_tolerant()
@@ -53,26 +53,26 @@ def test_strict_fast_init_fails_where_tolerant_succeeds():
     ecu = FakeKLineEcu({_init_req(): b"\x03\xc1\x38\x0e\xf8\x00"})
     with KLine(ecu) as k:
         with pytest.raises(KLineTimeout):
-            k.fast_init()  # strikt kräver giltig ram → faller
+            k.fast_init()  # strict requires a valid frame → fails
 
 
 # --------------------------------------------------------------------------- #
-# KWP2000: tolerant request plockar svaret trots trasig checksumma
+# KWP2000: tolerant request picks the response despite a bad checksum
 # --------------------------------------------------------------------------- #
 def test_tolerant_request_survives_bad_checksum():
     req = _sess(b"\x21\x09")
     good = _sess(b"\x61\x09\x00\x00")
-    ecu = FakeKLineEcu({req: good}, corrupt=True)  # checksumman flippas
+    ecu = FakeKLineEcu({req: good}, corrupt=True)  # the checksum is flipped
     with KWP2000(KLine(ecu), tolerant=True) as kwp:
         data = kwp.read_local_identifier(0x09)
-    assert data.startswith(b"\x00\x00")  # 61 09 hittades trots trasig cs
+    assert data.startswith(b"\x00\x00")  # 61 09 found despite a bad cs
 
 
 def test_strict_request_fails_on_bad_checksum():
     req = _sess(b"\x21\x09")
     good = _sess(b"\x61\x09\x00\x00")
     ecu = FakeKLineEcu({req: good}, corrupt=True)
-    with KWP2000(KLine(ecu)) as kwp:  # strikt
+    with KWP2000(KLine(ecu)) as kwp:  # strict
         with pytest.raises(Exception):
             kwp.read_local_identifier(0x09)
 
@@ -89,11 +89,11 @@ def test_tolerant_negative_response_still_raises():
 
 
 # --------------------------------------------------------------------------- #
-# Td5: full establish() inkl. keygen, mot sniffens exakta bytes
+# Td5: full establish() incl. keygen, against the sniff's exact bytes
 # --------------------------------------------------------------------------- #
 def _sniff_ecu(corrupt: bool = False) -> FakeKLineEcu:
-    seed_hi, seed_lo = 0x10, 0xE6                 # seed ur Ekaitza-sniffen
-    key = key_bytes_from_seed(seed_hi, seed_lo)   # vår keygen → 90 86
+    seed_hi, seed_lo = 0x10, 0xE6                 # seed from the Ekaitza sniff
+    key = key_bytes_from_seed(seed_hi, seed_lo)   # our keygen → 90 86
     responses = {
         _init_req(): _sess(b"\xc1\x57\x8f"),                              # 03 c1 57 8f aa
         _sess(b"\x10\xa0"): _sess(b"\x50"),                              # 01 50 51
@@ -107,14 +107,14 @@ def test_establish_full_flow_including_keygen():
     td5 = Td5(KWP2000(KLine(_sniff_ecu()), tolerant=True))
     with td5:
         c1 = td5.establish(idle=0, attempts=2, sleep=NOSLEEP)
-    # Nyckeln accepterades bara om vår keygen matchade sniffens seed→key.
+    # The key was accepted only if our keygen matched the sniff's seed→key.
     assert c1[:3] == b"\xc1\x57\x8f"
 
 
 def test_read_real_recorded_lid_1a_decodes_temps():
-    # Verklig 21 1A-svarsram från bilen (RDL 016, 2026-08-03, motor av):
+    # Real 21 1A response frame from the car (RDL 016, 2026-08-03, engine off):
     #   12 61 1a | 0c fc 04 f1 0c b1 05 eb 10 88 00 04 0c 95 06 51 | cb
-    # kylvätska = offset 0 u16 = 0x0cfc = 3324 → 332.4 − 273.2 = 59.2 °C
+    # coolant = offset 0 u16 = 0x0cfc = 3324 → 332.4 − 273.2 = 59.2 °C
     resp = bytes.fromhex("12611a0cfc04f10cb105eb108800040c950651cb")
     req = _sess(b"\x21\x1a")
     ecu = FakeKLineEcu({req: resp})

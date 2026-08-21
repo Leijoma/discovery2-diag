@@ -161,5 +161,5 @@ ACE has not been cleanly sniffed).
 | EAT autobox (Bosch GS8.87.0) | 🔴 not recorded | `72`-framed proprietary 🟢 | ReadFaults *frame* 🟢 | Fault payload 🔴, all live data 🔴 |
 | ACE (Lucas) | 🟡 "known", byte not recorded | 🔴 not established | Fault-set mapping (via tool) 🟡 | Address, framing, bulk-block decode, byte-doubling 🔴 |
 
-See also `references/protocol_state_handoff.md` (belagt/kandidat/öppet per module)
+See also `references/protocol_state_handoff.md` (proven/candidate/open per module)
 and `references/portabilitet_andra_bilar.md`.

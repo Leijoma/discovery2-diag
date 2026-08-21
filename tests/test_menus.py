@@ -1,4 +1,4 @@
-"""Tester för modulkartorna (Karta-fliken) och täckningsberäkningen."""
+"""Tests for the module maps (Map tab) and the coverage calculation."""
 from __future__ import annotations
 
 from d2diag.menus import MENUS
@@ -9,9 +9,9 @@ from d2diag.web.sources import MockDataSource, MockSlabsDataSource
 def test_all_modules_have_populated_maps():
     for name in ("td5", "slabs", "bcu", "ace", "autobox", "airbag"):
         menu = MENUS[name]
-        assert menu, f"{name} har tom karta"
+        assert menu, f"{name} has an empty map"
         for group in menu:
-            assert group["items"], f"{name}/{group['cat']} saknar items"
+            assert group["items"], f"{name}/{group['cat']} is missing items"
             for item in group["items"]:
                 assert set(item) >= {"name", "status", "ref"}
                 assert item["status"] in {"ok", "maybe", "todo"}
@@ -36,8 +36,8 @@ def test_coverage_counts_match_maps():
 
 
 def test_airbag_has_no_output_actuators():
-    """SRS är pyroteknik — kartan får inte lista aktiverbara outputs som todo/ok-test."""
+    """SRS is pyrotechnic — the map must not list activatable outputs as todo/ok tests."""
     names = [i["name"].lower() for g in MENUS["airbag"] for i in g["items"]]
-    # enda output-raden ska vara den belagda 'ingen output-sida'
-    assert any("ingen output" in n for n in names)
-    assert not any("force on" in n or "aktivera" in n for n in names)
+    # the only output row should be the confirmed 'no output page'
+    assert any("no output" in n for n in names)
+    assert not any("force on" in n or "activate" in n for n in names)

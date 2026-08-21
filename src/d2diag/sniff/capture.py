@@ -1,9 +1,9 @@
-"""Delad capture-parsning — grund för analys-verktyg och protokollbibliotek.
+"""Shared capture parsing — the basis for analysis tools and the protocol library.
 
-Läser esp32_read-loggar, delar i längd-prefixade KWP-ramar med checksum-validering,
-klassar tjänster och parar request→response. Håller reda på aktiv modul via
-fast-init-signatur. Icke-KWP-protokoll (Autobox `72…`, BCU EKA `CC`) känns igen
-separat i :mod:`d2diag.sniff.library`.
+Reads esp32_read logs, splits into length-prefixed KWP frames with checksum validation,
+classifies services and pairs request→response. Tracks the active module via the
+fast-init signature. Non-KWP protocols (Autobox `72…`, BCU EKA `CC`) are recognised
+separately in :mod:`d2diag.sniff.library`.
 """
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def _last_ms(events) -> int:
 
 
 def split_frames(b: "list[int]") -> "tuple[list, int]":
-    """Dela bytelista i giltiga längd-prefixade ramar. → (frames, consumed_index)."""
+    """Split a byte list into valid length-prefixed frames. → (frames, consumed_index)."""
     out, i, n = [], 0, len(b)
     while i < n:
         if b[i] == 0x00:
@@ -72,10 +72,10 @@ def _contains(seq, sub) -> bool:
 
 
 def classify_frame(frame: "list[int]") -> "dict":
-    """→ {dir, sid, service, lid, payload(hex), cs_ok} för en KWP-ram."""
+    """→ {dir, sid, service, lid, payload(hex), cs_ok} for a KWP frame."""
     payload = frame[1:-1]
     sid = payload[0] if payload else 0
-    if sid == 0x7F:  # negativt svar: 7F <service> <NRC>
+    if sid == 0x7F:  # negative response: 7F <service> <NRC>
         return {"dir": "neg", "sid": 0x7F,
                 "service": f"NegResp({SERVICES.get(payload[1], hex(payload[1])) if len(payload) >= 2 else '?'})",
                 "lid": None, "payload": " ".join(f"{v:02x}" for v in payload),
@@ -93,9 +93,9 @@ def classify_frame(frame: "list[int]") -> "dict":
 
 
 def frames_with_context(events) -> "list[dict]":
-    """Alla giltiga KWP-ramar i ordning, taggade med modul + senaste annotering.
+    """All valid KWP frames in order, tagged with module + the latest annotation.
 
-    Returnerar även resten (icke-KWP-bytes) per rad som ``raw``-poster."""
+    Also returns the remainder (non-KWP bytes) per line as ``raw`` entries."""
     out: "list[dict]" = []
     module, mark = None, None
     for ms, kind, p in events:
@@ -116,7 +116,7 @@ def frames_with_context(events) -> "list[dict]":
 
 
 def kwp_transactions(events) -> "list[dict]":
-    """Para request→response bland KWP-ramarna (hoppar TesterPresent)."""
+    """Pair request→response among the KWP frames (skips TesterPresent)."""
     fr = [e for e in frames_with_context(events) if "kwp" in e]
     txs: "list[dict]" = []
     for i, e in enumerate(fr):

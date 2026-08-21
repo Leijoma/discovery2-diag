@@ -1,4 +1,4 @@
-"""KWP2000-lagret: standardtjänster ovanpå K-Line."""
+"""KWP2000 layer: standard services on top of K-Line."""
 from .kwp2000 import (
     READ_DATA_BY_LOCAL_ID,
     SECURITY_ACCESS,

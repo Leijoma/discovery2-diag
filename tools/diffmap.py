@@ -1,17 +1,17 @@
-"""Aktiv differential-mappning — läs → ändra EN sak → läs → auto-diff → spara.
+"""Active differential mapping — read → change ONE thing → read → auto-diff → save.
 
-Kräver en SÄNDANDE kabel. Verktyget **läser bara** (``21 xx`` + establish +
-keepalive) via en skrivskyddad proxy (:class:`ReadOnlyEcu`) — operatören
-provocerar själv inputen (tryck broms, lyft ett hörn, växla transport mode).
-Ställdon/clear/writes är onåbara här per konstruktion (airbag-pyro och BCU 3B kan
-alltså inte råka triggas).
+Requires a TRANSMITTING cable. The tool **only reads** (``21 xx`` + establish +
+keepalive) via a read-only proxy (:class:`ReadOnlyEcu`) — the operator provokes
+the input themselves (press the brake, lift a corner, toggle transport mode).
+Actuators/clear/writes are unreachable here by construction (so airbag pyro and
+BCU 3B cannot be triggered by accident).
 
-Flöde per fält:
-  1. läs N baslinjeavläsningar av en kandidat-LID-uppsättning
-  2. operatören ändrar en fysisk sak och trycker Enter
-  3. ``stable_diff`` visar vilken byte/bit som rörde sig (stabil-sedan-ändrad)
-  4. operatören etiketterar (numeriskt värde, eller tillståndstext)
-  5. ``automap.solve`` → mappning → spara som kandidat i signalstoren
+Flow per field:
+  1. read N baseline readings of a candidate LID set
+  2. the operator changes one physical thing and presses Enter
+  3. ``stable_diff`` shows which byte/bit moved (stable-then-changed)
+  4. the operator labels it (a numeric value, or a state text)
+  5. ``automap.solve`` → mapping → save as a candidate in the signal store
 
     PYTHONPATH=src python3 tools/diffmap.py slabs /dev/cu.usbserial-XXXX
     PYTHONPATH=src python3 tools/diffmap.py td5   /dev/cu.usbserial-XXXX --lids 1e,36
@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from d2diag.sniff import automap  # noqa: E402
 from d2diag.signals import upsert_field  # noqa: E402
 
-# Read-only kandidat-LID:er per modul (input/switch/settings — aldrig ställdon).
+# Read-only candidate LIDs per module (input/switch/settings — never actuators).
 _CANDIDATES = {
     "slabs": [0x53, 0x54, 0x55, 0x43, 0x44, 0x49, 0x50, 0x57,
               0x42, 0x48, 0x56, 0x58, 0x45, 0x46, 0x59],
@@ -36,24 +36,24 @@ _CANDIDATES = {
 
 
 # --------------------------------------------------------------------------- #
-# Ren logik (enhetstestad — ingen I/O)
+# Pure logic (unit-tested — no I/O)
 # --------------------------------------------------------------------------- #
 def moved(baselines, after, lids):
-    """Stabil-sedan-ändrade bytes (brushärdad). ``lids`` = hex-nyckel-lista."""
+    """Stable-then-changed bytes (noise-hardened). ``lids`` = list of hex keys."""
     return automap.stable_diff(baselines, after, lids)
 
 
 def solve_label(samples, lids, name="signal", unit=""):
-    """Kör automap.solve på etiketterade avläsningar → mappningsförslag."""
+    """Run automap.solve on labeled readings → mapping proposal."""
     return automap.solve(samples, lids, name, unit)
 
 
 def build_record(res, name, unit="", confidence="kandidat", source=""):
-    """Bygg en signalstore-post ur ett ``automap.solve``-resultat."""
+    """Build a signal-store record from an ``automap.solve`` result."""
     rec = {"name": name, "lid": res["lid"], "offset": int(res["offset"]),
            "unit": unit, "confidence": confidence, "source": source}
     if res.get("mode") == "state" or "mapping" in res:
-        # mapping: {tillståndsetikett: råvärde} → states: {råvärde: etikett}
+        # mapping: {state label: raw value} → states: {raw value: label}
         states = {int(v): k for k, v in res["mapping"].items()}
         if res.get("bit") is not None:
             rec.update(kind="bit", bit=int(res["bit"]), states=states)
@@ -66,12 +66,12 @@ def build_record(res, name, unit="", confidence="kandidat", source=""):
 
 
 # --------------------------------------------------------------------------- #
-# Skrivskyddad proxy — säkerhetsgräns
+# Read-only proxy — safety boundary
 # --------------------------------------------------------------------------- #
 class ReadOnlyEcu:
-    """Exponerar BARA läsning: establish/read_block/read_local/tester_present/
-    open/close. Allt annat (ställdon, clear, 3B-write) höjer AttributeError → en
-    framtida redigering kan inte smyga in en skrivväg via harnessen."""
+    """Exposes ONLY reading: establish/read_block/read_local/tester_present/
+    open/close. Everything else (actuators, clear, 3B write) raises AttributeError → a
+    future edit cannot sneak in a write path via the harness."""
 
     _ALLOWED = ("establish", "read_block", "read_local", "tester_present", "open", "close")
 
@@ -81,11 +81,11 @@ class ReadOnlyEcu:
     def __getattr__(self, name):
         if name in self._ALLOWED:
             return getattr(self._s, name)
-        raise AttributeError(f"ReadOnlyEcu tillåter inte {name!r} (skrivskyddad harness)")
+        raise AttributeError(f"ReadOnlyEcu does not allow {name!r} (read-only harness)")
 
 
 # --------------------------------------------------------------------------- #
-# I/O + interaktiv CLI
+# I/O + interactive CLI
 # --------------------------------------------------------------------------- #
 def _open_session(module: str, port: str) -> ReadOnlyEcu:
     from d2diag.kline import KLine

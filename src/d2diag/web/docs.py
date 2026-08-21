@@ -1,9 +1,10 @@
-"""Dokumentbibliotek för dashboardens Dokument-flik.
+"""Document library for the dashboard's Documents tab.
 
-Registret pekar på de **kanoniska** markdown-filerna (felkodsordboken i register-
-repot + referensdokumenten i diag-repot) och läser dem *färskt vid varje anrop*.
-Dashboarden blir därmed ett fönster mot källan — aldrig en kopia. Saknade filer
-(t.ex. register-repot ligger på annan sökväg på Pi:n) hoppas tyst över.
+The registry points at the **canonical** markdown files (the fault-code dictionary
+in the register repo + the reference docs in the diag repo) and reads them *fresh
+on every request*. The dashboard is thereby a window on the source — never a copy.
+Missing files (e.g. the register repo sits at a different path on the Pi) are
+silently skipped.
 """
 from __future__ import annotations
 
@@ -34,14 +35,14 @@ class _Doc:
 
 
 class DocLibrary:
-    """Ordnad samling markdown-dokument som exponeras för webben."""
+    """Ordered collection of markdown documents exposed to the web."""
 
     def __init__(self) -> None:
         self._docs: "list[_Doc]" = []
         self._by_id: "dict[str, _Doc]" = {}
 
     def add_file(
-        self, path: "str | Path", title: "str | None" = None, group: str = "Referens"
+        self, path: "str | Path", title: "str | None" = None, group: str = "Reference"
     ) -> "DocLibrary":
         path = Path(path).expanduser()
         title = title or self._title_of(path)
@@ -57,7 +58,7 @@ class DocLibrary:
         return self
 
     def add_dir(
-        self, path: "str | Path", group: str = "Referens", pattern: str = "*.md"
+        self, path: "str | Path", group: str = "Reference", pattern: str = "*.md"
     ) -> "DocLibrary":
         d = Path(path).expanduser()
         if d.is_dir():
@@ -76,7 +77,7 @@ class DocLibrary:
         return path.stem.replace("_", " ").replace("-", " ")
 
     def index(self) -> "list[dict]":
-        """Lista över tillgängliga dokument (saknade filer utelämnas)."""
+        """List of available documents (missing files are omitted)."""
         return [
             {"id": d.id, "title": d.title, "group": d.group}
             for d in self._docs
@@ -84,7 +85,7 @@ class DocLibrary:
         ]
 
     def html(self, doc_id: str) -> "str | None":
-        """Rendera dokumentet till HTML, eller ``None`` om okänt/saknat."""
+        """Render the document to HTML, or ``None`` if unknown/missing."""
         doc = self._by_id.get(doc_id)
         if doc is None or not doc.available:
             return None

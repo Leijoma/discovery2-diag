@@ -1,9 +1,9 @@
-"""TD5-lagret verifierat mot VERKLIG sniffad reference tool-trafik (2026-08-08, RDL 016).
+"""TD5 layer verified against REAL sniffed reference tool traffic (2026-08-08, RDL 016).
 
-Exakta bytes ur ``logs/session.log`` (TD5-sessionen). Bevisar att vårt lager:
-  - räknar rätt SecurityAccess-nyckel (seed→key),
-  - avkodar `21 3B`-felblocket rätt, och
-  - **skriver byte-identiska** output-/injektor-/security-kommandon.
+Exact bytes from ``logs/session.log`` (the TD5 session). Proves that our layer:
+  - computes the correct SecurityAccess key (seed→key),
+  - decodes the `21 3B` fault block correctly, and
+  - **writes byte-identical** output/injector/security commands.
 """
 from d2diag.kline import KLine, encode
 from d2diag.kwp2000 import KWP2000
@@ -14,7 +14,7 @@ from tests.fakes import FakeKLineEcu
 
 
 def _frame(data: bytes) -> bytes:
-    return encode(data, addressed=False)  # oadresserad ram <len><data><cs>
+    return encode(data, addressed=False)  # unaddressed frame <len><data><cs>
 
 
 def _td5(responses):
@@ -22,12 +22,12 @@ def _td5(responses):
     return ecu, Td5(KWP2000(KLine(ecu)))
 
 
-# ---- SecurityAccess: seed d3 e6 → key ad 87 (fångad) -------------------- #
+# ---- SecurityAccess: seed d3 e6 → key ad 87 (captured) ------------------ #
 def test_keygen_matches_capture():
     assert key_bytes_from_seed(0xD3, 0xE6) == bytes([0xAD, 0x87])
 
 
-# ---- felblock 21 3B (motorn, varm tomgång) ------------------------------ #
+# ---- fault block 21 3B (engine, warm idle) ------------------------------ #
 def test_fault_block_decode_matches_capture():
     block = bytes.fromhex(
         "40 00 00 01 40 00 00 00 00 00 00 00 00 00 00 00 00 00"
@@ -41,8 +41,8 @@ def test_fault_block_decode_matches_capture():
     assert "problem detected with drive demand (Current)" in faults
 
 
-# ---- output-tester: byte-identiska kommandon ---------------------------- #
-# (sänd ram → svar) exakt ur session.log
+# ---- output tests: byte-identical commands ------------------------------ #
+# (sent frame → response) exactly from session.log
 _OUTPUT_CAPTURE = {
     "fuel_pump":   ("03 30 a1 ff d3", "02 70 a1 13"),
     "mil_lamp":    ("03 30 a2 ff d4", "02 70 a2 14"),
@@ -76,6 +76,6 @@ def test_security_status_reads_not_immobilised():
         _frame(b"\x31\xc0"): _frame(b"\x71\xc0"),
         _frame(b"\x33\xc0"): _frame(b"\x73\xc0\x03"),
     })
-    assert td5.security_status() == 0x03  # 0x03 = ej immobiliserad (fångst)
+    assert td5.security_status() == 0x03  # 0x03 = not immobilised (capture)
     assert ecu.sent[0].hex(" ") == "02 31 c0 f3"
     assert ecu.sent[1].hex(" ") == "02 33 c0 f5"

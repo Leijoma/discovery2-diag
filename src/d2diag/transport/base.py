@@ -1,12 +1,12 @@
-"""Transportlagret — en rå byte-pipe.
+"""The transport layer — a raw byte pipe.
 
-Detta lager vet INGENTING om K-Line, KWP2000 eller Td5. Det enda det gör är att
-flytta bytes fram och tillbaka. Allt ovanför (K-Line → KWP2000 → Td5) byggs mot
-detta gränssnitt och bryr sig inte om transporten är seriell, TCP eller något
-annat.
+This layer knows NOTHING about K-Line, KWP2000 or Td5. The only thing it does is
+move bytes back and forth. Everything above (K-Line → KWP2000 → Td5) is built against
+this interface and does not care whether the transport is serial, TCP or something
+else.
 
-    transport = SerialTransport("/dev/ttyUSB0")   # eller TcpTransport(...), senare
-    kwp = KWP2000(transport)                       # nästa lager, känner bara Transport
+    transport = SerialTransport("/dev/ttyUSB0")   # or TcpTransport(...), later
+    kwp = KWP2000(transport)                       # next layer, knows only Transport
 """
 from __future__ import annotations
 
@@ -14,28 +14,28 @@ import abc
 
 
 class Transport(abc.ABC):
-    """Abstrakt bas. Enda kontraktet är send/receive plus öppna/stäng."""
+    """Abstract base. The only contract is send/receive plus open/close."""
 
     _is_open: bool = False
 
     @abc.abstractmethod
     def open(self) -> None:
-        """Öppna kanalen. Idempotent — får anropas på en redan öppen transport."""
+        """Open the channel. Idempotent — may be called on an already-open transport."""
 
     @abc.abstractmethod
     def close(self) -> None:
-        """Stäng kanalen. Idempotent."""
+        """Close the channel. Idempotent."""
 
     @abc.abstractmethod
     def send(self, data: bytes) -> int:
-        """Skicka rå bytes. Returnerar antal skrivna bytes."""
+        """Send raw bytes. Returns the number of bytes written."""
 
     @abc.abstractmethod
     def receive(self, size: int = 1, timeout: float | None = None) -> bytes:
-        """Läs upp till ``size`` bytes.
+        """Read up to ``size`` bytes.
 
-        Blockerar högst ``timeout`` sekunder (``None`` = transportens default).
-        Kan returnera färre än ``size`` bytes, eller ``b""`` vid timeout.
+        Blocks at most ``timeout`` seconds (``None`` = the transport's default).
+        May return fewer than ``size`` bytes, or ``b""`` on timeout.
         """
 
     @property

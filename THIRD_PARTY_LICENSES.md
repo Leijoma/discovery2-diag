@@ -1,8 +1,8 @@
-# Tredjepartslicenser och källor
+# Third-party licenses and sources
 
 ## td5keygen — SecurityAccess seed→key
 
-`src/d2diag/td5/keygen.py` är en Python-port av algoritmen i
+`src/d2diag/td5/keygen.py` is a Python port of the algorithm in
 [pajacobson/td5keygen](https://github.com/pajacobson/td5keygen).
 
 > BSD 2-Clause License
@@ -31,30 +31,30 @@
 > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 > SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## Ekaitza_Itzali — protokollreferens (ingen kod använd)
+## Ekaitza_Itzali — protocol reference (no code used)
 
-[EA2EGA/Ekaitza_Itzali](https://github.com/EA2EGA/Ekaitza_Itzali) har använts som
-**referens för protokollfakta** (ramformat, ECU-adresser, init-sekvens,
-identifiers + skalning, samt felkodskartan för `21 3B` — offset/bitmask →
-feltext, som är fakta om ECU:ns diagnostik). Ingen källkod därifrån är kopierad —
-repot saknar licens, så endast icke-skyddbara fakta om protokollet har använts.
-Init-/session-/security-/felkodssekvenserna är dessutom verifierade mot repots
-sniff-loggar (`Sniffing/*.log`). Krediter i det projektet till OffTrack
-(ECU-disassembly) och Luca72 (Arduino-referens).
+[EA2EGA/Ekaitza_Itzali](https://github.com/EA2EGA/Ekaitza_Itzali) has been used as a
+**reference for protocol facts** (frame format, ECU addresses, init sequence,
+identifiers + scaling, plus the fault-code map for `21 3B` — offset/bitmask →
+fault text, which are facts about the ECU's diagnostics). No source code from there is
+copied — the repo has no license, so only non-protectable facts about the protocol have been used.
+The init/session/security/fault-code sequences are moreover verified against the repo's
+sniff logs (`Sniffing/*.log`). Credits in that project go to OffTrack
+(ECU disassembly) and Luca72 (Arduino reference).
 
-Td5-felkodskartan (`21 3B`) är dessutom **korsvaliderad mot en publik,
-community-spridd lista över Td5-felkoder** — samma namn på samma offset/bit,
-vilket också gav den mer precisa statusdistinktionen Logged Low / Logged High /
-Current. Endast faktauppgifter (offset/bit → feltext) har använts.
+The Td5 fault-code map (`21 3B`) is additionally **cross-validated against a public,
+community-spread list of Td5 fault codes** — same names on the same offset/bit,
+which also yielded the more precise status distinction Logged Low / Logged High /
+Current. Only factual data (offset/bit → fault text) has been used.
 
-## muki01/OBD2_K-line_Reader — K-line-referens (MIT)
+## muki01/OBD2_K-line_Reader — K-line reference (MIT)
 
 [muki01/OBD2_K-line_Reader](https://registry.platformio.org/libraries/muki01/OBD2%20K-Line)
-— OBD2 K-line-bibliotek (ISO 9141 / ISO 14230) för Arduino/ESP32, **MIT-licens**.
-En arkiverad kopia (Basic_Code + Schematics) finns i `references/muki01_OBD2_K-line_Reader/`
-som referens för ESP32-porten (fast init-timing, burst-läsning, L9637D-interface). MIT
-tillåter återanvändning med bibehållen upphovsrätts- och licensnotis; behåll denna
-attribution om kod därifrån portas in.
+— OBD2 K-line library (ISO 9141 / ISO 14230) for Arduino/ESP32, **MIT license**.
+An archived copy (Basic_Code + Schematics) is in `references/muki01_OBD2_K-line_Reader/`
+as a reference for the ESP32 port (fast init timing, burst reading, L9637D interface). MIT
+allows reuse with the copyright and license notice retained; keep this
+attribution if code from there is ported in.
 
 ## Astryx — UI theme tokens (dashboard visual design)
 

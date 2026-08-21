@@ -508,8 +508,8 @@
 <script>
   const $ = id => document.getElementById(id);
   const fmt = x => (Math.abs(x) >= 100 ? Math.round(x) : x.toFixed(1));
-  // Signal-metadata: grupp + kort beskrivning (vad siffran betyder). Normalintervall
-  // och confidence kommer från storen (limits/c) och sätts ihop i tooltip-texten.
+  // Signal metadata: group + short description (what the number means). Normal range
+  // and confidence come from the store (limits/c) and are assembled into the tooltip text.
   const GROUPS = ["Engine","Temperatures","Fuelling","Pressures","Accelerator",
                   "Ride height","Wheels","Electrical","Inputs","Other"];
   const META = {
@@ -554,7 +554,7 @@
     abs_sensor_rr:{g:"Wheels",d:"Rear-right ABS sensor voltage (~2.3 V). ⚠ Wheel-to-field order unconfirmed."},
   };
   function groupOf(n){ return (META[n]&&META[n].g) || "Other"; }
-  // Bygg tooltip-text: beskrivning + normalintervall (ur limits) + confidence.
+  // Build tooltip text: description + normal range (from limits) + confidence.
   function tipFor(n, s, f){
     const m = META[n] || {}, lim = (f&&f.limits) || null;
     const parts = [];
@@ -564,10 +564,10 @@
     if(c) parts.push(c==="kandidat" ? "Experimental (candidate — unverified)" : "Verified against the car");
     return parts.join("\n");
   }
-  // Rendera en grupperad lista av signalrader. ALLA fält visas alltid (layouten är
-  // konstant); för en kandidat som filtrerats bort i Verified-läget döljs bara
-  // VÄRDET (visas som "–"), inte raden. Så ser man vad som finns att mappa utan att
-  // exponera overifierade siffror.
+  // Render a grouped list of signal rows. ALL fields are always shown (the layout is
+  // constant); for a candidate filtered out in Verified mode only the VALUE is hidden
+  // (shown as "–"), not the row. That way you can see what there is to map without
+  // exposing unverified numbers.
   function renderRows(el, names, sig, fmap, skip){
     if(!el) return;
     const all = names.filter(n => !(skip&&skip.has(n)));
@@ -578,7 +578,7 @@
     el.innerHTML = order.map(g => {
       const rows = byGroup[g].sort().map(n => {
         const s = sig[n], f = fmap[n]||{}, c = s ? s.c : f.c;
-        const reveal = shown(sig[n]||fmap[n]);   // kandidat + ej experimental → dölj värdet
+        const reveal = shown(sig[n]||fmap[n]);   // candidate + not experimental → hide the value
         const badge = c==="kandidat" ? ' <span class="exp">exp</span>' : "";
         const cls = (reveal && s && (s.s==="low"||s.s==="high")) ? " s-"+s.s : "";
         let val = "–";
@@ -611,13 +611,13 @@
   const HERO = ["rpm","speed","coolant_temp","battery"];
 
   // ---- tabs = pick module (establishes a session on the vehicle; K-line has one session at a time) ----
-  let _userNav = false;  // sätts när användaren själv navigerar → init får aldrig överrida
+  let _userNav = false;  // is set when the user navigates themselves → init must never override
   function showTab(name) {
     document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === name));
     document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
   }
   async function selectModule(name) {
-    _userNav = true;  // användaren valde modul → lås navigeringen mot init-race
+    _userNav = true;  // the user chose a module → lock navigation against the init race
     showTab(name);
     try {
       await fetch("/command", { method:"POST", headers:{"Content-Type":"application/json"},
@@ -923,15 +923,15 @@
     }catch(e){ showCmd("network error", false); }
   }
   // ---- CSV live-data logging (start/stop; logs whichever module is active) ----
-  let _csvRec = false, _csvBusy = false;   // state från snapshot, inte från knapptexten
+  let _csvRec = false, _csvBusy = false;   // state from the snapshot, not from the button text
   function renderCsv(d){
     const info = d.logging || {recording:false}, btn = $("csvbtn"), inf = $("csvinfo");
     if(!btn) return;
     _csvRec = !!info.recording;
-    if(_csvBusy) return;                    // rör inte knappen medan ett anrop är i luften
+    if(_csvBusy) return;                    // don't touch the button while a call is in flight
     if(_csvRec){ btn.textContent = `⏹ Stop (${info.rows||0} rows)`; btn.classList.add("rec");
-      // Loggern låser kolumnerna vid FÖRSTA snapshoten med signaler → 0 rader
-      // betyder att vi väntar på data (t.ex. under anslutning), inte att inget händer.
+      // The logger locks the columns at the FIRST snapshot with signals → 0 rows
+      // means we are waiting for data (e.g. during connection), not that nothing is happening.
       if(inf) inf.textContent = info.rows ? ("→ "+(info.file||"")) : "waiting for data…"; }
     else { btn.textContent = "⏺ Log to CSV"; btn.classList.remove("rec"); if(inf) inf.textContent = ""; }
   }
@@ -1002,8 +1002,8 @@
       el.className="conn err"; el.innerHTML=`⚠ <b>Can't talk to the vehicle.</b> ${err||""}<br>`+
         "Check the cable is seated, the ignition is on, and the engine is off/stationary.";
     } else {
-      // Live etableringsfas från servern (opening the cable / sending init (try N) /
-      // response received / session established) medan poll blockerar.
+      // Live establishment phase from the server (opening the cable / sending init (try N) /
+      // response received / session established) while poll is blocking.
       const label = mod ? mod.toUpperCase() : "the vehicle";
       el.className="conn wait";
       el.innerHTML = phase
@@ -1049,7 +1049,7 @@
       return `<div class="card" data-tip="${tip}"><div class="k">${LABELS[k]||k}</div><div class="v">${s?fmt(s.v):"–"}<span class="u"> ${s&&s.u?s.u:""}</span></div></div>`; }).join("");
     const fmap = _fields.motor || {};
     const names = Array.from(new Set([...Object.keys(fmap), ...Object.keys(sig)]));
-    renderRows($("signals"), names, sig, fmap, new Set(HERO));  // hero-fälten visas redan ovan
+    renderRows($("signals"), names, sig, fmap, new Set(HERO));  // the hero fields are already shown above
     $("m_faults").innerHTML = faultHtml(faults);
   }
 
@@ -1059,13 +1059,13 @@
     $("slabs-body").style.display = "";
     const has = Object.keys(sig).length;
     for (const w of ["fl","fr","rl","rr"]) {
-      const s = sig["wheel_speed_"+w], v = sig["abs_sensor_"+w];  // kandidat → hidden in Verified
+      const s = sig["wheel_speed_"+w], v = sig["abs_sensor_"+w];  // candidate → hidden in Verified
       setT("c_"+w+"_s", (s && shown(s)) ? fmt(s.v)+"" : "–");
       setT("c_"+w+"_v", (v && shown(v)) ? v.v.toFixed(2)+"V" : "–");
     }
     setT("c_h_l", sig.height_left ? fmt(sig.height_left.v) : "–");
     setT("c_h_r", sig.height_right ? fmt(sig.height_right.v) : "–");
-    // Generisk grupperad lista: alla mappade store-fält (höjderna visas i SVG:n → skip).
+    // Generic grouped list: all mapped store fields (the heights are shown in the SVG → skip).
     const fmap = _fields.slabs || {};
     const skip = new Set(["height_left","height_right","height_left_mm","height_right_mm"]);
     const names = Array.from(new Set([...Object.keys(fmap), ...Object.keys(sig)]));
@@ -1219,8 +1219,8 @@
   $("consent-save").onclick = ()=>saveConsent($("consent-cb").checked);
   $("consent-skip").onclick = closeConsent;
   loadCommunity();
-  // Egen tooltip (native title är opålitlig i webviews). Delegerad hover på rader
-  // med data-tip; följer musen och håller sig innanför fönstret.
+  // Custom tooltip (native title is unreliable in webviews). Delegated hover on rows
+  // with data-tip; follows the mouse and stays inside the window.
   (function(){
     const tt = document.getElementById("tt");
     function place(e){
@@ -1240,9 +1240,9 @@
       if(!tt.classList.contains("show")) return;
       const row = e.target.closest && e.target.closest("[data-tip]");
       if(row) place(e);
-      else tt.classList.remove("show");   // ute ur raden (el. omritad) → dölj direkt
+      else tt.classList.remove("show");   // out of the row (or redrawn) → hide immediately
     });
-    // Säkerhetsnät: dölj vid omritning, tab-byte, scroll och när fönstret tappar fokus.
+    // Safety net: hide on redraw, tab switch, scroll and when the window loses focus.
     window.hideTip = () => tt.classList.remove("show");
     document.addEventListener("mouseleave", hideTip);
     window.addEventListener("blur", hideTip);
@@ -1250,7 +1250,7 @@
   })();
 
   loadFields("motor");   // so the Engine layout shows even before a cable is connected
-  loadFields("slabs");   // samma för SLABS-vyns signallista
+  loadFields("slabs");   // same for the SLABS view's signal list
 
   (function connect() {
     const es = new EventSource("/events");

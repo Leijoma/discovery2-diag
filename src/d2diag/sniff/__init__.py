@@ -1,7 +1,7 @@
-"""Passiv sniff-kalibrering — läs reference tool-trafik (RX-only) och mappa LID-fält.
+"""Passive sniff calibration — read reference tool traffic (RX-only) and map LID fields.
 
-Eftersom vår ESP32-tapp aldrig sänder måste reference tool vara inkopplad och polla;
-vi avkodar passivt och jämför mot reference tools skärm för att lösa skala/offset.
+Since our ESP32 tap never transmits, the reference tool must be connected and polling;
+we decode passively and compare against the reference tool's screen to solve scale/offset.
 """
 from .automap import solve as automap_solve
 from .calib import solve_linear, suggest_signal

@@ -1,7 +1,7 @@
-"""Webbdashboard för realtidsdiagnostik (HTTP + SSE, stdlib).
+"""Web dashboard for real-time diagnostics (HTTP + SSE, stdlib).
 
-`sources` levererar datasnapshots (Mock för UI-dev, Td5 för bilen); `server`
-serverar dashboarden och strömmar snapshots via Server-Sent Events.
+`sources` supplies data snapshots (Mock for UI dev, Td5 for the car); `server`
+serves the dashboard and streams snapshots via Server-Sent Events.
 """
 from .sources import (
     DataSource,

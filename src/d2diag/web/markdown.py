@@ -1,18 +1,18 @@
-"""Minimal, beroendefri Markdown→HTML-renderare.
+"""Minimal, dependency-free Markdown→HTML renderer.
 
-Byggd för att rendera *våra* diagnostikdokument (den kanoniska felkodsordboken +
-referensdokumenten) i dashboardens Dokument-flik — **inte** en fullständig
-CommonMark-implementation. Stöder exakt det vi använder:
+Built to render *our* diagnostic documents (the canonical fault-code dictionary +
+the reference docs) in the dashboard's Documents tab — **not** a full CommonMark
+implementation. Supports exactly what we use:
 
-- rubriker ``#``…``######``
-- GFM-tabeller (``| … |`` med separatorrad ``|---|---|``) — de bär hela facit
-- fetstil ``**x**``, kursiv ``*x*``/``_x_``, inline-kod `` `x` ``
-- länkar ``[text](url)`` (inkl. ankarlänkar ``#slug``)
-- blockcitat ``>`` (flera rader), punkt-/numrerade listor, ``---`` (hr)
-- kodstaket ```` ``` ````
+- headings ``#``…``######``
+- GFM tables (``| … |`` with separator row ``|---|---|``) — they carry the whole reference
+- bold ``**x**``, italic ``*x*``/``_x_``, inline code `` `x` ``
+- links ``[text](url)`` (incl. anchor links ``#slug``)
+- blockquotes ``>`` (multiple lines), bullet/numbered lists, ``---`` (hr)
+- code fences ```` ``` ````
 
-Dashboarden är offline (Pi i bilen) → ingen CDN, ingen extern markdown-lib.
-Rendering sker serversidan; klienten injicerar färdig HTML.
+The dashboard is offline (Pi in the car) → no CDN, no external markdown lib.
+Rendering happens server-side; the client injects the finished HTML.
 """
 from __future__ import annotations
 
@@ -33,8 +33,8 @@ _ITAL_U = re.compile(r"(?<![\w_])_(?!\s)(.+?)(?<!\s)_(?![\w_])")
 
 
 def _inline(text: str) -> str:
-    """Rendera inline-markup i en redan HTML-escapad textrad."""
-    # Skydda inline-kod först så dess innehåll inte formatteras vidare.
+    """Render inline markup in an already HTML-escaped line of text."""
+    # Protect inline code first so its contents aren't formatted further.
     spans: list[str] = []
 
     def _stash(m: "re.Match") -> str:
@@ -43,8 +43,8 @@ def _inline(text: str) -> str:
 
     text = re.sub(r"`([^`]+)`", _stash, text)
     text = html.escape(text, quote=False)
-    # URL:en är redan escapad av raden ovan (& → &amp;); escapa inte igen, bara
-    # citattecken så attributet inte bryts.
+    # The URL is already escaped by the line above (& → &amp;); don't escape again,
+    # only quotes so the attribute isn't broken.
     text = _LINK.sub(
         lambda m: f'<a href="{m.group(2).replace(chr(34), "&quot;")}" '
         f'rel="noopener">{m.group(1)}</a>',
@@ -66,7 +66,7 @@ def _split_row(line: str) -> list[str]:
         line = line[1:]
     if line.endswith("|"):
         line = line[:-1]
-    # dela på | men respektera escapead \|
+    # split on | but respect escaped \|
     cells = re.split(r"(?<!\\)\|", line)
     return [c.replace("\\|", "|").strip() for c in cells]
 
@@ -100,14 +100,14 @@ class _Renderer:
                 self._paragraph()
         return "\n".join(self.out)
 
-    # ---- block-typer ---------------------------------------------------- #
+    # ---- block types ---------------------------------------------------- #
     def _fence(self) -> None:
         self.i += 1
         buf: list[str] = []
         while self.i < len(self.lines) and not _FENCE.match(self.lines[self.i]):
             buf.append(self.lines[self.i])
             self.i += 1
-        self.i += 1  # stängande ```
+        self.i += 1  # closing ```
         self.out.append(
             "<pre><code>" + html.escape("\n".join(buf), quote=False) + "</code></pre>"
         )
@@ -121,7 +121,7 @@ class _Renderer:
 
     def _table(self) -> None:
         header = _split_row(self.lines[self.i])
-        self.i += 2  # rubrik + separator
+        self.i += 2  # header + separator
         rows: list[list[str]] = []
         while self.i < len(self.lines) and "|" in self.lines[self.i] and self.lines[self.i].strip():
             rows.append(_split_row(self.lines[self.i]))
@@ -156,14 +156,14 @@ class _Renderer:
         while self.i < len(self.lines):
             m = pat.match(self.lines[self.i])
             if not m:
-                # tillåt annan listtyp att avsluta denna
+                # allow a different list type to end this one
                 if (_OLI if not ordered else _ULI).match(self.lines[self.i]):
                     break
                 if not self.lines[self.i].strip():
                     break
                 if _HEADING.match(self.lines[self.i]) or self._is_table():
                     break
-                # fortsättningsrad på föregående item
+                # continuation line of the previous item
                 if items:
                     items[-1] += " " + _inline(self.lines[self.i].strip())
                     self.i += 1
@@ -195,5 +195,5 @@ class _Renderer:
 
 
 def render(text: str) -> str:
-    """Rendera Markdown → HTML-fragment (ingen ``<html>``/``<body>``-wrapper)."""
+    """Render Markdown → HTML fragment (no ``<html>``/``<body>`` wrapper)."""
     return _Renderer(text.replace("\r\n", "\n").replace("\r", "\n").split("\n")).render()

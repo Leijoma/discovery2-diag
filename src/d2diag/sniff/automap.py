@@ -1,15 +1,15 @@
-"""Auto-mappa ett reference tool-fält från KLARTEXT-avläsningar + sniffade råbytes.
+"""Auto-map a reference tool field from PLAINTEXT readings + sniffed raw bytes.
 
-Förutsättning: användaren ser bara klartext i reference tool (kan inte ange offset/typ).
-Verktyget får därför bara ``(klartext-värde, råbytes-för-kandidat-LID:er)`` per
-avläsning och **söker själv** rätt fält:
+Premise: the user only sees plaintext in the reference tool (can't specify offset/type).
+The tool therefore only gets ``(plaintext value, raw bytes for candidate LIDs)`` per
+reading and **searches on its own** for the right field:
 
-- **numeriskt** — testa varje ``(lid, offset, typ∈{u8,u16,u16le,s16,s16le})``,
-  linjäranpassa råvärde→klartext, välj bästa R² (snäpp skalan till rena bråk).
-  En enda avläsning ger en gissning (ren skala, bias 0); två+ vid olika lägen
-  låser skala+offset.
-- **tillstånd** — när avläsningarna är text (OPEN/CLOSED, AIR/springs …): hitta
-  den byte.bit (eller byte) som skiljer lägena entydigt.
+- **numeric** — try every ``(lid, offset, type∈{u8,u16,u16le,s16,s16le})``,
+  linear-fit raw value→plaintext, pick the best R² (snap the scale to clean fractions).
+  A single reading gives a guess (clean scale, bias 0); two+ at different positions
+  lock scale+offset.
+- **state** — when the readings are text (OPEN/CLOSED, AIR/springs …): find
+  the byte.bit (or byte) that distinguishes the states unambiguously.
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def _s16le(b, o):
 
 
 KINDS = {"u8": _u8, "u16": _u16, "u16le": _u16le, "s16": _s16, "s16le": _s16le}
-_KIND_RANK = {"u16": 0, "u8": 1, "s16": 2, "u16le": 3, "s16le": 4}  # BE föredras
+_KIND_RANK = {"u16": 0, "u8": 1, "s16": 2, "u16le": 3, "s16le": 4}  # BE preferred
 
 
 def _nearest_clean(scale: float) -> "float | None":
@@ -64,11 +64,11 @@ def _r2(xs, ys, scale, bias):
 
 
 def _fit(xs, ys):
-    """→ (scale, bias, r2, how, clean) eller None.
+    """→ (scale, bias, r2, how, clean) or None.
 
-    Med få avläsningar ger varje fält R²≈1 (två punkter ligger alltid på en
-    linje). Därför är **ren skala** (snäppt till ett känt bråk) den starka
-    signalen om att fältet är rätt — inte R²."""
+    With few readings every field gives R²≈1 (two points always lie on a
+    line). So **a clean scale** (snapped to a known fraction) is the strong
+    signal that the field is right — not R²."""
     n = len(xs)
     if len(set(xs)) >= 2:
         mx, my = sum(xs) / n, sum(ys) / n
@@ -80,10 +80,10 @@ def _fit(xs, ys):
         snap = _nearest_clean(scale)
         if snap is not None:
             b2 = sum(y - snap * x for x, y in zip(xs, ys)) / n
-            if _r2(xs, ys, snap, b2) >= r2_raw - 0.02:  # acceptera liten R²-förlust för ren skala
+            if _r2(xs, ys, snap, b2) >= r2_raw - 0.02:  # accept a small R² loss for a clean scale
                 return snap, b2, _r2(xs, ys, snap, b2), "fit", True
         return scale, bias, r2_raw, "fit", False
-    # bara ett distinkt råvärde → gissa ren skala (bias 0)
+    # only one distinct raw value → guess a clean scale (bias 0)
     x, y = xs[0], ys[0]
     if x == 0:
         return None
@@ -98,7 +98,7 @@ def _lid_int(lid: str) -> int:
 
 
 def search_numeric(samples, candidate_lids, name="signal", unit=""):
-    """samples: [{'value': float, 'raws': {lid_hex: bytes}}]. → bästa fält eller None."""
+    """samples: [{'value': float, 'raws': {lid_hex: bytes}}]. → best field or None."""
     best = None
     for lid in candidate_lids:
         raws = [s["raws"].get(lid) for s in samples]
@@ -117,7 +117,7 @@ def search_numeric(samples, candidate_lids, name="signal", unit=""):
                     continue
                 scale, bias, r2, how, clean = got
                 small_bias = abs(bias) <= tol
-                # renhet väger tyngst, sedan R², fit>gissning, liten bias, BE-typ, lågt offset
+                # cleanness weighs most, then R², fit>guess, small bias, BE type, low offset
                 key = (clean, round(r2, 6), how == "fit", small_bias, -_KIND_RANK[kind], -off)
                 if best is None or key > best["key"]:
                     best = {
@@ -136,7 +136,7 @@ def search_numeric(samples, candidate_lids, name="signal", unit=""):
 
 
 def search_state(samples, candidate_lids):
-    """samples: [{'state': str, 'raws': {lid_hex: bytes}}]. → bästa byte/bit eller None."""
+    """samples: [{'state': str, 'raws': {lid_hex: bytes}}]. → best byte/bit or None."""
     states = [s["state"] for s in samples]
     if len(set(states)) < 2:
         return None
@@ -145,8 +145,8 @@ def search_state(samples, candidate_lids):
         by_state = {}
         for st, v in zip(states, vals):
             if by_state.setdefault(st, v) != v:
-                return False  # samma läge, olika råvärde → inte det här fältet
-        return len(set(by_state.values())) == len(by_state)  # lägena särskiljs
+                return False  # same state, different raw value → not this field
+        return len(set(by_state.values())) == len(by_state)  # the states are distinguished
 
     best = None
     for lid in candidate_lids:
@@ -164,7 +164,7 @@ def search_state(samples, candidate_lids):
                     if best is None or cand["rank"] < best["rank"]:
                         best = cand
             if best is not None and best["lid"] == lid and best["offset"] == off:
-                continue  # redan en bit-träff för denna byte
+                continue  # already a bit hit for this byte
             vals = [r[off] for r in raws]
             if consistent(vals):
                 mapping = {st: r[off] for st, r in zip(states, raws)}
@@ -182,10 +182,10 @@ def search_state(samples, candidate_lids):
 
 
 def block_diff(parsed, candidate_lids):
-    """Vilka bytes ändrades mellan avläsningarna? Kärn-primitiven för fält som
-    läses i ett block: ändra EN sak, se vilken byte som rör sig = där bor fältet.
+    """Which bytes changed between the readings? The core primitive for fields
+    read in a block: change ONE thing, see which byte moves = that's where the field lives.
 
-    → [{'lid', 'byte', 'values': [per avläsning]}]. Tom = inget rörde sig.
+    → [{'lid', 'byte', 'values': [per reading]}]. Empty = nothing moved.
     """
     out = []
     if len(parsed) < 2:
@@ -202,14 +202,14 @@ def block_diff(parsed, candidate_lids):
 
 
 def stable_diff(baselines, after, candidate_lids):
-    """Bytes som var STABILA över baslinjeläsningarna men ÄNDRADES i ``after``.
+    """Bytes that were STABLE across the baseline readings but CHANGED in ``after``.
 
-    Brushärdning för aktiv differential-mappning: en byte som redan flackade
-    mellan baslinjeläsningarna är brus, inte fältet vi provocerade. Kräver ≥1
-    baslinje.
+    Noise-hardening for active differential mapping: a byte that already wandered
+    between the baseline readings is noise, not the field we provoked. Requires ≥1
+    baseline.
 
     ``baselines``: ``[{'raws': {lid_hex: bytes}}]``; ``after``: ``{'raws': …}``.
-    → ``[{'lid', 'byte', 'baseline', 'after'}]`` (tom = inget stabilt rörde sig).
+    → ``[{'lid', 'byte', 'baseline', 'after'}]`` (empty = nothing stable moved).
     """
     out = []
     for lid in candidate_lids:
@@ -220,18 +220,18 @@ def stable_diff(baselines, after, candidate_lids):
         n = min([len(aft)] + [len(r) for r in bases])
         for off in range(n):
             base_vals = {r[off] for r in bases}
-            if len(base_vals) == 1:                    # stabil i baslinjen …
+            if len(base_vals) == 1:                    # stable in the baseline …
                 b0 = next(iter(base_vals))
-                if aft[off] != b0:                     # … och ändrad efteråt
+                if aft[off] != b0:                     # … and changed afterwards
                     out.append({"lid": lid, "byte": off, "baseline": b0, "after": aft[off]})
     return out
 
 
 def solve(samples, candidate_lids, name="signal", unit=""):
-    """Auto-detektera numeriskt vs tillstånd och returnera bästa mappning.
+    """Auto-detect numeric vs state and return the best mapping.
 
-    ``samples``: [{'text': '<klartext>', 'raws': {lid_hex: 'hex' | bytes}}]. Bär
-    alltid med ``diff`` (ändrade bytes mellan avläsningarna) så platsen syns.
+    ``samples``: [{'text': '<plaintext>', 'raws': {lid_hex: 'hex' | bytes}}]. Always
+    carries ``diff`` (bytes changed between the readings) so the location is visible.
     """
     parsed = []
     numeric = True
@@ -245,16 +245,16 @@ def solve(samples, candidate_lids, name="signal", unit=""):
         except ValueError:
             numeric = False
     if len(parsed) < 1:
-        return {"ok": False, "error": "inga avläsningar"}
+        return {"ok": False, "error": "no readings"}
     diff = block_diff(parsed, candidate_lids)
     if numeric:
         num = [{"value": float(p["text"].replace(",", ".")), "raws": p["raws"]} for p in parsed]
         res = search_numeric(num, candidate_lids, name, unit)
         if res is None:
-            return {"ok": False, "error": "hittade inget råfält som matchar värdena", "diff": diff}
+            return {"ok": False, "error": "found no raw field matching the values", "diff": diff}
         return {"ok": True, "mode": "numeric", "diff": diff, **res}
     st = [{"state": p["text"], "raws": p["raws"]} for p in parsed]
     res = search_state(st, candidate_lids)
     if res is None:
-        return {"ok": False, "error": "behöver ≥2 olika lägen som särskiljs i råbytesen", "diff": diff}
+        return {"ok": False, "error": "need ≥2 distinct states that are distinguishable in the raw bytes", "diff": diff}
     return {"ok": True, "mode": "state", "diff": diff, **res}

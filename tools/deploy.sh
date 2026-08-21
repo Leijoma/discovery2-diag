@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Deploya arbetsträdet till Pi:n och starta om tjänsten — så Mac och Pi kör
-# SAMMA version. Stämplar git-commit på Pi:n (DEPLOYED_VERSION) och verifierar
-# att den matchar Macen. Kör ett snabbt testsvep på Pi:n innan omstart.
+# Deploy the working tree to the Pi and restart the service — so Mac and Pi run
+# the SAME version. Stamps the git commit on the Pi (DEPLOYED_VERSION) and checks
+# it matches the Mac. Runs a quick test sweep on the Pi before the restart.
 #
 #   tools/deploy.sh                 # → pi@discopi.local
 #   tools/deploy.sh pi@192.168.68.66
@@ -16,28 +16,28 @@ if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; th
   dirty="+dirty"
 fi
 stamp="${commit}${dirty}"
-echo "→ deployar ${stamp} till ${PI}:${DEST}"
-[ -n "$dirty" ] && echo "  ⚠ OCOMMITTADE ändringar deployas — committa för en ren version"
+echo "→ deploying ${stamp} to ${PI}:${DEST}"
+[ -n "$dirty" ] && echo "  ⚠ UNCOMMITTED changes are being deployed — commit for a clean version"
 
-# --delete på src så borttagna moduler försvinner även på Pi:n (exakt spegling).
+# --delete on src so removed modules disappear on the Pi too (exact mirror).
 rsync -az --delete src/ "${PI}:${DEST}/src/"
 rsync -az tools/ "${PI}:${DEST}/tools/"
 rsync -az tests/ "${PI}:${DEST}/tests/"
 rsync -az pyproject.toml "${PI}:${DEST}/pyproject.toml" 2>/dev/null || true
 
-# Testa på Pi:n → stämpla version → starta om tjänsten.
+# Test on the Pi → stamp the version → restart the service.
 ssh "$PI" "set -e
   cd ${DEST}
   python3 -m pytest tests/test_web.py tests/test_transport.py -q 2>&1 | tail -3
-  [ \${PIPESTATUS[0]} -eq 0 ] || { echo 'TESTER RÖDA på Pi:n — avbryter deploy (ingen omstart)'; exit 1; }
+  [ \${PIPESTATUS[0]} -eq 0 ] || { echo 'TESTS RED on the Pi — aborting deploy (no restart)'; exit 1; }
   echo '${stamp}' > DEPLOYED_VERSION
   sudo systemctl restart d2diag.service
   sleep 3
-  echo \"Pi: \$(cat DEPLOYED_VERSION) · tjänst \$(systemctl is-active d2diag.service)\""
+  echo \"Pi: \$(cat DEPLOYED_VERSION) · service \$(systemctl is-active d2diag.service)\""
 
 remote="$(ssh "$PI" cat "${DEST}/DEPLOYED_VERSION" 2>/dev/null || echo '?')"
 if [ "$remote" = "$stamp" ]; then
   echo "✓ Mac ${stamp} = Pi ${remote}"
 else
-  echo "✗ VERSIONER SKILJER: Mac ${stamp} ≠ Pi ${remote}"; exit 1
+  echo "✗ VERSIONS DIFFER: Mac ${stamp} ≠ Pi ${remote}"; exit 1
 fi

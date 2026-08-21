@@ -1,8 +1,8 @@
-"""Tester för Td5 seed→key.
+"""Tests for Td5 seed→key.
 
-Beviset: min port (XOR/OR) jämförs mot en ordagrann transkription av
-originalets ``+``-form över ALLA 65536 seeds. Matchar de överallt är porten
-bevisligen ekvivalent med referensimplementationen.
+The proof: my port (XOR/OR) is compared against a verbatim transcription of the
+original's ``+`` form over ALL 65536 seeds. If they match everywhere, the port is
+provably equivalent to the reference implementation.
 """
 import pytest
 
@@ -10,7 +10,7 @@ from d2diag.td5.keygen import key_bytes_from_seed, key_from_seed
 
 
 def _reference_plus(seed: int) -> int:
-    # Ordagrann transkription av keytool.py (paul@discotd5.com, BSD-2), med '+'.
+    # Verbatim transcription of keytool.py (paul@discotd5.com, BSD-2), with '+'.
     count = ((seed >> 0xC & 0x8) + (seed >> 0x5 & 0x4) + (seed >> 0x3 & 0x2) + (seed & 0x1)) + 1
     for _ in range(count):
         tap = ((seed >> 1) + (seed >> 2) + (seed >> 8) + (seed >> 9)) & 1

@@ -459,10 +459,10 @@ Determine exact seed→key algorithm.
 Determine whether output bank writes need SecurityAccess and which session.
 Bottom line
 
-Den sista reference tool-sessionen löste inte SLABS-lamptesterna, men gav två ganska värdefulla resultat:
+The final reference tool session did not solve the SLABS lamp tests, but it produced two fairly valuable results:
 
-EAT-kommandona för Read/Clear Faults är nu reproducerade och kan betraktas som bekräftade, trots reference tools eget felmeddelande.
+The EAT commands for Read/Clear Faults are now reproduced and can be regarded as confirmed, despite the reference tool's own error message.
 
-Och ännu viktigare för BCU: vi har nu starkt stöd för att dess diagnostic-outputmekanism använder SecurityAccess + 3B WriteLocalIdentifier mot fyra fyrbytesbanker 22, 23, C1, C2. Själva bitmappningen återstår, eftersom den enda state vi fångade var 00000000.
+And more importantly for the BCU: we now have strong support that its diagnostic-output mechanism uses SecurityAccess + 3B WriteLocalIdentifier against four four-byte banks 22, 23, C1, C2. The bit mapping itself remains, since the only state we captured was 00000000.
 
-Det är den del jag skulle be Claude lägga in i protokollbiblioteket som structural/high-confidence, men uttryckligen inte som färdiga output-decoders.
+That is the part I would ask Claude to add to the protocol library as structural/high-confidence, but explicitly not as finished output decoders.

@@ -9,7 +9,7 @@
     "unit": "",
     "confidence": "belagt",
     "limits": null,
-    "source": "21 54 byte0 = vänster höjd; belagt via varians session.log 2026-08-08 reference tool-referens: normal ~110–135 (kalibreringsberoende); L och R ska ligga nära varandra på plan mark; fast 0/255 = trasig arm/givare."
+    "source": "21 54 byte0 = left height; proven via variance session.log 2026-08-08 reference tool reference: normal ~110–135 (calibration-dependent); L and R should sit close to each other on level ground; fixed 0/255 = broken arm/sensor."
   },
   {
     "name": "height_right",
@@ -21,7 +21,7 @@
     "unit": "",
     "confidence": "belagt",
     "limits": null,
-    "source": "21 54 byte1 = höger höjd; belagt via varians session.log 2026-08-08 reference tool-referens: normal ~110–135 (kalibreringsberoende); L och R ska ligga nära varandra på plan mark; fast 0/255 = trasig arm/givare."
+    "source": "21 54 byte1 = right height; proven via variance session.log 2026-08-08 reference tool reference: normal ~110–135 (calibration-dependent); L and R should sit close to each other on level ground; fixed 0/255 = broken arm/sensor."
   },
   {
     "name": "any_door",
@@ -35,10 +35,10 @@
     "confidence": "belagt",
     "limits": null,
     "states": {
-      "0": "stängd",
-      "1": "öppen"
+      "0": "closed",
+      "1": "open"
     },
-    "source": "21 56 byte0 bit0 = any-door; BELAGT via differential 2026-08-08 (00 stängd/01 öppen)"
+    "source": "21 56 byte0 bit0 = any-door; PROVEN via differential 2026-08-08 (00 closed/01 open)"
   },
   {
     "name": "battery",
@@ -53,7 +53,7 @@
       11.5,
       15.0
     ],
-    "source": "21 44 byte12 u8×0.0625 V. BELAGT i bilen 2026-08-20: 13,5 V med motorn igång (laddning), 12,0 V med motorn av — spårar systemspänningen rätt."
+    "source": "21 44 byte12 u8×0.0625 V. PROVEN in the car 2026-08-20: 13.5 V with the engine running (charging), 12.0 V with the engine off — tracks system voltage correctly."
   },
   {
     "name": "ecu_supply",
@@ -68,7 +68,7 @@
       11.5,
       15.0
     ],
-    "source": "21 44 byte13 u8×0.0625 V. BELAGT 2026-08-20: samma som batteri (13,5 V motor på, 12,0 V av)."
+    "source": "21 44 byte13 u8×0.0625 V. PROVEN 2026-08-20: same as battery (13.5 V engine on, 12.0 V off)."
   },
   {
     "name": "wheel_speed_fl",
@@ -80,7 +80,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@0 u16le. Avkodning BELAGD i bilen 2026-08-20 (alla fyra läser 124 stilla, ≠ km/h). ⚠ HJUL-ordningen (vilket offset = vilket hjul) ej bekräftad — alla lika stilla går ej att skilja. Kräver snurra-ETT-hjul-test. KANDIDAT tills dess."
+    "source": "21 43@0 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). ⚠ WHEEL order (which offset = which wheel) not confirmed — all equally stationary cannot be told apart. Requires a spin-ONE-wheel test. CANDIDATE until then."
   },
   {
     "name": "wheel_speed_fr",
@@ -92,7 +92,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@2 u16le. Avkodning BELAGD i bilen 2026-08-20 (alla fyra läser 124 stilla, ≠ km/h). ⚠ HJUL-ordningen (vilket offset = vilket hjul) ej bekräftad — alla lika stilla går ej att skilja. Kräver snurra-ETT-hjul-test. KANDIDAT tills dess."
+    "source": "21 43@2 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). ⚠ WHEEL order (which offset = which wheel) not confirmed — all equally stationary cannot be told apart. Requires a spin-ONE-wheel test. CANDIDATE until then."
   },
   {
     "name": "wheel_speed_rl",
@@ -104,7 +104,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@4 u16le. Avkodning BELAGD i bilen 2026-08-20 (alla fyra läser 124 stilla, ≠ km/h). ⚠ HJUL-ordningen (vilket offset = vilket hjul) ej bekräftad — alla lika stilla går ej att skilja. Kräver snurra-ETT-hjul-test. KANDIDAT tills dess."
+    "source": "21 43@4 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). ⚠ WHEEL order (which offset = which wheel) not confirmed — all equally stationary cannot be told apart. Requires a spin-ONE-wheel test. CANDIDATE until then."
   },
   {
     "name": "wheel_speed_rr",
@@ -116,7 +116,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@6 u16le. Avkodning BELAGD i bilen 2026-08-20 (alla fyra läser 124 stilla, ≠ km/h). ⚠ HJUL-ordningen (vilket offset = vilket hjul) ej bekräftad — alla lika stilla går ej att skilja. Kräver snurra-ETT-hjul-test. KANDIDAT tills dess."
+    "source": "21 43@6 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). ⚠ WHEEL order (which offset = which wheel) not confirmed — all equally stationary cannot be told apart. Requires a spin-ONE-wheel test. CANDIDATE until then."
   },
   {
     "name": "abs_sensor_fl",
@@ -131,7 +131,7 @@
       1.5,
       3.0
     ],
-    "source": "21 50@0 u8×0.02 V. Avkodning BELAGD 2026-08-20 (alla ~2,3 V stabilt). ⚠ HJUL-ordning ej bekräftad. KANDIDAT."
+    "source": "21 50@0 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). ⚠ WHEEL order not confirmed. CANDIDATE."
   },
   {
     "name": "abs_sensor_fr",
@@ -146,7 +146,7 @@
       1.5,
       3.0
     ],
-    "source": "21 50@1 u8×0.02 V. Avkodning BELAGD 2026-08-20 (alla ~2,3 V stabilt). ⚠ HJUL-ordning ej bekräftad. KANDIDAT."
+    "source": "21 50@1 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). ⚠ WHEEL order not confirmed. CANDIDATE."
   },
   {
     "name": "abs_sensor_rl",
@@ -161,7 +161,7 @@
       1.5,
       3.0
     ],
-    "source": "21 50@2 u8×0.02 V. Avkodning BELAGD 2026-08-20 (alla ~2,3 V stabilt). ⚠ HJUL-ordning ej bekräftad. KANDIDAT."
+    "source": "21 50@2 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). ⚠ WHEEL order not confirmed. CANDIDATE."
   },
   {
     "name": "abs_sensor_rr",
@@ -176,6 +176,6 @@
       1.5,
       3.0
     ],
-    "source": "21 50@3 u8×0.02 V. Avkodning BELAGD 2026-08-20 (alla ~2,3 V stabilt). ⚠ HJUL-ordning ej bekräftad. KANDIDAT."
+    "source": "21 50@3 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). ⚠ WHEEL order not confirmed. CANDIDATE."
   }
 ]

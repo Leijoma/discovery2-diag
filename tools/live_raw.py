@@ -1,12 +1,12 @@
-"""Permissiv Td5-avläsning (muki01-stil) för brusig KKL-kabel.
+"""Permissive Td5 reading (muki01-style) for a noisy KKL cable.
 
-Läser hela svarsbursten tills ~60 ms tystnad, plockar värden på fixa positioner
-och avvisar INTE på checksumma (får hellre ett värde att verifiera än inget).
-Använder baud-drop-init och Td5-skalningen från d2diag.td5.identifiers.
+Reads the whole response burst until ~60 ms of silence, picks values at fixed
+positions and does NOT reject on checksum (better a value to verify than nothing).
+Uses baud-drop init and the Td5 scaling from d2diag.td5.identifiers.
 
     PYTHONPATH=src python3 tools/live_raw.py /dev/cu.usbserial-XXXX
 
-Kör med tändning på men motorn AV.
+Run with ignition on but the engine OFF.
 """
 import sys
 import time
@@ -58,7 +58,7 @@ def main() -> int:
         port, baudrate=10400, bytesize=8, parity="N", stopbits=1, timeout=0.05
     )
 
-    # ---- fast init tills 0xC1 dyker upp i bursten ----
+    # ---- fast init until 0xC1 appears in the burst ----
     ok = False
     for i in range(15):
         ser.reset_input_buffer()
@@ -66,25 +66,25 @@ def main() -> int:
         time.sleep(0.025)
         raw = _burst(ser, bytes([0x81, 0x13, 0xF7, 0x81, 0x0C]))
         if 0xC1 in raw:
-            print(f"init {i + 1}: C1 (session öppen)  raw={raw.hex(' ')}")
+            print(f"init {i + 1}: C1 (session open)  raw={raw.hex(' ')}")
             ok = True
             break
-        print(f"init {i + 1}: {raw.hex(' ') or 'tomt'}")
+        print(f"init {i + 1}: {raw.hex(' ') or 'empty'}")
     if not ok:
-        print("Kunde inte öppna session (ingen C1).")
+        print("Could not open session (no C1).")
         return 1
 
     # ---- StartDiagnosticSession 10 A0 ----
     raw = _burst(ser, _frame(bytes([0x02, 0x10, 0xA0])))
-    print(f"StartDiagnosticSession raw={raw.hex(' ')}\n--- livedata (permissiv) ---")
+    print(f"StartDiagnosticSession raw={raw.hex(' ')}\n--- live data (permissive) ---")
 
-    # ---- läs kända LID:er ----
+    # ---- read known LIDs ----
     for lid in LIDS:
         raw = _burst(ser, _frame(bytes([0x02, 0x21, lid])))
-        # svaret: hitta positivt SID 0x61 följt av ekad LID; data följer
+        # the response: find positive SID 0x61 followed by the echoed LID; data follows
         idx = raw.find(bytes([0x61, lid]))
         data = raw[idx + 2:] if idx >= 0 else b""
-        marker = "" if idx >= 0 else "  (inget 61-svar hittat)"
+        marker = "" if idx >= 0 else "  (no 61 response found)"
         print(f"21 {lid:02X}  raw={raw.hex(' ')}{marker}")
         for sig in signals_for_lid(lid):
             if sig.fits(data):

@@ -1,8 +1,8 @@
-"""Td5-lagret: Td5-specifik logik ovanpå KWP2000.
+"""Td5 layer: Td5-specific logic on top of KWP2000.
 
-Diagnostiksession, SecurityAccess (seed→key) och avläsning av identifiers med
-skalning till fysiska värden (rpm, temperaturer, batterispänning, injektorbalans …).
-Skalningen kommer från protokollreferensen — bör bekräftas mot bilen.
+Diagnostic session, SecurityAccess (seed→key) and reading of identifiers with
+scaling to physical values (rpm, temperatures, battery voltage, injector balance …).
+The scaling comes from the protocol reference — should be confirmed against the car.
 """
 from __future__ import annotations
 
@@ -17,16 +17,16 @@ TD5_DIAGNOSTIC_SESSION = 0xA0
 _SECURITY_LEVEL_SEED = 0x01
 _SECURITY_LEVEL_KEY = 0x02
 
-# Felkoder: Td5 läser dem som ett statusblock via ReadDataByLocalIdentifier 0x3B
-# (inte standard-DTC-tjänster) och raderar via StartRoutine 0xDD med 18 nollbytes.
-# Härlett ur Ekaitza-sniffen (Read_Faults.log / Read_Faults_and_clear.log).
+# Fault codes: Td5 reads them as a status block via ReadDataByLocalIdentifier 0x3B
+# (not standard DTC services) and clears them via StartRoutine 0xDD with 18 zero bytes.
+# Derived from the Ekaitza sniff (Read_Faults.log / Read_Faults_and_clear.log).
 FAULT_LID = 0x3B
 _CLEAR_FAULTS_ROUTINE = 0xDD
 _CLEAR_FAULTS_PADDING = b"\x00" * 18
 
-# Output-tester — BELAGT ur sniff 2026-08-08 (session.log, RDL 016). reference tool
-# pulsar TD5-utgångar via IOControl `30 <lid> ff`; wastegate/EGR tar PWM-parametrar.
-# Injektorklick är StartRoutine `31 C2 0<n>`. Alla svarar `70/71 <id>` (ack, ingen data).
+# Output tests — PROVEN from sniff 2026-08-08 (session.log, RDL 016). The reference tool
+# pulses TD5 outputs via IOControl `30 <lid> ff`; wastegate/EGR take PWM parameters.
+# The injector click is StartRoutine `31 C2 0<n>`. All respond `70/71 <id>` (ack, no data).
 _OUTPUTS: "dict[str, tuple[int, bytes]]" = {
     "fuel_pump":   (0xA1, b"\xff"),
     "mil_lamp":    (0xA2, b"\xff"),
@@ -35,40 +35,40 @@ _OUTPUTS: "dict[str, tuple[int, bytes]]" = {
     "glow_plugs":  (0xB3, b"\xff"),
     "rev_counter": (0xB7, b"\xff"),
     "temp_gauge":  (0xBA, b"\xff"),
-    "egr_throttle": (0xBD, b"\xff\x00\xfa\x13\x88"),  # PWM-parametrar (duty/frekvens)
+    "egr_throttle": (0xBD, b"\xff\x00\xfa\x13\x88"),  # PWM parameters (duty/frequency)
     "wastegate":   (0xBE, b"\xff\x00\x0a\x13\x88"),
 }
-_INJECTOR_ROUTINE = 0xC2       # `31 C2 0<n>` — pulsa injektor n (1–5)
-_SECURITY_ROUTINE = 0xC0       # `31 C0` starta, `33 C0` läs status (03 = ej immobiliserad)
+_INJECTOR_ROUTINE = 0xC2       # `31 C2 0<n>` — pulse injector n (1–5)
+_SECURITY_ROUTINE = 0xC0       # `31 C0` start, `33 C0` read status (03 = not immobilised)
 
-# Standardvärden för establish(): bus-idle innan init och antal helomförsök.
+# Defaults for establish(): bus idle before init and number of full retries.
 _DEFAULT_IDLE = 5.0
 _DEFAULT_ATTEMPTS = 6
 
 
 class Td5(EcuSession):
     name = "Td5"
-    _has_session = True  # StartDiagnosticSession 0xA0 → måste stängas rent vid modulbyte
+    _has_session = True  # StartDiagnosticSession 0xA0 → must be closed cleanly on module switch
 
-    # livscykel (open/close/context) + read_block/tester_present ärvs från EcuSession
+    # lifecycle (open/close/context) + read_block/tester_present inherited from EcuSession
 
     def start_session(self) -> bytes:
-        """StartDiagnosticSession i Td5:ans diagnostikläge (0xA0)."""
+        """StartDiagnosticSession in the Td5's diagnostic mode (0xA0)."""
         return self._kwp.start_diagnostic_session(TD5_DIAGNOSTIC_SESSION)
 
     def unlock(self) -> None:
-        """SecurityAccess: hämta seed, räkna nyckel, skicka nyckel."""
+        """SecurityAccess: fetch seed, compute key, send key."""
         seed = self._kwp.request_seed(_SECURITY_LEVEL_SEED)
         if len(seed) < 2:
-            raise ValueError(f"oväntad seed-längd: {seed.hex(' ')}")
+            raise ValueError(f"unexpected seed length: {seed.hex(' ')}")
         key = key_bytes_from_seed(seed[0], seed[1])
         self._kwp.send_key(key, _SECURITY_LEVEL_KEY)
 
     def connect(self) -> None:
-        """StartDiagnosticSession + SecurityAccess-unlock.
+        """StartDiagnosticSession + SecurityAccess unlock.
 
-        Förutsätter etablerad kommunikation (fast init redan gjord). Efter detta
-        är ECU:n upplåst och ``21 xx``-läsning fungerar."""
+        Assumes established communication (fast init already done). After this
+        the ECU is unlocked and ``21 xx`` reading works."""
         self.start_session()
         self.unlock()
 
@@ -80,31 +80,31 @@ class Td5(EcuSession):
         sleep: Callable[[float], None] = time.sleep,
         progress: "Callable[[str], None] | None" = None,
     ) -> bytes:
-        """Full uppkoppling: bus-idle → tolerant fast init (sök C1) → session →
-        unlock (via :meth:`connect`). Retryar hela sekvensen vid brus och
-        returnerar C1-datafältet.
+        """Full connection: bus idle → tolerant fast init (search for C1) → session →
+        unlock (via :meth:`connect`). Retries the whole sequence on noise and
+        returns the C1 data field.
 
-        Bäst mot en färsk ECU (tändningscykel precis innan). ``sleep`` injiceras
-        för testbarhet. Höjer :class:`KWP2000Error` om det inte går efter
-        ``attempts`` försök. En halvöppen session svarar ``7F`` på
-        StartCommunication men går ändå att låsa upp — därför tolereras tom C1
-        (se :meth:`EcuSession._establish`)."""
+        Best against a fresh ECU (ignition cycle just before). ``sleep`` is injected
+        for testability. Raises :class:`KWP2000Error` if it fails after
+        ``attempts`` attempts. A half-open session responds ``7F`` to
+        StartCommunication but can still be unlocked — so an empty C1 is tolerated
+        (see :meth:`EcuSession._establish`)."""
         return self._establish(
             after=self.connect, idle=idle, attempts=attempts, retry_sleep=8.0,
             sleep=sleep, progress=progress,
         )
 
-    # ---- avläsning av livedata --------------------------------------- #
+    # ---- reading of live data ---------------------------------------- #
     def read_lid(self, lid: int) -> "dict[str, float]":
-        """Läs en identifier (21 xx) och avkoda alla signaler i den."""
+        """Read an identifier (21 xx) and decode all signals in it."""
         return decode_lid(lid, self._kwp.read_local_identifier(lid))
 
     def read(self, name: str) -> float:
-        """Läs en enskild signal per namn, t.ex. 'rpm' eller 'coolant_temp'."""
+        """Read a single signal by name, e.g. 'rpm' or 'coolant_temp'."""
         return self.read_lid(BY_NAME[name].lid)[name]
 
     def read_all(self) -> "dict[str, float]":
-        """Läs alla kända LID:er → {signalnamn: värde}. En LID som felar hoppas över."""
+        """Read all known LIDs → {signal_name: value}. A LID that fails is skipped."""
         out: "dict[str, float]" = {}
         for lid in LIDS:
             try:
@@ -113,61 +113,61 @@ class Td5(EcuSession):
                 pass
         return out
 
-    # ---- felkoder ----------------------------------------------------- #
+    # ---- fault codes -------------------------------------------------- #
     def read_faults_raw(self) -> bytes:
-        """Läs Td5:ans felstatusblock (rå bytes efter ``61 3B``) via 0x21 0x3B.
+        """Read the Td5's fault status block (raw bytes after ``61 3B``) via 0x21 0x3B.
 
-        Kräver upplåst session. Blocket är bitkodat; namngiven avkodning görs av
+        Requires an unlocked session. The block is bit-coded; named decoding is done by
         :func:`d2diag.td5.faults.decode_faults`."""
         return self._kwp.read_local_identifier(FAULT_LID)
 
     def read_faults(self) -> "list[str]":
-        """Läs och avkoda aktiva fel till en lista med beskrivningar."""
+        """Read and decode active faults into a list of descriptions."""
         from .faults import decode_faults
 
         return decode_faults(self.read_faults_raw())
 
     def clear_faults(self) -> None:
-        """Radera lagrade felkoder (StartRoutine 0xDD). Kräver upplåst session."""
+        """Clear stored fault codes (StartRoutine 0xDD). Requires an unlocked session."""
         self._kwp.start_routine(_CLEAR_FAULTS_ROUTINE, _CLEAR_FAULTS_PADDING)
 
-    # ---- output-tester (kräver SÄNDANDE kabel) ------------------------ #
+    # ---- output tests (require a TRANSMITTING cable) ------------------ #
     def output_names(self) -> "list[str]":
-        """Namn på de kända output-testerna (för UI/CLI)."""
+        """Names of the known output tests (for UI/CLI)."""
         return list(_OUTPUTS)
 
     def output_test(self, name: str) -> None:
-        """Pulsa en TD5-utgång (IOControl). ``name`` ur :meth:`output_names`.
+        """Pulse a TD5 output (IOControl). ``name`` from :meth:`output_names`.
 
-        ⚠️ Aktivt test — kör bara stillastående, tändning på. Byte-exakt mot
-        sniffen (t.ex. ``ac_clutch`` → ``30 A3 FF``)."""
+        ⚠️ Active test — only run stationary, ignition on. Byte-exact against
+        the sniff (e.g. ``ac_clutch`` → ``30 A3 FF``)."""
         try:
             lid, params = _OUTPUTS[name]
         except KeyError:
-            raise ValueError(f"okänd TD5-utgång: {name!r}") from None
+            raise ValueError(f"unknown TD5 output: {name!r}") from None
         self._kwp.io_control(lid, params)
 
     def injector_pulse(self, cylinder: int) -> None:
-        """Pulsa en injektor för hörbart klick (StartRoutine ``31 C2 0<n>``).
+        """Pulse an injector for an audible click (StartRoutine ``31 C2 0<n>``).
 
-        ``cylinder`` 1–5. ⚠️ Aktivt test, motorn av."""
+        ``cylinder`` 1–5. ⚠️ Active test, engine off."""
         if not 1 <= cylinder <= 5:
-            raise ValueError("cylinder måste vara 1–5")
+            raise ValueError("cylinder must be 1–5")
         self._kwp.start_routine(_INJECTOR_ROUTINE, bytes([cylinder]))
 
     # ---- immobiliser/security ----------------------------------------- #
     def security_status(self) -> int:
-        """Läs immobiliser-status (`31 C0` starta + `33 C0` läs). Returnerar
-        statusbyten — **0x03 = ej immobiliserad** (belagt RDL 016). Read-only.
+        """Read immobiliser status (`31 C0` start + `33 C0` read). Returns
+        the status byte — **0x03 = not immobilised** (proven RDL 016). Read-only.
 
-        (Motsvarar reference tools 'GET SECURITY STATUS'. 'LEARN SECURITY CODE' är en
-        annan, tillståndsändrande rutin och implementeras medvetet inte.)"""
+        (Corresponds to the reference tool's 'GET SECURITY STATUS'. 'LEARN SECURITY CODE' is a
+        different, state-changing routine and is deliberately not implemented.)"""
         self._kwp.start_routine(_SECURITY_ROUTINE)
         result = self._kwp.request_routine_results(_SECURITY_ROUTINE)
-        # svaret börjar med ekad rutin-id (C0), följt av statusbyte
+        # the response starts with the echoed routine id (C0), followed by the status byte
         return result[1] if len(result) >= 2 else -1
 
-    # bekvämlighet
+    # convenience
     def rpm(self) -> float:
         return self.read("rpm")
 

@@ -18,14 +18,14 @@ from d2diag.sniff.library import build_library  # noqa: E402
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Bygg protokollbibliotek (JSON)")
-    ap.add_argument("logs", nargs="*", help="loggfiler (default: logs/*.log)")
+    ap = argparse.ArgumentParser(description="Build protocol library (JSON)")
+    ap.add_argument("logs", nargs="*", help="log files (default: logs/*.log)")
     ap.add_argument("--out", default="references/protocol_library.json")
     args = ap.parse_args()
 
     logs = args.logs or sorted(glob.glob("logs/*.log"))
     if not logs:
-        print("inga loggfiler hittade", file=sys.stderr)
+        print("no log files found", file=sys.stderr)
         return 1
     lib = build_library(logs)
     os.makedirs(os.path.dirname(args.out), exist_ok=True)

@@ -1,8 +1,8 @@
-"""Migrering: dumpa nuvarande td5.identifiers-literal → signals/td5.json.
+"""Migration: dump the current td5.identifiers literal → signals/td5.json.
 
-Engångs- (och idempotent) devverktyg. Läser den handkodade ``SIGNALS``/``LIMITS``
-och skriver den deklarativa storen, med kurerad konfidens/källa per fält (det som
-tidigare låg i kodkommentarer). Kör en gång; därefter är JSON:en sanningskällan.
+One-shot (and idempotent) dev tool. Reads the hand-coded ``SIGNALS``/``LIMITS``
+and writes the declarative store, with curated confidence/source per field (what
+used to live in code comments). Run once; after that the JSON is the source of truth.
 
     PYTHONPATH=src python3 tools/export_signals.py
 """
@@ -14,30 +14,30 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from d2diag.td5.identifiers import LIMITS, SIGNALS  # noqa: E402
 
-# Kurerad konfidens + källa per signal (ur kodkommentarer/loggverifiering).
-# Default om ej listad: ("kandidat", "").
+# Curated confidence + source per signal (from code comments/log verification).
+# Default if not listed: ("kandidat", "").
 ANNOT: "dict[str, tuple[str, str]]" = {
-    "rpm":            ("belagt", "fuelling verifierat mot bilen (RDL 016)"),
-    "speed":          ("belagt", "fuelling verifierat mot bilen"),
-    "battery":        ("belagt", "u16/1000 V, verifierat mot bilen"),
-    "coolant_temp":   ("belagt", "21 1A@0 u16/10−273.2; verifierat 2026-08-03 (59.2 °C)"),
-    "air_temp":       ("belagt", "21 1A@4, samma temp-skala"),
-    "ext_temp":       ("kandidat", "givare EJ monterad → konstant 0x1088=150 °C (oansluten)"),
-    "fuel_temp":      ("belagt", "21 1A@12, samma temp-skala"),
-    "accel_way1":     ("belagt", "21 1B@0 u16/1000 V; sniffat 2026-08-08"),
+    "rpm":            ("belagt", "fuelling verified against the car (RDL 016)"),
+    "speed":          ("belagt", "fuelling verified against the car"),
+    "battery":        ("belagt", "u16/1000 V, verified against the car"),
+    "coolant_temp":   ("belagt", "21 1A@0 u16/10−273.2; verified 2026-08-03 (59.2 °C)"),
+    "air_temp":       ("belagt", "21 1A@4, same temp scale"),
+    "ext_temp":       ("kandidat", "sensor NOT fitted → constant 0x1088=150 °C (unconnected)"),
+    "fuel_temp":      ("belagt", "21 1A@12, same temp scale"),
+    "accel_way1":     ("belagt", "21 1B@0 u16/1000 V; sniffed 2026-08-08"),
     "accel_way2":     ("belagt", "21 1B@2 u16/1000 V"),
-    "accel_way3":     ("kandidat", "21 1B@4; tredje spänningsspår, skala ej bekräftad (0 V i fångst)"),
-    "accel_supply":   ("belagt", "21 1B@6 u16/1000 V (5V-referens)"),
-    "manifold_press": ("belagt", "21 1C@0 u16/10000 bar; BEKRÄFTAT 2026-08-03 (1.0→1.2 bar)"),
-    "maf_raw":        ("kandidat", "21 1C@4; ingen MAF på tidig ROM — rått fält, tolka ej som mg"),
-    "rpm_error":      ("kandidat", "21 21@0 s16; idle-reglerfel"),
+    "accel_way3":     ("kandidat", "21 1B@4; third voltage track, scale not confirmed (0 V in capture)"),
+    "accel_supply":   ("belagt", "21 1B@6 u16/1000 V (5V reference)"),
+    "manifold_press": ("belagt", "21 1C@0 u16/10000 bar; CONFIRMED 2026-08-03 (1.0→1.2 bar)"),
+    "maf_raw":        ("kandidat", "21 1C@4; no MAF on early ROM — raw field, do not interpret as mg"),
+    "rpm_error":      ("kandidat", "21 21@0 s16; idle control error"),
     "ambient_press_1": ("belagt", "21 23@0 u16/10000 bar"),
     "ambient_press_2": ("belagt", "21 23@2 u16/10000 bar"),
-    "balance_1":      ("kandidat", "21 40@0 s16; cylinderbalans 1"),
-    "balance_2":      ("kandidat", "21 40@2 s16; cylinderbalans 2"),
-    "balance_3":      ("kandidat", "21 40@4 s16; cylinderbalans 3"),
-    "balance_4":      ("kandidat", "21 40@6 s16; cylinderbalans 4"),
-    "balance_5":      ("kandidat", "21 40@8 s16; cylinderbalans 5"),
+    "balance_1":      ("kandidat", "21 40@0 s16; cylinder balance 1"),
+    "balance_2":      ("kandidat", "21 40@2 s16; cylinder balance 2"),
+    "balance_3":      ("kandidat", "21 40@4 s16; cylinder balance 3"),
+    "balance_4":      ("kandidat", "21 40@6 s16; cylinder balance 4"),
+    "balance_5":      ("kandidat", "21 40@8 s16; cylinder balance 5"),
 }
 
 
@@ -61,7 +61,7 @@ def main() -> int:
     with open(out, "w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)
         f.write("\n")
-    print(f"skrev {len(rows)} signaler → {os.path.relpath(out)}")
+    print(f"wrote {len(rows)} signals → {os.path.relpath(out)}")
     return 0
 
 

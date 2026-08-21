@@ -1,15 +1,15 @@
-"""Passiv K-line-sniffning — ram-uppdelning och annotering (offline-analys).
+"""Passive K-line sniffing — frame splitting and annotation (offline analysis).
 
-K-line är en enda tråd, halvduplex: både testarens frågor och ECU:ns svar syns
-på samma tråd. En passiv RX-lyssnare fångar alltså hela samtalet. Meddelanden
-skiljs åt på **tystnadsgap** mellan bytes. De rena funktionerna här (ingen I/O)
-används av ``tools/sniff.py`` och är enhetstestbara.
+K-line is a single wire, half-duplex: both the tester's requests and the ECU's
+replies appear on the same wire. A passive RX listener therefore captures the whole
+conversation. Messages are separated by **silence gaps** between bytes. The pure
+functions here (no I/O) are used by ``tools/sniff.py`` and are unit-testable.
 """
 from __future__ import annotations
 
 from .kline.frame import ChecksumError, FrameError, decode
 
-# Tjänste-ID → namn (KWP2000). Positivt svar = SID | 0x40.
+# Service ID → name (KWP2000). Positive response = SID | 0x40.
 _SERVICES = {
     0x10: "StartDiagnosticSession",
     0x11: "EcuReset",
@@ -33,12 +33,12 @@ _SERVICES = {
 
 
 def frame_by_gaps(byte_samples, gap: float) -> "list[dict]":
-    """Dela en tidsstämplad byte-ström i meddelanden på tystnadsgap.
+    """Split a timestamped byte stream into messages on silence gaps.
 
-    ``byte_samples``: itererbar av ``(t, b)`` (t = monoton tid i sekunder, b = byte).
-    Nytt meddelande börjar när ``t - förra_t > gap``. Returnerar en lista av
-    ``{"start", "end", "gap_before", "data"}`` (gap_before = tystnad före
-    meddelandet, ``None`` för det första).
+    ``byte_samples``: iterable of ``(t, b)`` (t = monotonic time in seconds, b = byte).
+    A new message starts when ``t - prev_t > gap``. Returns a list of
+    ``{"start", "end", "gap_before", "data"}`` (gap_before = silence before
+    the message, ``None`` for the first one).
     """
     msgs: "list[dict]" = []
     cur = bytearray()
@@ -61,10 +61,10 @@ def frame_by_gaps(byte_samples, gap: float) -> "list[dict]":
 
 
 def describe(message: bytes) -> str:
-    """Best-effort-annotering av ett sniffat meddelande (rå ram-bytes).
+    """Best-effort annotation of a sniffed message (raw frame bytes).
 
-    Försöker avkoda ramen; annars gissa på råbytes. Namnger tjänst/SID, positivt
-    svar, negativt svar (7F+NRC) och slow-init-sync (0x55).
+    Tries to decode the frame; otherwise guesses from the raw bytes. Names
+    service/SID, positive response, negative response (7F+NRC) and slow-init sync (0x55).
     """
     if not message:
         return ""
@@ -73,18 +73,18 @@ def describe(message: bytes) -> str:
     try:
         payload = decode(message).data
     except (FrameError, ChecksumError):
-        payload = message  # okänt/trasigt format — gissa på råbytes
+        payload = message  # unknown/broken format — guess from the raw bytes
     if not payload:
         return ""
     sid = payload[0]
     if sid == 0x7F:
         svc = _SERVICES.get(payload[1], f"{payload[1]:#04x}") if len(payload) >= 2 else "?"
         nrc = f"{payload[2]:#04x}" if len(payload) >= 3 else "?"
-        return f"NEG på {svc} (NRC {nrc})"
+        return f"NEG on {svc} (NRC {nrc})"
     if sid == 0xC1:
-        return "StartCommunication positivt (C1)"
+        return "StartCommunication positive (C1)"
     if (sid & 0x40) and (sid & ~0x40) in _SERVICES:
-        return f"SVAR {_SERVICES[sid & ~0x40]}"
+        return f"RESP {_SERVICES[sid & ~0x40]}"
     if sid in _SERVICES:
         return f"REQ {_SERVICES[sid]}"
     return ""

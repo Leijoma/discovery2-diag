@@ -1,42 +1,42 @@
-# Td5 — fynd ur externa repos (research 2026-08-21)
+# Td5 — findings from external repos (research 2026-08-21)
 
-Genomgång av EA2EGA/Ekaitza_Itzali (Python, riktiga sniff-loggar), SimonRafferty
-och muki01. Syfte: hitta vad vi INTE redan har. Vi visade oss ligga bra till.
+Review of EA2EGA/Ekaitza_Itzali (Python, real sniff logs), SimonRafferty
+and muki01. Purpose: find what we do NOT already have. We turned out to be in good shape.
 
-## Redan implementerat hos oss (bekräftat av Ekaitzas riktiga sniffar)
+## Already implemented on our side (confirmed by Ekaitza's real sniffs)
 - **Immobiliser/security status** — `security_status()` = `31 C0` + `33 C0`,
-  RDL016 = **0x03 (ej immobiliserad), belagt**. OBS: Ekaitzas README listar detta
-  som "Not yet" (oimplementerat) — VI har det oberoende. "Learn code" görs medvetet EJ.
-  ⚠️ Ännu inte visat i v2-UI:t ("security status: planned").
-- **Outputs `0x30`** — vårt `_OUTPUTS` matchar Ekaitzas fångade bytes exakt:
-  A1 fuel pump · A2 MIL · A3 A/C-koppling · A4 A/C-fläkt · B3 glödstift · B7 varvräknar-
-  svep · BA temp-mätarsvep · BD EGR-modulator (PWM).
-- **Injektortester** `31 C2 01…05` (cylinderbalans) — har `injector_pulse`.
-- **Seed→key** LFSR (taps bit 1,2,8,9) — har keygen.
-- **Checksumma = summa(alla bytes inkl. längd) mod 256** — bekräftar `raw_analyze`-parsern.
-- **Fast init 25 ms låg + 25 ms hög** — matchar vår (muki01 i
-  `references/muki01_OBD2_K-line_Reader/`, Wayback-capture, MIT).
+  RDL016 = **0x03 (not immobilised), proven**. NOTE: Ekaitza's README lists this
+  as "Not yet" (unimplemented) — WE have it independently. "Learn code" is deliberately NOT done.
+  ⚠️ Not yet shown in the v2 UI ("security status: planned").
+- **Outputs `0x30`** — our `_OUTPUTS` matches Ekaitza's captured bytes exactly:
+  A1 fuel pump · A2 MIL · A3 A/C clutch · A4 A/C fan · B3 glow plugs · B7 rev-counter
+  sweep · BA temp-gauge sweep · BD EGR modulator (PWM).
+- **Injector tests** `31 C2 01…05` (cylinder balance) — has `injector_pulse`.
+- **Seed→key** LFSR (taps bits 1,2,8,9) — has a keygen.
+- **Checksum = sum(all bytes incl. length) mod 256** — confirms the `raw_analyze` parser.
+- **Fast init 25 ms low + 25 ms high** — matches ours (muki01 in
+  `references/muki01_OBD2_K-line_Reader/`, Wayback capture, MIT).
 
-## Nytt att ev. adoptera (overifierat mot RDL016 — bekräfta först)
-- **`21 1D` = "fuel-usage params"** (Ekaitza) → bekräftar att MAF (1D@5) OCH
-  bränsle-/injektionsdata bor i 1D-blocket. **Vägen till bränsleförbrukning** går via
-  injektionsmängd (mg/stroke) i 1D — jaga fältet ur en LASTAD körning (byte1 27→65,
-  byte11 50→127 rörde sig med rpm; last skiljer injektion från rena rpm-fält).
-- **ECU-identifiering `1A xx`**: `1A 87` VIN · `1A 9A` ECU-typ · `1A 9B/9C` fler ID.
-  (Läs-only, lätt att lägga till — vi läser inte VIN idag.)
-- **Digitala ingångar / switchar `21 1E` och `21 36`** (bitfält): broms, koppling,
-  cruise, A/C-begäran, transfer-läge. Ekaitza ger pin-mappning (A33 transfer, B10/B16
-  broms, B35 koppling, B15/B17/B11 cruise, B9/B23 A/C). Vi fångar 1E i råloggen men
-  **avkodar inte bitfältet** — konkret mappnings-uppgift.
-- **`21 32` / `21 0E`** homologation/map-variant (ASCII) · **`21 3D`** 14-byte statusblock.
-- **`30 BE` wastegate-modulator** (vi har BD EGR men ev. inte BE wastegate — kolla).
+## New to possibly adopt (unverified against RDL016 — confirm first)
+- **`21 1D` = "fuel-usage params"** (Ekaitza) → confirms that MAF (1D@5) AND
+  fuel/injection data live in the 1D block. **The route to fuel consumption** goes via
+  injection quantity (mg/stroke) in 1D — hunt the field from a LOADED drive (byte1 27→65,
+  byte11 50→127 moved with rpm; load distinguishes injection from pure rpm fields).
+- **ECU identification `1A xx`**: `1A 87` VIN · `1A 9A` ECU type · `1A 9B/9C` more IDs.
+  (Read-only, easy to add — we don't read VIN today.)
+- **Digital inputs / switches `21 1E` and `21 36`** (bitfields): brake, clutch,
+  cruise, A/C request, transfer position. Ekaitza gives pin mapping (A33 transfer, B10/B16
+  brake, B35 clutch, B15/B17/B11 cruise, B9/B23 A/C). We capture 1E in the raw log but
+  **don't decode the bitfield** — a concrete mapping task.
+- **`21 32` / `21 0E`** homologation/map variant (ASCII) · **`21 3D`** 14-byte status block.
+- **`30 BE` wastegate modulator** (we have BD EGR but possibly not BE wastegate — check).
 
-## Låg återanvändning
-- colinbourassa/libcomm14cux (Rover V8 14CUX) + memsgauge (MEMS 1.6): EJ KWP2000,
-  bara K-line-/FTDI-wiring-referens.
-- Zi-x/OBD-KLINE: generisk ISO14230, inget Td5-specifikt.
+## Low reuse
+- colinbourassa/libcomm14cux (Rover V8 14CUX) + memsgauge (MEMS 1.6): NOT KWP2000,
+  only a K-line/FTDI wiring reference.
+- Zi-x/OBD-KLINE: generic ISO14230, nothing Td5-specific.
 
 ## Attribution
-Ekaitzas sniff-loggar = hög tillit (fångat från riktig Td5). SimonRafferty läser som
-delvis rekonstruerad och krockar med vårt bilverifierade LID-schema (MAF@1B m.m.) →
-lägre tillit; verifiera dess `21 37/38` (EGR/wastegate-position) mot bilen först.
+Ekaitza's sniff logs = high trust (captured from a real Td5). SimonRafferty reads as
+partly reconstructed and clashes with our car-verified LID scheme (MAF@1B etc.) →
+lower trust; verify its `21 37/38` (EGR/wastegate position) against the car first.

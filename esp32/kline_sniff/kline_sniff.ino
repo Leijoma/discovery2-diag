@@ -1,19 +1,19 @@
-// kline_sniff.ino — PASSIV K-line-sniffer (RX-only) via högimpedanstapp på GPIO16.
+// kline_sniff.ino — PASSIVE K-line sniffer (RX-only) via a high-impedance tap on GPIO16.
 //
-// Hårdvara (din tapp): OBD pin7 (K-line) -> 220k -> BC337 bas; kollektor -> GPIO16
-//   + 10k pullup till 3V3; emitter -> GND; OBD pin4/5 -> ESP32 GND. Inverterande
-//   => KLINE_INVERT=true. INGEN TX på K-linen => kan ALDRIG driva bussen (read-only).
+// Hardware (your tap): OBD pin7 (K-line) -> 220k -> BC337 base; collector -> GPIO16
+//   + 10k pullup to 3V3; emitter -> GND; OBD pin4/5 -> ESP32 GND. Inverting
+//   => KLINE_INVERT=true. NO TX on the K-line => can NEVER drive the bus (read-only).
 //
-// Läser K-line @10400 8N1, delar upp i ramar på tystnadsgap, skickar hex +
-// tidsstämpel (ms) över USB-serial @115200. *** SÄNDER ALDRIG. ***
-// Kör stillastående, tändning på. Testa först: når reference toolen bilen med tappen i?
+// Reads the K-line @10400 8N1, splits it into frames on silence gaps, sends hex +
+// timestamp (ms) over USB serial @115200. *** NEVER TRANSMITS. ***
+// Run stationary, ignition on. Test first: does the reference tool reach the car with the tap in place?
 
 #include <Arduino.h>
 
-static const int      PIN_KRX      = 16;      // Q-kollektor -> GPIO16
+static const int      PIN_KRX      = 16;      // Q collector -> GPIO16
 static const uint32_t KLINE_BAUD   = 10400;
-static const bool     KLINE_INVERT = true;    // transistortappen inverterar
-static const uint32_t GAP_MS       = 7;       // tystnad som avslutar en ram
+static const bool     KLINE_INVERT = true;    // the transistor tap inverts
+static const uint32_t GAP_MS       = 7;       // silence that ends a frame
 
 static uint8_t  buf[512];
 static size_t   n = 0;
@@ -30,8 +30,8 @@ static void flushFrame() {
 void setup() {
   Serial.begin(115200);
   delay(200);
-  Serial.println("# kline_sniff RX-only @10400 invert, GPIO16 — sander ALDRIG");
-  // txPin = -1 => ingen TX-pinne routad => omojligt att driva K-linen.
+  Serial.println("# kline_sniff RX-only @10400 invert, GPIO16 — NEVER transmits");
+  // txPin = -1 => no TX pin routed => impossible to drive the K-line.
   Serial2.begin(KLINE_BAUD, SERIAL_8N1, PIN_KRX, -1, KLINE_INVERT);
 }
 

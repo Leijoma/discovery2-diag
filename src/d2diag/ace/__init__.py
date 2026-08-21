@@ -1,7 +1,7 @@
-"""ACE-lagret (Lucas Active Cornering Enhancement) — meny-data först.
+"""ACE layer (Lucas Active Cornering Enhancement) — menu data first.
 
-Protokoll-lagret byggs efter ACE-sniff. Se `references/reference_tool_master_menu.md`
-(avsnitt ACE) och felkodsordboken (dicten, ACE 0001–0048).
+The protocol layer is built after an ACE sniff. See `references/reference_tool_master_menu.md`
+(ACE section) and the fault code dictionary (the dictionary, ACE 0001–0048).
 """
 from .menu import ACE_MENU
 

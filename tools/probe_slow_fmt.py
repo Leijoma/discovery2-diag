@@ -1,10 +1,10 @@
-"""Hitta rätt post-slow-init header-format — prova konkreta råramar mot en modul.
+"""Find the right post-slow-init header format — try concrete raw frames against a module.
 
     PYTHONPATH=src python3 tools/probe_slow_fmt.py PORT ADDR_HEX
 
-För varje kandidatram: gör 5-baud slow init (egen session), skicka råramen, dumpa
-HELA bursten (även skräp). Ett svar med 0x7E (TesterPresent-ACK) eller 0x7F (neg)
-avslöjar rätt format. ≥8 s mellan (session-lås). Stillastående, tändning på.
+For each candidate frame: do a 5-baud slow init (own session), send the raw frame, dump
+the WHOLE burst (junk included). A response with 0x7E (TesterPresent ACK) or 0x7F (neg)
+reveals the right format. >=8 s between attempts (session lock). Stationary, ignition on.
 """
 import sys
 import time
@@ -19,18 +19,18 @@ def cs(b: bytes) -> bytes:
 
 def candidates(addr: int):
     a = addr
-    # TesterPresent (0x3E) i olika KWP2000/ISO-format + testaradresser
+    # TesterPresent (0x3E) in various KWP2000/ISO formats + tester addresses
     return [
-        ("oadr len-i-fmt         ", cs(bytes([0x01, 0x3E]))),
-        ("adr fmt=0x81 F7        ", cs(bytes([0x81, a, 0xF7, 0x3E]))),
-        ("adr fmt=0x81 F1        ", cs(bytes([0x81, a, 0xF1, 0x3E]))),
-        ("funktionell C1 F1      ", cs(bytes([0xC1, a, 0xF1, 0x3E]))),
-        ("adr+längdbyte 80..01   ", cs(bytes([0x80, a, 0xF7, 0x01, 0x3E]))),
-        ("adr+längdbyte 80 F1    ", cs(bytes([0x80, a, 0xF1, 0x01, 0x3E]))),
+        ("unaddr len-in-fmt      ", cs(bytes([0x01, 0x3E]))),
+        ("addr fmt=0x81 F7       ", cs(bytes([0x81, a, 0xF7, 0x3E]))),
+        ("addr fmt=0x81 F1       ", cs(bytes([0x81, a, 0xF1, 0x3E]))),
+        ("functional C1 F1       ", cs(bytes([0xC1, a, 0xF1, 0x3E]))),
+        ("addr+lenbyte 80..01    ", cs(bytes([0x80, a, 0xF7, 0x01, 0x3E]))),
+        ("addr+lenbyte 80 F1     ", cs(bytes([0x80, a, 0xF1, 0x01, 0x3E]))),
         ("ISO9141 68 6A F1       ", cs(bytes([0x68, 0x6A, 0xF1, 0x3E]))),
         ("ISO9141 68 addr F1     ", cs(bytes([0x68, a, 0xF1, 0x3E]))),
         ("ISO9141 82 addr F1     ", cs(bytes([0x82, a, 0xF1, 0x3E]))),
-        ("adr src=0x03           ", cs(bytes([0x81, a, 0x03, 0x3E]))),
+        ("addr src=0x03          ", cs(bytes([0x81, a, 0x03, 0x3E]))),
     ]
 
 
@@ -42,12 +42,12 @@ def main() -> int:
     kl = KLine(t, target=addr)
     hits = []
     try:
-        print(f"tyst 6 s först...")
+        print(f"quiet 6 s first...")
         time.sleep(6)
         for name, frame in candidates(addr):
             raw_init = t.slow_init(addr)
             if not (raw_init and raw_init[0] == 0x55):
-                print(f"  {name} init-tyst, hoppar")
+                print(f"  {name} init silent, skipping")
                 time.sleep(8)
                 continue
             kl._flush_input()
@@ -60,14 +60,14 @@ def main() -> int:
                 mark = "  <<< 7E ACK!"
                 hits.append((name, "7E"))
             elif 0x7F in resp:
-                mark = "  <<< 7F neg (svar!)"
+                mark = "  <<< 7F neg (response!)"
                 hits.append((name, "7F"))
-            print(f"  {name} TX {frame.hex(' ')} → {resp.hex(' ') or 'tyst'}{mark}")
+            print(f"  {name} TX {frame.hex(' ')} → {resp.hex(' ') or 'silent'}{mark}")
             time.sleep(8)
     finally:
         t.close()
-    print("\n--- format-träffar ---")
-    print("  " + (", ".join(f"{n.strip()}={tag}" for n, tag in hits) if hits else "inga"))
+    print("\n--- format hits ---")
+    print("  " + (", ".join(f"{n.strip()}={tag}" for n, tag in hits) if hits else "none"))
     return 0
 
 

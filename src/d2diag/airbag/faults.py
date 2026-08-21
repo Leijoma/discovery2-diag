@@ -1,36 +1,36 @@
-"""Airbag (TRW SPS 2A) felavkodning — BELAGT ur sniff 2026-08-10 (RDL 016).
+"""Airbag (TRW SPS 2A) fault decoding — PROVEN from sniff 2026-08-10 (RDL 016).
 
-Felminnet läses via ``21 02`` (svaret börjar ``61 02``). Datafältet är poster om
-**2 byte: [status][fault-number]**, där fault-number är **reference tools display-nummer
-direkt** (`0x04`=004, `0x16`=022). Tomma poster = `00 00`. Radera = `14` → `54`.
+The fault memory is read via ``21 02`` (the response starts ``61 02``). The data field is records of
+**2 bytes: [status][fault-number]**, where fault-number is **the reference tool's display number
+directly** (`0x04`=004, `0x16`=022). Empty records = `00 00`. Clear = `14` → `54`.
 
-Belagt exempel (RDL 016): ``61 02 90 04 90 16 00 00 …`` →
-``90 04`` = fault 004 (open circuit intermittent), ``90 16`` = fault 022 (dito).
+Proven example (RDL 016): ``61 02 90 04 90 16 00 00 …`` →
+``90 04`` = fault 004 (open circuit intermittent), ``90 16`` = fault 022 (ditto).
 
-Fault-numret slås upp mot positions-listan i felkodsordboken (Airbag, position =
-display-kod, 1–65). Statuskodningen är preliminär — `0x90` observerat för båda
-"open circuit intermittent"; övriga statusvärden behöver fler captures.
+The fault number is looked up against the position list in the fault code dictionary (Airbag, position =
+display code, 1–65). The status encoding is preliminary — `0x90` observed for both
+"open circuit intermittent"; other status values need more captures.
 """
 from __future__ import annotations
 
-FAULT_LID = 0x02          # 21 02 → felminnet (innehöll de aktiva/intermittenta felen)
-FAULT_LID_ALT = 0x01      # 21 01 → tomt i capturen (annan fault-klass?)
+FAULT_LID = 0x02          # 21 02 → the fault memory (held the active/intermittent faults)
+FAULT_LID_ALT = 0x01      # 21 01 → empty in the capture (another fault class?)
 _CLEAR = 0x14             # 14 → 54
 
-# Preliminär status-tolkning (behöver fler captures för att bekräfta bit-betydelser).
+# Preliminary status interpretation (needs more captures to confirm bit meanings).
 STATUS = {0x90: "open circuit intermittent (candidate)"}
 
 
 def decode_faults(data: bytes) -> "list[dict]":
-    """Avkoda datafältet (efter ``61 02``) → lista med ``{number, status, status_text}``.
+    """Decode the data field (after ``61 02``) → list of ``{number, status, status_text}``.
 
-    Number = reference tools display-felnummer (t.ex. 4 → 004). Slå upp texten i dicten
-    (Airbag position=display-kod)."""
+    Number = the reference tool's display fault number (e.g. 4 → 004). Look up the text in the
+    dictionary (Airbag position=display code)."""
     out: "list[dict]" = []
     for i in range(0, len(data) - 1, 2):
         status, num = data[i], data[i + 1]
         if status == 0 and num == 0:
-            continue  # tom/padding-post
+            continue  # empty/padding record
         out.append({
             "number": num,
             "status": status,

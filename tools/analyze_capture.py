@@ -1,14 +1,15 @@
-"""Analysera en esp32_read-logg → request/response/annotation/candidate.
+"""Analyze an esp32_read log → request/response/annotation/candidate.
 
-Vänder ChatGPT-analysens metod till kod:
-- **Ram + checksum:** längd-prefixade KWP-ramar `<len><payload><cs>` (cs = summa av
-  alla föregående byte mod 256) valideras. Rena ramar (TD5/SLABS) klassas per tjänst.
-- **Andra protokoll** (Autobox `72…`, ACE `67…/04 04 00`, Airbag `…90 04…`, BCU) visas
-  som råramar med igenkänd funktions-signatur.
-- **Annotering mitt i flödet:** varje `>>> markör` ankras RETROAKTIVT — vi visar
-  distinkta ramar i ett fönster runt markören och kollapsar keepalive/upprepningar,
-  så en kommentar mitt i en ström ändå knyts till rätt trafikregim.
-- **Skärm-fingerprint:** vilka `21 xx`-identifierare som pollas repeterat.
+Turns the ChatGPT analysis method into code:
+- **Frame + checksum:** length-prefixed KWP frames `<len><payload><cs>` (cs = sum of
+  all preceding bytes mod 256) are validated. Clean frames (TD5/SLABS) are classified
+  per service.
+- **Other protocols** (Autobox `72…`, ACE `67…/04 04 00`, Airbag `…90 04…`, BCU) are
+  shown as raw frames with a recognized function signature.
+- **Mid-stream annotation:** every `>>> marker` is anchored RETROACTIVELY — we show
+  distinct frames in a window around the marker and collapse keepalive/repetitions,
+  so a comment in the middle of a stream is still tied to the right traffic regime.
+- **Screen fingerprint:** which `21 xx` identifiers are polled repeatedly.
 
     python3 tools/analyze_capture.py logs/faultread-20260809.log
     python3 tools/analyze_capture.py logs/session.log --window 6
@@ -30,7 +31,7 @@ _LINE = re.compile(r"\[\s*(\d+)\s*\]\s*([0-9a-fA-F ]+)")
 
 
 def parse(path: str):
-    """→ lista av (ms, kind, payload). kind = 'data' (bytes) | 'mark' (text)."""
+    """→ list of (ms, kind, payload). kind = 'data' (bytes) | 'mark' (text)."""
     events = []
     for line in open(path, encoding="utf-8", errors="replace"):
         line = line.rstrip()
@@ -55,10 +56,10 @@ def _last_ms(events):
 
 
 def split_frames(b):
-    """Dela en bytelista i längd-prefixade ramar. → (frames, consumed).
+    """Split a byte list into length-prefixed frames. → (frames, consumed).
 
-    En ram = [len, payload…, cs] med giltig additiv checksum. Stannar vid första
-    byte som inte inleder en giltig ram (0x00-gap hoppas)."""
+    A frame = [len, payload…, cs] with a valid additive checksum. Stops at the first
+    byte that does not start a valid frame (0x00 gaps are skipped)."""
     out, i, n = [], 0, len(b)
     while i < n:
         if b[i] == 0x00:
@@ -76,10 +77,10 @@ def split_frames(b):
 
 
 def classify(frame):
-    """→ kort textbeskrivning av en giltig KWP-ram."""
+    """→ short text description of a valid KWP frame."""
     payload = frame[1:-1]
     if not payload:
-        return "(tom)"
+        return "(empty)"
     sid = payload[0]
     hx = " ".join(f"{v:02x}" for v in payload)
     base = sid & ~0x40
@@ -94,7 +95,7 @@ def frame_sig(b):
 
 
 def raw_hint(b):
-    """Igenkänning för icke-KWP-ramar (Autobox/ACE/Airbag/BCU)."""
+    """Recognition for non-KWP frames (Autobox/ACE/Airbag/BCU)."""
     if len(b) >= 3 and b[0] == 0x72:
         return "AUTOBOX-cmd"
     if b[:2] == [0x04, 0x04] or b[:2] == [0x07, 0x07] or b[:2] == [0x67, 0x67]:
@@ -109,11 +110,11 @@ def raw_hint(b):
 def analyze(path: str, window_s: float = 6.0):
     events = parse(path)
     win = int(window_s * 1000)
-    # Markörer med index
+    # Markers with index
     marks = [(i, ms, txt) for i, (ms, k, txt) in enumerate(events) if k == "mark"]
-    print(f"### {path}  ({sum(1 for _,k,_ in events if k=='data')} datarader, {len(marks)} markörer)\n")
+    print(f"### {path}  ({sum(1 for _,k,_ in events if k=='data')} data rows, {len(marks)} markers)\n")
 
-    # Skärm-fingerprint: vilka 21 xx pollas mest?
+    # Screen fingerprint: which 21 xx are polled most?
     lids = {}
     for ms, k, p in events:
         if k != "data":
@@ -125,10 +126,10 @@ def analyze(path: str, window_s: float = 6.0):
                 lids[pl[1]] = lids.get(pl[1], 0) + 1
     if lids:
         top = sorted(lids.items(), key=lambda x: -x[1])[:12]
-        print("Mest pollade 21-identifierare (skärm-fingerprint):")
+        print("Most polled 21 identifiers (screen fingerprint):")
         print("  " + ", ".join(f"21 {l:02x}(×{c})" for l, c in top) + "\n")
 
-    # Per markör: distinkta ramar i [markör−window, markör+2s], keepalive kollapsad
+    # Per marker: distinct frames in [marker−window, marker+2s], keepalive collapsed
     for i, ms, txt in marks:
         lo, hi = ms - win, ms + 2000
         seen, rows = set(), []
@@ -146,7 +147,7 @@ def analyze(path: str, window_s: float = 6.0):
                 seen.add(sig)
                 rows.append("  " + classify(f))
             rest = p[consumed:]
-            if rest:  # icke-KWP-ram (annat protokoll)
+            if rest:  # non-KWP frame (other protocol)
                 sig = ("raw",) + tuple(rest)
                 if sig in seen or set(rest) <= {0x00}:
                     continue
@@ -158,15 +159,15 @@ def analyze(path: str, window_s: float = 6.0):
             for r in rows[:12]:
                 print(r)
             if len(rows) > 12:
-                print(f"  … (+{len(rows)-12} till)")
+                print(f"  … (+{len(rows)-12} more)")
             print()
 
 
 def variance(path: str):
-    """Vilka byte-offset VARIERAR per LID? = differential-kandidater ur befintlig data.
+    """Which byte offsets VARY per LID? = differential candidates from existing data.
 
-    Konstant offset = statiskt fält; varierande = det som rörde sig under captet
-    (kandidat att korrelera mot reference tool-värde/fysisk ändring)."""
+    Constant offset = static field; varying = what moved during the capture
+    (candidate to correlate against a reference tool value / physical change)."""
     from collections import defaultdict
     resp = defaultdict(list)
     for ms, k, p in parse(path):
@@ -176,7 +177,7 @@ def variance(path: str):
             pl = f[1:-1]
             if pl and pl[0] == 0x61 and len(pl) >= 2:
                 resp[pl[1]].append(tuple(pl[2:]))
-    print(f"### Byte-varians per 21-LID — {path}\n")
+    print(f"### Byte variance per 21 LID — {path}\n")
     for lid in sorted(resp):
         vals = resp[lid]
         uniq = list(dict.fromkeys(vals))
@@ -184,18 +185,18 @@ def variance(path: str):
             continue
         n = min(len(v) for v in uniq)
         varying = [i for i in range(n) if len({v[i] for v in uniq}) > 1]
-        tag = "VARIERAR " + str(varying) if varying else "konstant"
-        print(f"21 {lid:02x}: {len(vals):>4} svar, {len(uniq):>3} distinkta, {n} byte — {tag}")
+        tag = "VARIES " + str(varying) if varying else "constant"
+        print(f"21 {lid:02x}: {len(vals):>4} responses, {len(uniq):>3} distinct, {n} bytes — {tag}")
         if varying:
             for v in uniq[:3]:
                 print("        " + " ".join(f"{x:02x}" for x in v))
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Analysera esp32_read-capture")
+    ap = argparse.ArgumentParser(description="Analyze an esp32_read capture")
     ap.add_argument("log")
-    ap.add_argument("--window", type=float, default=6.0, help="retroaktivt fönster (s) före markör")
-    ap.add_argument("--variance", action="store_true", help="byte-varians per LID (differential-kandidater)")
+    ap.add_argument("--window", type=float, default=6.0, help="retroactive window (s) before marker")
+    ap.add_argument("--variance", action="store_true", help="byte variance per LID (differential candidates)")
     args = ap.parse_args()
     if args.variance:
         variance(args.log)

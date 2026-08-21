@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Analysera en rå TX/RX-logg och titta på ALL mottagen data — inte bara de fält
-vi redan mappat. Varje TD5-poll ger ett helt block per LID; de bytes vi inte döpt
-är precis där omappade signaler (t.ex. MAF) gömmer sig.
+"""Analyze a raw TX/RX log and look at ALL received data — not just the fields
+we've already mapped. Every TD5 poll returns a whole block per LID; the bytes we
+haven't named are exactly where unmapped signals (e.g. MAF) hide.
 
-För varje LID visas:
-  * byte-nivå: vilka byte-positioner RÖR sig (min/max/distinkta) vs konstanta
-  * u16 (big-endian) på varje jämnt offset: spann + ev. korrelation mot RPM
-  * vilka offset som redan är MAPPADE (ur signalstoren) vs OMAPPADE
+For each LID it shows:
+  * byte level: which byte positions MOVE (min/max/distinct) vs constant
+  * u16 (big-endian) at each even offset: range + optional correlation against RPM
+  * which offsets are already MAPPED (from the signal store) vs UNMAPPED
 
-Om RPM (21 09) rör sig rankas omappade u16-fält efter korrelation mot varvtalet —
-MAF ska följa rpm. Rör sig inte rpm rankas efter spann i stället.
+If RPM (21 09) moves, unmapped u16 fields are ranked by correlation against engine
+speed — MAF should track rpm. If rpm doesn't move, they're ranked by range instead.
 
-    PYTHONPATH=src python3 tools/raw_analyze.py                      # nyaste raw-td5-*.log
+    PYTHONPATH=src python3 tools/raw_analyze.py                      # newest raw-td5-*.log
     PYTHONPATH=src python3 tools/raw_analyze.py logs/raw-td5-XXduration.log
     PYTHONPATH=src python3 tools/raw_analyze.py --module slabs
 """
@@ -31,7 +31,7 @@ _RX = re.compile(r"\bRX\b\s+([0-9A-Fa-f ]+)")
 
 
 def _bytes_from_log(path: str) -> bytes:
-    """Slå ihop alla RX-bytes i loggen till EN ström (frame-parsern letar i den)."""
+    """Merge all RX bytes in the log into ONE stream (the frame parser searches it)."""
     buf = bytearray()
     with open(path, encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -46,15 +46,15 @@ def _bytes_from_log(path: str) -> bytes:
 
 
 def _read_frames(stream: bytes) -> "list[tuple[int, bytes]]":
-    """Plocka ut giltiga oadresserade svarsramar ``<len> 61 <lid> <payload> <cs>``.
+    """Extract valid unaddressed response frames ``<len> 61 <lid> <payload> <cs>``.
 
-    Validerar checksumman (summan av len+ramen & 0xFF) så vi inte fastnar på
-    slumpmässiga 0x61 i eko/brus. Returnerar (lid, payload)-par i tidsordning."""
+    Validates the checksum (sum of len+frame & 0xFF) so we don't trip on random
+    0x61 in echo/noise. Returns (lid, payload) pairs in time order."""
     out: "list[tuple[int, bytes]]" = []
     i, n = 0, len(stream)
     while i < n:
         fmt = stream[i]
-        ln = fmt & 0x3F  # oadresserad: låga 6 bitar = längd
+        ln = fmt & 0x3F  # unaddressed: low 6 bits = length
         if 2 <= ln <= 63 and i + 1 + ln < n:
             frame = stream[i + 1:i + 1 + ln]
             cs = stream[i + 1 + ln]
@@ -87,32 +87,32 @@ def _pearson(xs, ys) -> "float | None":
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("log", nargs="?", help="rålogg (default: nyaste logs/raw-<module>-*.log)")
-    ap.add_argument("--module", default="td5", help="td5 (default) eller slabs — för mappnings-facit")
-    ap.add_argument("--rpm-lid", default="09", help="LID vars u16@0 är RPM (td5: 09)")
+    ap.add_argument("log", nargs="?", help="raw log (default: newest logs/raw-<module>-*.log)")
+    ap.add_argument("--module", default="td5", help="td5 (default) or slabs — for the mapping reference")
+    ap.add_argument("--rpm-lid", default="09", help="LID whose u16@0 is RPM (td5: 09)")
     args = ap.parse_args()
 
     path = args.log
     if not path:
         cands = sorted(glob.glob(f"logs/raw-{args.module}-*.log"), reverse=True)
         if not cands:
-            print(f"ingen logg: logs/raw-{args.module}-*.log"); return 1
+            print(f"no log: logs/raw-{args.module}-*.log"); return 1
         path = cands[0]
-    print(f"analyserar {path}")
+    print(f"analyzing {path}")
 
     frames = _read_frames(_bytes_from_log(path))
     if not frames:
-        print("inga giltiga 61-svarsramar hittades"); return 1
+        print("no valid 61 response frames found"); return 1
 
-    # per LID: lista av payloads i tidsordning
+    # per LID: list of payloads in time order
     per: "dict[int, list[bytes]]" = {}
     for lid, payload in frames:
         per.setdefault(lid, []).append(payload)
 
-    # mappade (lid, offset) ur signalstoren
+    # mapped (lid, offset) from the signal store
     mapped: "set[tuple[int, int]]" = set()
     for s in load_signals(args.module):
-        try:  # Signal.lid är oftast redan int; tål hex-sträng också
+        try:  # Signal.lid is usually already an int; also tolerates a hex string
             lid_i = s.lid if isinstance(s.lid, int) else int(str(s.lid), 16)
             mapped.add((lid_i, int(s.offset)))
         except (ValueError, TypeError):
@@ -123,22 +123,22 @@ def main() -> int:
     rpm_vals = [x for x in rpm_series if x is not None]
     rpm_moved = bool(rpm_vals) and (max(rpm_vals) - min(rpm_vals) >= 100)
 
-    print(f"ramar: {len(frames)}  ·  LID:er: {len(per)}  ·  "
-          f"RPM {'rör sig '+str(min(rpm_vals))+'→'+str(max(rpm_vals)) if rpm_moved else 'STILLA (motor av?)'}")
+    print(f"frames: {len(frames)}  ·  LIDs: {len(per)}  ·  "
+          f"RPM {'moves '+str(min(rpm_vals))+'→'+str(max(rpm_vals)) if rpm_moved else 'STILL (engine off?)'}")
 
     movers = []  # (lid, off, span, corr, mapped?)
     for lid in sorted(per):
         payloads = per[lid]
         L = max(len(p) for p in payloads)
-        # byte-nivå: vilka positioner rör sig
+        # byte level: which positions move
         moving_bytes = []
         for off in range(L):
             vs = [p[off] for p in payloads if off < len(p)]
             if vs and max(vs) != min(vs):
                 moving_bytes.append(off)
         tag = "".join("^" if b in moving_bytes else "." for b in range(L))
-        print(f"\n21 {lid:02X}  ({len(payloads)} läsningar, {L} byte)  rörliga byte: {tag or '(inga)'}")
-        # u16 på varje jämnt offset
+        print(f"\n21 {lid:02X}  ({len(payloads)} reads, {L} bytes)  moving bytes: {tag or '(none)'}")
+        # u16 at each even offset
         for off in range(0, L - 1, 2):
             series = [_u16(p, off) for p in per[lid]]
             vals = [x for x in series if x is not None]
@@ -151,24 +151,24 @@ def main() -> int:
             flag = "MAP " if ismap else "  · "
             note = ""
             if not ismap and rpm_moved and corr is not None and abs(corr) >= 0.8:
-                note = "  <== följer RPM (MAF-kandidat)"
+                note = "  <== tracks RPM (MAF candidate)"
             elif not ismap and not rpm_moved and span > 0:
-                note = "  < rör sig"
-            print(f"    @{off:<2} u16  min {min(vals):5}  max {max(vals):5}  spann {span:5}{cstr}  [{flag}]{note}")
+                note = "  < moves"
+            print(f"    @{off:<2} u16  min {min(vals):5}  max {max(vals):5}  range {span:5}{cstr}  [{flag}]{note}")
             if not ismap and span > 0:
                 movers.append((lid, off, span, corr if corr is not None else 0.0))
 
-    print("\n=== OMAPPADE fält som rör sig — mest intressanta överst ===")
+    print("\n=== UNMAPPED fields that move — most interesting first ===")
     if rpm_moved:
         movers.sort(key=lambda m: abs(m[3]), reverse=True)
         for lid, off, span, corr in movers[:12]:
-            print(f"  21 {lid:02X}@{off:<2}  r(rpm)={corr:+.2f}  spann {span}")
-        print("\n  MAF = högst positiv r mot RPM.")
+            print(f"  21 {lid:02X}@{off:<2}  r(rpm)={corr:+.2f}  range {span}")
+        print("\n  MAF = highest positive r against RPM.")
     else:
         movers.sort(key=lambda m: m[2], reverse=True)
         for lid, off, span, _ in movers[:12]:
-            print(f"  21 {lid:02X}@{off:<2}  spann {span}")
-        print("\n  (RPM stilla → kan inte peka ut MAF. Fånga en logg med motorn igång.)")
+            print(f"  21 {lid:02X}@{off:<2}  range {span}")
+        print("\n  (RPM still → can't pinpoint MAF. Capture a log with the engine running.)")
     return 0
 
 

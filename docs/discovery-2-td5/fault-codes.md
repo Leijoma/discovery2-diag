@@ -142,7 +142,7 @@ a clear. Those are the two anchor points now encoded in `SLABS_FAULT_BITS`:
 | (3, 4) | 020 | 044 | RH-front wheel-speed sensor — output too low |
 | (10, 4) | 027 | 114 | Shuttle valve switch — electrical failure |
 
-Every other bit is decoded generically as `okänt (byte i, bit b)` until more anchor
+Every other bit is decoded generically as `unknown (byte i, bit b)` until more anchor
 points are captured (e.g. by inducing a known fault). The full display-number list
 (012–114) in `references/slabs_fault_codes.md` is the **display** side only, and is
 explicitly tagged as such — it is 🟡 Assumed for the raw mapping until sniffed.

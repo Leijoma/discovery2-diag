@@ -1,8 +1,8 @@
-"""HTTP + SSE-server för dashboarden (stdlib, inga externa beroenden).
+"""HTTP + SSE server for the dashboard (stdlib, no external dependencies).
 
-En bakgrundstråd pollar datakällan och uppdaterar ``latest``; ``/events`` strömmar
-den via Server-Sent Events. ``/command`` är en hook för framtida skriv-/rensa-
-kommandon (ej implementerad än).
+A background thread polls the data source and updates ``latest``; ``/events``
+streams it via Server-Sent Events. ``/command`` is a hook for future write/clear
+commands (not implemented yet).
 """
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ from .docs import DocLibrary
 from .sources import DataSource
 
 _DASHBOARD = Path(__file__).with_name("dashboard.html")
-_DASHBOARD_V2 = Path(__file__).with_name("dashboard_v2.html")  # ny design (proof of concept)
+_DASHBOARD_V2 = Path(__file__).with_name("dashboard_v2.html")  # new design (proof of concept)
 
 
 def _calibrate(req: "dict") -> "dict":
-    """Lös skala/offset ur inskickade (rå, visat)-prover → Signal-förslag."""
+    """Solve scale/offset from submitted (raw, displayed) samples → Signal suggestion."""
     from ..sniff.calib import solve_linear, suggest_signal
 
     samples = req.get("samples") or []
@@ -48,8 +48,8 @@ _capture_lock = threading.Lock()
 
 
 def _append_capture(path: "str | None", rec: "dict") -> "dict":
-    """Lägg en märkt fångst {module, lid, raw, text} till en JSONL-fil (durabelt
-    dataset för mappnings-analys)."""
+    """Append a labelled capture {module, lid, raw, text} to a JSONL file (durable
+    dataset for mapping analysis)."""
     if not path:
         return {"ok": True, "stored": False}
     row = {"t": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -64,7 +64,7 @@ def _append_capture(path: "str | None", rec: "dict") -> "dict":
 
 
 def _automap(req: "dict") -> "dict":
-    """Auto-sök rätt råfält (offset/typ/skala eller byte.bit) ur klartext-avläsningar."""
+    """Auto-search the right raw field (offset/type/scale or byte.bit) from plaintext readings."""
     from ..sniff.automap import solve
 
     try:
@@ -82,9 +82,9 @@ _ALLOWED_MODULES = ("td5", "slabs", "airbag")
 
 
 def _signal_upsert(req: "dict") -> "dict":
-    """Skriv en bekräftad/kandidat-mappning till den deklarativa signalstoren
-    (write-back — stänger mappnings-loopen). Ersätter localStorage för det
-    värdefulla RE-arbetet: mappning gjord i bilen överlever server-side."""
+    """Write a confirmed/candidate mapping to the declarative signal store
+    (write-back — closes the mapping loop). Replaces localStorage for the
+    valuable RE work: mapping done in the car survives server-side."""
     from ..signals import upsert_field
 
     module = (req.get("module") or "").lower()
@@ -101,7 +101,7 @@ def _signal_upsert(req: "dict") -> "dict":
 
 
 def _signals_list(module: str) -> "dict":
-    """Läs storen för en modul (för UI: visa mappade fält + konfidens)."""
+    """Read the store for a module (for the UI: show mapped fields + confidence)."""
     from ..signals import load_records
 
     if module not in _ALLOWED_MODULES:
@@ -110,34 +110,34 @@ def _signals_list(module: str) -> "dict":
 
 
 def _fields_list(module: str) -> "dict":
-    """Förväntade fält för en modul (namn/enhet/confidence) — så UI:t kan visa
-    layouten med tomma platshållare även UTAN kabel/live-data."""
+    """Expected fields for a module (name/unit/confidence) — so the UI can show
+    the layout with empty placeholders even WITHOUT a cable/live data."""
     from ..signals import load_signals
 
-    store_mod = {"motor": "td5"}.get(module, module)  # UI-modulnamn → store-modul
+    store_mod = {"motor": "td5"}.get(module, module)  # UI module name → store module
     fields = [{"name": s.name, "unit": s.unit, "c": s.confidence, "limits": s.limits}
               for s in load_signals(store_mod)]
     return {"module": module, "fields": fields}
 
 
 class _Handler(BaseHTTPRequestHandler):
-    def log_message(self, *args) -> None:  # tyst logg
+    def log_message(self, *args) -> None:  # silent log
         pass
 
     def do_GET(self) -> None:  # noqa: N802
-        # v2 är numera den normala UI:n på "/". "/v2" behålls som alias för gamla
-        # bokmärken. Den gamla v1-dashboarden är mappnings-/admin-konsolen och
-        # ligger på "/admin" bakom lösenord (den har Karta/Fångst/Dok-flikarna).
+        # v2 is now the normal UI at "/". "/v2" is kept as an alias for old
+        # bookmarks. The old v1 dashboard is the mapping/admin console and
+        # lives at "/admin" behind a password (it has the Map/Capture/Docs tabs).
         if self.path in ("/", "/index.html", "/v2", "/v2.html"):
             self._send(_DASHBOARD_V2.read_bytes(), "text/html; charset=utf-8")
         elif self.path in ("/admin", "/admin.html"):
-            # Samma app som "/", men admin-läge: sidan känner av /admin och visar
-            # mappnings-flikarna. En app, en routing, ett UI.
+            # Same app as "/", but admin mode: the page detects /admin and shows
+            # the mapping tabs. One app, one routing, one UI.
             if not self._require_admin():
                 return
             self._send(_DASHBOARD_V2.read_bytes(), "text/html; charset=utf-8")
         elif self.path in ("/v1", "/v1.html"):
-            if not self._require_admin():  # gamla dashboarden — kvar som referens
+            if not self._require_admin():  # the old dashboard — kept as a reference
                 return
             self._html()
         elif self.path == "/events":
@@ -206,8 +206,8 @@ class _Handler(BaseHTTPRequestHandler):
                 cmd = json.loads(raw or b"{}")
             except (ValueError, TypeError):
                 cmd = {}
-            # Basic-mode-skanningen är sekventiell över flera moduler (slow init
-            # för airbag) → ge den rejält med tid; övriga kommandon är snabba.
+            # The basic-mode scan is sequential over several modules (slow init
+            # for airbag) → give it plenty of time; other commands are fast.
             timeout = 45.0 if cmd.get("action") == "read_all_faults" else 8.0
             result = self.server.enqueue_command(cmd, timeout=timeout)
             self._json(result, code=200 if result.get("ok") else 400)
@@ -264,11 +264,11 @@ class _Handler(BaseHTTPRequestHandler):
         except (ValueError, TypeError):
             return {}
 
-    # ---- admin-gate (HTTP Basic Auth) --------------------------------- #
-    # Skyddar mappnings-/dev-ytan (/admin + automap/capture/signal/calib/…).
-    # Är inget lösen satt är admin OGATED (lokal dev, bakåtkompatibelt) — Pi:n
-    # kör med --admin-password. Basic Auth över HTTP utan TLS är "håll nyfikna
-    # borta på LAN", inte stark krypto; ingen känslig data ligger bakom det.
+    # ---- admin gate (HTTP Basic Auth) --------------------------------- #
+    # Protects the mapping/dev surface (/admin + automap/capture/signal/calib/…).
+    # If no password is set, admin is UNGATED (local dev, backwards-compatible) — the Pi
+    # runs with --admin-password. Basic Auth over HTTP without TLS is "keep the curious
+    # off the LAN", not strong crypto; no sensitive data lives behind it.
     def _admin_ok(self) -> bool:
         pw = getattr(self.server, "_admin_password", None)
         if not pw:
@@ -279,13 +279,13 @@ class _Handler(BaseHTTPRequestHandler):
                 decoded = base64.b64decode(hdr[6:]).decode("utf-8", "replace")
             except Exception:  # noqa: BLE001
                 decoded = ""
-            supplied = decoded.partition(":")[2]  # valfritt användarnamn, bara lösen räknas
+            supplied = decoded.partition(":")[2]  # optional username, only the password counts
             if hmac.compare_digest(supplied, pw):
                 return True
         return False
 
     def _require_admin(self) -> bool:
-        """True om anropet får fortsätta; annars skickas 401 och False returneras."""
+        """True if the call may proceed; otherwise a 401 is sent and False returned."""
         if self._admin_ok():
             return True
         self.send_response(401)
@@ -294,7 +294,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         return False
 
-    # ---- svar ---------------------------------------------------------- #
+    # ---- responses ----------------------------------------------------- #
     def _send(self, body: bytes, content_type: str, code: int = 200) -> None:
         self.send_response(code)
         self.send_header("Content-Type", content_type)
@@ -326,19 +326,19 @@ class _Handler(BaseHTTPRequestHandler):
                 self.wfile.flush()
                 time.sleep(self.server.stream_interval)
         except (BrokenPipeError, ConnectionResetError):
-            pass  # klienten stängde
+            pass  # the client closed
 
 
-# Kommandon som INTE rör K-line och därför får köras direkt på HTTP-tråden.
-# Att köa dem bakom pollertråden betyder att de får vänta ut en pågående
-# etablering (SLABS: bus-idle + 3 försök × 5 s retry ≈ 20 s) och sedan timeouta
-# på 8 s i UI:t — trots att de sedan lyckas när kön väl dräneras. De rör bara
-# serverns eget tillstånd (CsvLogger-objekt, fault_every-attribut).
+# Commands that do NOT touch K-line and may therefore run straight on the HTTP thread.
+# Queuing them behind the poller thread means they have to wait out an ongoing
+# establishment (SLABS: bus-idle + 3 attempts × 5 s retry ≈ 20 s) and then time out
+# at 8 s in the UI — even though they later succeed once the queue drains. They only
+# touch the server's own state (CsvLogger object, fault_every attribute).
 _INLINE_COMMANDS = frozenset({"start_csv", "stop_csv", "set_fault_watch"})
 
 
 class ConnectAborted(Exception):
-    """Etableringen avbröts för att ett kommando väntar (t.ex. modulbyte)."""
+    """Establishment aborted because a command is waiting (e.g. module switch)."""
 
 
 class DiagServer(ThreadingHTTPServer):
@@ -368,24 +368,24 @@ class DiagServer(ThreadingHTTPServer):
         admin_password: "str | None" = None,
     ) -> None:
         super().__init__((host, port), _Handler)
-        # None/"" = admin ogated (lokal dev). Satt = /admin + mappnings-endpoints
-        # bakom HTTP Basic Auth. Se _Handler._admin_ok.
+        # None/"" = admin ungated (local dev). Set = /admin + mapping endpoints
+        # behind HTTP Basic Auth. See _Handler._admin_ok.
         self._admin_password = admin_password or None
-        self._fault_watch = fault_watch  # True = polla felkoder varje cykel (snabbt)
-        self._scan_port = scan_port  # port för "läs alla felkoder" (basic mode)
-        self._csv_dir = csv_dir  # var CSV-live-loggar hamnar (start/stop i UI:t)
-        self._csv = None  # aktiv CsvLogger eller None
-        self._csv_lock = threading.Lock()  # start/stop sker på HTTP-tråden, log() i pollern
-        self.community = community  # opt-in bidrags-klient (Community) eller None
-        self._public = public  # publikt läge: enklare UI (döljer Karta/Fångst/Dok + ställdon)
-        self._menus = menus or {}  # modul → meny-lista (Karta-fliken)
-        self.docs = docs or DocLibrary()  # markdown-vy (Dokument-fliken)
-        self.sniffer = sniffer  # passiv sniff-feed (Mappning-fliken), valfri
-        self.captures_path = captures_path  # märkta live-fångster → JSONL
-        # ``variants`` = {modul: {läge: DataSource}} → mock/live kan väljas i UI:t
-        # och bytas i drift. ``source`` (enkel DataSource eller {modul: DataSource})
-        # är bakåtkompatibelt (inget lägesval). Bara EN modul är aktiv åt gången
-        # (K-line = delad buss) → flikbyte släpper gammal session och etablerar ny.
+        self._fault_watch = fault_watch  # True = poll fault codes every cycle (fast)
+        self._scan_port = scan_port  # port for "read all fault codes" (basic mode)
+        self._csv_dir = csv_dir  # where CSV live logs go (start/stop in the UI)
+        self._csv = None  # active CsvLogger or None
+        self._csv_lock = threading.Lock()  # start/stop on the HTTP thread, log() in the poller
+        self.community = community  # opt-in contribution client (Community) or None
+        self._public = public  # public mode: simpler UI (hides Map/Capture/Docs + actuators)
+        self._menus = menus or {}  # module → menu list (Map tab)
+        self.docs = docs or DocLibrary()  # markdown view (Documents tab)
+        self.sniffer = sniffer  # passive sniff feed (Mapping tab), optional
+        self.captures_path = captures_path  # labelled live captures → JSONL
+        # ``variants`` = {module: {mode: DataSource}} → mock/live can be chosen in the UI
+        # and switched at runtime. ``source`` (a single DataSource or {module: DataSource})
+        # is backwards-compatible (no mode selection). Only ONE module is active at a time
+        # (K-line = shared bus) → a tab switch releases the old session and establishes a new one.
         if variants:
             self._variants: "dict | None" = {n: dict(v) for n, v in variants.items()}
             self._modes = sorted({m for v in self._variants.values() for m in v})
@@ -406,35 +406,35 @@ class DiagServer(ThreadingHTTPServer):
         self.source = self._modules[self._active]
         self.poll_interval = poll_interval
         self.stream_interval = stream_interval
-        self.logger = logger  # valfri SnapshotLogger → loggar varje poll till fil
+        self.logger = logger  # optional SnapshotLogger → logs every poll to file
         self.latest: "dict" = {
             "status": "connecting", "source": self.source.name,
             "module": self._active, "mode": self._mode, "modes": self._modes,
             "signals": {}, "faults": [], "logging": {"recording": False},
             "public": self._public, "fault_watch": self._fault_watch,
         }
-        self._apply_fault_watch()  # sätt fel-pollnings-kadensen på alla källor
-        for s in self._all_sources():  # live-feedback under blockande etablering
+        self._apply_fault_watch()  # set the fault-polling cadence on all sources
+        for s in self._all_sources():  # live feedback during blocking establishment
             s.on_progress = self._connect_progress
             s.on_sleep = self._connect_sleep
-        # Anslutningslogg: hela etableringsförloppet + fel skrivs hit (och till stderr)
-        # så man kan felsöka en session som "dör" strax efter uppkoppling.
+        # Connection log: the whole establishment sequence + errors are written here (and to stderr)
+        # so you can debug a session that "dies" shortly after connecting.
         self._conn_log_path = os.path.join(self._csv_dir, "connection.log")
-        self._last_conn_status: "tuple | None" = None  # (modul, status) — se _log_conn_transition
+        self._last_conn_status: "tuple | None" = None  # (module, status) — see _log_conn_transition
         self._last_conn_error: "str | None" = None
-        self._last_phase_logged: "str | None" = None  # dedupe av identiska progress-rader
-        # Senast kända motorkontext (rpm/fart/batteri) från TD5. K-line är en delad
-        # buss så vi kan inte läsa motorn medan SLABS är aktiv — men SLABS-försök
-        # föregås nästan alltid av en TD5-session, och då är värdena sekunder gamla.
-        # Utan detta går det inte att i efterhand se om ett tyst initförsök gjordes
-        # i rörelse (SLABS vägrar comms >8–20 km/h) eller på tomgång.
+        self._last_phase_logged: "str | None" = None  # dedupe of identical progress lines
+        # Last known engine context (rpm/speed/battery) from TD5. K-line is a shared
+        # bus so we can't read the engine while SLABS is active — but a SLABS attempt
+        # is almost always preceded by a TD5 session, and then the values are seconds old.
+        # Without this you can't tell afterwards whether a silent init attempt was made
+        # while moving (SLABS refuses comms >8–20 km/h) or at idle.
         self._engine: "dict | None" = None
         self._stop = threading.Event()
         self._commands: "queue.Queue" = queue.Queue()
         self._poller = threading.Thread(target=self._poll_loop, daemon=True)
 
     def _remember_engine(self, snap: "dict") -> None:
-        """Spara rpm/fart/batteri från en TD5-snapshot (till _engine_note)."""
+        """Save rpm/speed/battery from a TD5 snapshot (for _engine_note)."""
         sig = snap.get("signals") or {}
         if not {"rpm", "battery"} <= set(sig):
             return
@@ -444,29 +444,29 @@ class DiagServer(ThreadingHTTPServer):
         }
 
     def _engine_note(self) -> str:
-        """`· motor: rpm 761, 0 km/h, 13.9 V (12s sedan)` — tom om vi inget vet."""
+        """`· motor: rpm 761, 0 km/h, 13.9 V (12s ago)` — empty if we know nothing."""
         e = self._engine
         if not e:
             return ""
         age = time.monotonic() - e["t"]
-        if age > 600:  # äldre än 10 min säger inget om nuläget
+        if age > 600:  # older than 10 min says nothing about the present
             return ""
         speed = "?" if e["speed"] is None else f"{e['speed']:.0f} km/h"
-        return f" · motor: rpm {e['rpm']:.0f}, {speed}, {e['battery']:.1f} V ({age:.0f}s sedan)"
+        return f" · motor: rpm {e['rpm']:.0f}, {speed}, {e['battery']:.1f} V ({age:.0f}s ago)"
 
     def _connect_sleep(self, seconds: float) -> None:
-        """Sleep som etableringen använder — avbryts av ett köat kommando.
+        """Sleep used by the establishment — interrupted by a queued command.
 
-        SLABS tysta period är 28 s och en full etablering kan ta ~90 s. Utan detta
-        ligger pollertråden och sover medan ett modulbyte står i kön, och UI:t får
-        timeout trots att kommandot är giltigt. Vi sover i skivor och kastar
-        :class:`ConnectAborted` så snart något köats — etableringen avbryts, kön
-        dräneras, och nästa poll börjar om mot rätt modul.
+        The SLABS quiet period is 28 s and a full establishment can take ~90 s. Without
+        this the poller thread sleeps while a module switch sits in the queue, and the UI
+        times out even though the command is valid. We sleep in slices and raise
+        :class:`ConnectAborted` as soon as anything is queued — the establishment is
+        aborted, the queue drains, and the next poll restarts against the right module.
         """
         deadline = time.monotonic() + seconds
         while True:
             if not self._commands.empty():
-                raise ConnectAborted("avbruten av ett köat kommando")
+                raise ConnectAborted("aborted by a queued command")
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 return
@@ -475,17 +475,17 @@ class DiagServer(ThreadingHTTPServer):
                 return
 
     def _conn_log(self, msg: str, module: "str | None" = None) -> None:
-        """Skriv en tidsstämplad rad till anslutningsloggen och stderr. Får aldrig
-        fälla poll-loopen — sväljer alla fel.
+        """Write a timestamped line to the connection log and stderr. Must never
+        fell the poll loop — swallows all errors.
 
-        ``module`` stämplar raden med den modul snapshoten gäller; utan den används
-        den just nu aktiva. Skillnaden spelar roll mitt i ett modulbyte, där en
-        snapshot från den gamla modulen annars skulle märkas med den nya.
+        ``module`` stamps the line with the module the snapshot concerns; without it
+        the currently active one is used. The difference matters mid module-switch,
+        where a snapshot from the old module would otherwise be labelled with the new.
         """
         line = (f"{time.strftime('%Y-%m-%d %H:%M:%S')} "
                 f"[{module or self._active}/{self._mode}] {msg}")
         try:
-            print(line, flush=True)  # → task/stderr-loggen
+            print(line, flush=True)  # → the task/stderr log
         except Exception:  # noqa: BLE001
             pass
         try:
@@ -496,14 +496,14 @@ class DiagServer(ThreadingHTTPServer):
             pass
 
     def _connect_progress(self, phase: str) -> None:
-        """Källorna ropar hit under den blockande etableringen (i pollertråden).
-        Vi uppdaterar ``self.latest`` direkt så SSE-tråden pushar fasen live till
-        webläsaren medan poll fortfarande blockerar. Bara meningsfullt medan vi
-        faktiskt försöker koppla upp — poll skriver över med färsk snapshot sen.
+        """The sources call in here during the blocking establishment (on the poller
+        thread). We update ``self.latest`` immediately so the SSE thread pushes the
+        phase live to the browser while poll is still blocking. Only meaningful while
+        we're actually trying to connect — poll overwrites with a fresh snapshot later.
 
-        Identiska rader i följd loggas EN gång: utan kabel ropar återanslutningen
-        "opening the cable" två gånger i sekunden i all evighet (1,9 MB brus på en
-        kväll 2026-08-18), vilket dränker de rader man faktiskt felsöker med.
+        Identical lines in a row are logged ONCE: without a cable the reconnect shouts
+        "opening the cable" twice a second forever (1.9 MB of noise over one evening
+        2026-08-18), which drowns out the lines you actually debug with.
         """
         if phase != self._last_phase_logged:
             ctx = self._engine_note() if phase.startswith("sending init") else ""
@@ -523,21 +523,21 @@ class DiagServer(ThreadingHTTPServer):
         return list(self._modules.values())
 
     def _apply_fault_watch(self) -> None:
-        """Sätt fel-pollnings-kadensen på alla källor: 1 = varje cykel (~0,5 s,
-        fångar intermittenta fel), annars var 10:e (~5 s, sparar busstrafik)."""
+        """Set the fault-polling cadence on all sources: 1 = every cycle (~0.5 s,
+        catches intermittent faults), otherwise every 10th (~5 s, saves bus traffic)."""
         every = 1 if self._fault_watch else 10
         for s in self._all_sources():
             if hasattr(s, "fault_every"):
                 s.fault_every = every
 
     def set_fault_watch(self, on: bool) -> "dict":
-        """Slå på/av snabb fel-pollning (för att fånga t.ex. tre-amigos i stunden)."""
+        """Turn fast fault-polling on/off (to catch e.g. three-amigos in the moment)."""
         self._fault_watch = bool(on)
         self._apply_fault_watch()
         return {"ok": True, "fault_watch": self._fault_watch}
 
     def _run_inline(self, action: str, params: "dict") -> "dict":
-        """Kör ett kommando som inte rör K-line (se :data:`_INLINE_COMMANDS`)."""
+        """Run a command that doesn't touch K-line (see :data:`_INLINE_COMMANDS`)."""
         if action == "start_csv":
             return self.start_csv()
         if action == "stop_csv":
@@ -547,12 +547,12 @@ class DiagServer(ThreadingHTTPServer):
         return {"ok": False, "error": f"unknown command: {action}"}
 
     def enqueue_command(self, cmd: "dict", timeout: float = 8.0) -> "dict":
-        """Köa ett skrivkommando till pollertråden och vänta på resultatet.
+        """Queue a write command to the poller thread and wait for the result.
 
-        Serialiseras med pollningen så K-line-åtkomsten aldrig krockar."""
+        Serialized with the polling so K-line access never collides."""
         action = cmd.get("action", "")
         if action in _INLINE_COMMANDS:
-            # Direkt svar — får inte fastna bakom en pågående anslutning i pollern.
+            # Immediate reply — must not get stuck behind an ongoing connection in the poller.
             try:
                 return self._run_inline(action, cmd.get("params") or {})
             except Exception as exc:  # noqa: BLE001
@@ -564,7 +564,7 @@ class DiagServer(ThreadingHTTPServer):
         return {"ok": False, "error": "timeout — no response from the diagnostic layer"}
 
     def handle_error(self, request, client_address) -> None:
-        """Tysta ofarliga klient-frånkopplingar (webbläsaren stänger fetch/SSE)."""
+        """Silence harmless client disconnects (the browser closing fetch/SSE)."""
         import sys
         exc = sys.exc_info()[1]
         if isinstance(exc, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError)):
@@ -575,7 +575,7 @@ class DiagServer(ThreadingHTTPServer):
         return list(self._modules)
 
     def coverage(self) -> "dict":
-        """Täckning per modul: {modul: {ok, maybe, total}} — driver Karta-pickern."""
+        """Coverage per module: {module: {ok, maybe, total}} — drives the Map picker."""
         cov: "dict[str, dict]" = {}
         for name, menu in self._menus.items():
             ok = mb = tot = 0
@@ -591,31 +591,31 @@ class DiagServer(ThreadingHTTPServer):
         return cov
 
     def _select(self, name: "str | None") -> "dict":
-        """Byt aktiv modul: släpp gamla sessionen, aktivera den nya (etableras
-        lazily vid nästa poll). K-line är en delad buss → bara en session åt gången."""
+        """Switch the active module: release the old session, activate the new one
+        (established lazily on the next poll). K-line is a shared bus → only one session at a time."""
         if name not in self._modules:
             return {"ok": False, "error": f"unknown module: {name}"}
         if name != self._active:
             try:
-                self.source.disconnect()  # släpp K-line-porten/sessionen
+                self.source.disconnect()  # release the K-line port/session
             except Exception:  # noqa: BLE001
                 pass
             self._active = name
             self.source = self._modules[name]
-            # bevara public/fault_watch/logging/modes — annars tappar UI:t public-läget
+            # preserve public/fault_watch/logging/modes — otherwise the UI loses public mode
             self.latest = {**self.latest, "status": "connecting", "source": self.source.name,
                            "module": name, "signals": {}, "faults": [], "connect_phase": None,
                            "error": ""}
         return {"ok": True, "message": f"module: {name}", "module": name}
 
     def _set_mode(self, mode: "str | None") -> "dict":
-        """Växla datakälla mock↔live i drift (utan omstart). Släpper aktiv session
-        och pekar om alla moduler till det valda lägets variant."""
+        """Switch data source mock↔live at runtime (without restart). Releases the
+        active session and repoints all modules to the chosen mode's variant."""
         if not self._variants or mode not in self._modes:
             return {"ok": False, "error": f"unknown mode: {mode}"}
         if mode != self._mode:
             try:
-                self.source.disconnect()  # släpp ev. K-line-session före byte
+                self.source.disconnect()  # release any K-line session before switching
             except Exception:  # noqa: BLE001
                 pass
             self._mode = mode
@@ -628,11 +628,11 @@ class DiagServer(ThreadingHTTPServer):
         return {"ok": True, "message": f"mode: {mode}", "mode": mode}
 
     def _read_all_faults(self) -> "dict":
-        """Basic mode: läs felkoder från alla moduler sekventiellt. Släpper den
-        aktiva sessionen först (frigör K-line-porten), skannar, låter sedan
-        normal pollning återansluta. Körs i pollertråden → serialiserat med bussen."""
+        """Basic mode: read fault codes from all modules sequentially. Releases the
+        active session first (frees the K-line port), scans, then lets normal
+        polling reconnect. Runs on the poller thread → serialized with the bus."""
         try:
-            self.source.disconnect()  # frigör porten före sekvensskanning
+            self.source.disconnect()  # free the port before the sequential scan
         except Exception:  # noqa: BLE001
             pass
         from ..faultscan import read_all
@@ -643,10 +643,10 @@ class DiagServer(ThreadingHTTPServer):
         return {"ok": True, "mode": self._mode or "mock", "report": report}
 
     def start_csv(self, path: "str | None" = None) -> "dict":
-        """Börja logga live-data till en CSV-fil (för användaren — följa temp m.m.).
-        Loggar den AKTIVA modulens signaler, en rad per poll. Idempotent."""
+        """Start logging live data to a CSV file (for the user — following temps etc.).
+        Logs the ACTIVE module's signals, one row per poll. Idempotent."""
         from .logger import CsvLogger
-        with self._csv_lock:  # start/stop på HTTP-tråden, log() i pollern
+        with self._csv_lock:  # start/stop on the HTTP thread, log() in the poller
             if self._csv is not None:
                 return {"ok": True, "file": os.path.basename(self._csv.path),
                         "message": "already recording"}
@@ -657,7 +657,7 @@ class DiagServer(ThreadingHTTPServer):
         return {"ok": True, "file": os.path.basename(path), "path": path, "message": "recording"}
 
     def stop_csv(self) -> "dict":
-        """Stoppa CSV-loggningen. Returnerar filnamn + antal rader."""
+        """Stop the CSV logging. Returns filename + number of rows."""
         with self._csv_lock:
             if self._csv is None:
                 return {"ok": True, "message": "not recording", "rows": 0}
@@ -690,19 +690,19 @@ class DiagServer(ThreadingHTTPServer):
             holder["event"].set()
 
     def _log_conn_transition(self, snap: "dict") -> None:
-        """Logga bara när status faktiskt ändras (connected↔error) eller när
-        feltexten ändras — annars skulle en tappad kabel spamma varje ~0,5 s.
-        Mock-källor (alltid connected utan riktig session) loggas inte.
+        """Log only when the status actually changes (connected↔error) or when
+        the error text changes — otherwise a dropped cable would spam every ~0.5 s.
+        Mock sources (always connected without a real session) aren't logged.
 
-        Övergången nycklas på (MODUL, status): byter man från en uppkopplad modul
-        till en annan är status "connected" i båda ändar, och en ren status-jämförelse
-        tystar då den nya modulens CONNECTED-rad. Det gömde en lyckad SLABS-session
-        2026-08-18 23:08:54 ("session established" utan CONNECTED) och gjorde loggen
-        direkt vilseledande under felsökningen.
+        The transition is keyed on (MODULE, status): if you switch from one connected
+        module to another, the status is "connected" at both ends, and a plain status
+        comparison then silences the new module's CONNECTED line. That hid a successful
+        SLABS session 2026-08-18 23:08:54 ("session established" without CONNECTED) and
+        made the log outright misleading during debugging.
         """
         status = snap.get("status")
         if self._mode == "mock" or type(self.source).__name__.startswith("Mock"):
-            return  # mock är alltid "connected" utan riktig session → inget att logga
+            return  # mock is always "connected" without a real session → nothing to log
         err = snap.get("error") or ""
         key = (snap.get("module"), status)
         if key == self._last_conn_status and err == self._last_conn_error:
@@ -710,17 +710,17 @@ class DiagServer(ThreadingHTTPServer):
         if status == "connected":
             n = len(snap.get("signals") or {})
             self._conn_log(
-                f"CONNECTED — {n} signaler, {len(snap.get('faults') or [])} felkoder",
+                f"CONNECTED — {n} signals, {len(snap.get('faults') or [])} fault codes",
                 module=snap.get("module"))
         elif status == "error":
             self._conn_log(f"ERROR — {err}", module=snap.get("module"))
         self._last_conn_status = key
         self._last_conn_error = err
-        self._last_phase_logged = None  # ny status → nästa etableringsfas loggas igen
+        self._last_phase_logged = None  # new status → the next establishment phase is logged again
 
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
-            self._drain_commands()  # skrivningar först, serialiserat med poll
+            self._drain_commands()  # writes first, serialized with poll
             active = self._active
             try:
                 snap = self.source.poll()
@@ -729,25 +729,25 @@ class DiagServer(ThreadingHTTPServer):
                     "status": "error", "source": self.source.name,
                     "signals": {}, "faults": [], "error": f"{type(exc).__name__}: {exc}",
                 }
-            snap["module"] = active  # vilken flik datan hör till
-            snap["mode"] = self._mode  # aktivt datakällsläge (mock/live)
-            snap["modes"] = self._modes  # valbara lägen (för UI-toggeln)
+            snap["module"] = active  # which tab the data belongs to
+            snap["mode"] = self._mode  # active data-source mode (mock/live)
+            snap["modes"] = self._modes  # selectable modes (for the UI toggle)
             snap["logging"] = self._csv.status() if self._csv is not None else {"recording": False}
-            snap["public"] = self._public  # UI förenklas i publikt läge
-            snap["fault_watch"] = self._fault_watch  # snabb fel-pollning på/av
-            self._remember_engine(snap)      # spara motorkontext för SLABS-loggen
-            self._log_conn_transition(snap)  # logga connected/error-övergångar
+            snap["public"] = self._public  # the UI is simplified in public mode
+            snap["fault_watch"] = self._fault_watch  # fast fault-polling on/off
+            self._remember_engine(snap)      # save engine context for the SLABS log
+            self._log_conn_transition(snap)  # log connected/error transitions
             self.latest = snap
             if self.logger is not None:
                 try:
                     self.logger.log(self.latest)
-                except Exception:  # noqa: BLE001 — loggfel får aldrig fälla poll-loopen
+                except Exception:  # noqa: BLE001 — a log error must never fell the poll loop
                     pass
-            csv_log = self._csv  # lokal ref: stop_csv kan nolla den mitt i loggningen
+            csv_log = self._csv  # local ref: stop_csv may null it mid-logging
             if csv_log is not None:
                 try:
                     csv_log.log(self.latest)
-                except Exception:  # noqa: BLE001 — CSV-fel får aldrig fälla poll-loopen
+                except Exception:  # noqa: BLE001 — a CSV error must never fell the poll loop
                     pass
             self._stop.wait(self.poll_interval)
 

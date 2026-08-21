@@ -1,10 +1,10 @@
-# reference tool master-menytranskription (Discovery 2) — referens
+# reference tool master-menu transcription (Discovery 2) — reference
 
-Källa: ägarens `reference tool_protocol_...docx` (AI-bearbetad avläsning av reference tools
-online-emulator — nyare produkt, men samma menystruktur). **Exempelvärden är
-capture-exempel, ej protokollkonstanter.** Driver modul-menykartorna (`*_MENU`)
-och ger avkodnings-tips. Täcker: DCU/BCU (Instruments/Power/Settings/Outputs) +
-roadmap för ACE/Autobox/Airbag.
+Source: the owner's `reference tool_protocol_...docx` (AI-processed reading of the
+reference tool's online emulator — a newer product, but the same menu structure).
+**Example values are capture examples, not protocol constants.** Drives the module
+menu maps (`*_MENU`) and provides decoding hints. Covers: DCU/BCU
+(Instruments/Power/Settings/Outputs) + roadmap for ACE/Autobox/Airbag.
 
 ```
 reference tool communications protocol – Discovery 2
@@ -2108,63 +2108,63 @@ Airbag Settings. The TRW SPS Type 2A ECU exposes identification/configuration da
 Airbag capability note. Unlike BCU/ACE, the Discovery 2 TRW SPS Type 2A is documented primarily for Read/Clear Faults and Settings; no separate live Inputs or Outputs page is assumed here unless a reference tool screen/capture demonstrates one.
 ```
 
-# TD5 Engine ECU (Lucas) — komplett reference tool-meny
+# TD5 Engine ECU (Lucas) — complete reference tool menu
 
-Källa: `reference tool_protocol_Discovery2_Master_TD5_Complete.docx` (register-repot,
-transkriberad 2026-08-08). Menyordning bevarad exakt. Driver TD5-kartan
-(`src/d2diag/td5/menu.py`). Vår rå-mappning: `td5/identifiers.py` (live) +
+Source: `reference tool_protocol_Discovery2_Master_TD5_Complete.docx` (register
+repo, transcribed 2026-08-08). Menu order preserved exactly. Drives the TD5 map
+(`src/d2diag/td5/menu.py`). Our raw mapping: `td5/identifiers.py` (live) +
 `td5/faults.py` (`21 3B`).
 
-> ⚠️ **Displayvärdena nedan (ABNFE, svtnp006, ENABLED/DISABLED, ROBUST, 12.6 V …)
-> är transkriptionens screenshot-baslinje — INTE avläst på RDL 016.**
-> Faults/Inputs för TD5 hade INGA screenshots i .docx;
-> vår felavkodning kommer i stället ur Ekaitza + reference tool v1.12 (belagt).
+> ⚠️ **The display values below (ABNFE, svtnp006, ENABLED/DISABLED, ROBUST, 12.6 V …)
+> are the transcription's screenshot baseline — NOT read off RDL 016.**
+> Faults/Inputs for TD5 had NO screenshots in the .docx;
+> our fault decoding comes instead from Ekaitza + reference tool v1.12 (confirmed).
 
 ## Settings
 
-**Injektorkoder / typ** (6): Injector 1–5 = femteckens klassificeringskod
-(baslinje `ABNFE`), + `INJ. TYPE` (UI-action). *Byt bara ett fält i taget vid
-ev. kodningscapture.*
+**Injector codes / type** (6): Injector 1–5 = five-character classification code
+(baseline `ABNFE`), + `INJ. TYPE` (UI action). *Change only one field at a time
+during any coding capture.*
 
 **Read-only identification** (5):
 
-| # | Fält | Baslinje (screenshot) |
+| # | Field | Baseline (screenshot) |
 |---|---|---|
 | 1 | Config Tune ID | `svtnp006` |
 | 2 | Fuel Tune ID | `svdhg003` |
 | 3 | ECU Part Number | `NNN000120` |
 | 4 | Homologation | `4213` |
-| 5 | GET VIN | (UI-action, egen tjänst) |
+| 5 | GET VIN | (UI action, separate service) |
 
-**Feature / ECU configuration** (21, packat block-hypotes): Temperature Gauge,
+**Feature / ECU configuration** (21, packed-block hypothesis): Temperature Gauge,
 Tachometer, SLABS, Road Speed, Radiator Fan, MIL Lamp, Fuel Used, Fuel
 Temperature, EGR Modulator, EGR Inlet, Cruise Lamp, Cruise Control, Clutch Switch,
 CAN Bus, Auxiliary Fan, Auto Gearbox, Air Conditioning, Active Engine mount,
-Ambient Sensor, Wastegate Modulator (ENABLED/DISABLED-flaggor) + **ECU Status**
-(enum, baslinje `ROBUST`). *Toggla en i taget och läs om vid differential-capture.*
+Ambient Sensor, Wastegate Modulator (ENABLED/DISABLED flags) + **ECU Status**
+(enum, baseline `ROBUST`). *Toggle one at a time and re-read during a differential capture.*
 
-## Inputs — switchar (12)
+## Inputs — switches (12)
 Brake Switch 1, Brake Switch 2, Clutch Switch, Transfer Ratio, Gear Box,
 Cruise Control, Cruise Resume, Set Accelerate, AC Clutch Request, AC Clutch Drive,
-AC Fan Request, AC Fan Drive. *Brake 1/2 loggas ihop (komplementära kontakter);
-AC Request vs Drive jämförs som begäran-mot-utgång.*
+AC Fan Request, AC Fan Drive. *Brake 1/2 are logged together (complementary
+contacts); AC Request vs Drive is compared as request-against-output.*
 
 ## Inputs — Fuelling / live (22)
 Engine Speed (rpm), Idle Speed Error (rpm), Road Speed (km/h), Battery (V),
 Accel. Way 1/2/3 (V), Accel. Supply (V), Coolant Temp (°C), Fuel Temp (°C),
 Air Inlet Temp (°C), Air Flow (gr/hr), Ambient Pressure (kPa), Manifold Turbo
 Pressure (kPa), EGR Modulator (%), EGR Inlet (%), Wastegate Modulator (%),
-Cylinder 1–5 (balans). *Vi avkodar redan de flesta (se kartan); notera att reference tool
-visar **tre** accelerator-spänningsspår medan vår `21 1B`-avkodning ger track1/
-track2 + demand% — verifiera Way 3.*
+Cylinder 1–5 (balance). *We already decode most of these (see the map); note that
+the reference tool shows **three** accelerator voltage tracks while our `21 1B`
+decoding gives track1/track2 + demand% — verify Way 3.*
 
-## Outputs — aktiva tester (14, pulse)
+## Outputs — active tests (14, pulse)
 A/C Clutch, A/C Fan, MIL Lamp, Fuel Pump, Glow Plugs, Pulse Rev Counter,
-Wastegate Modul., Temp Gauge, EGR Throttle, Injector 1–5. *Sekvensen är oberoende
-bekräftad av reference tools TD5-dokumentation. Ej implementerat hos oss (kräver
-sändande kabel).*
+Wastegate Modul., Temp Gauge, EGR Throttle, Injector 1–5. *The sequence is
+independently confirmed by the reference tool's TD5 documentation. Not implemented
+on our side (requires a transmitting cable).*
 
-## Utilities (2) — säkerhet 🔴
-`GET SECURITY STATUS` (läs immobiliser-status — börja här, read-only) och
-`LEARN SECURITY CODE` (kan ändra immobiliser-state — **kör aldrig** under
-protokolltest förrän normal-state och återställning är förstådda).
+## Utilities (2) — security 🔴
+`GET SECURITY STATUS` (read immobiliser status — start here, read-only) and
+`LEARN SECURITY CODE` (can change immobiliser state — **never run** during protocol
+testing until the normal state and its recovery are understood).

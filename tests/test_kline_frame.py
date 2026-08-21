@@ -1,4 +1,4 @@
-"""Tester för ramkodning/-avkodning — både adresserat och oadresserat format."""
+"""Tests for frame encoding/decoding — both addressed and unaddressed formats."""
 import pytest
 
 from d2diag.kline.frame import (
@@ -15,12 +15,12 @@ def test_checksum_is_8bit_sum():
 
 
 def test_addressed_known_vector():
-    # StartCommunication till Td5-ECU:n (fast init)
+    # StartCommunication to the Td5 ECU (fast init)
     assert encode(b"\x81", target=0x13, source=0xF7, addressed=True) == bytes.fromhex("8113F7810C")
 
 
 def test_nonaddressed_known_vectors():
-    # sessionsramar: StartDiagnosticSession och seed-request
+    # session frames: StartDiagnosticSession and seed request
     assert encode(b"\x10\xa0") == bytes.fromhex("0210A0B2")
     assert encode(b"\x27\x01") == bytes.fromhex("0227012A")
 
@@ -47,7 +47,7 @@ def test_roundtrip_both_modes():
 def test_long_nonaddressed_uses_length_byte():
     data = bytes(range(70))  # > 0x3F
     frame = encode(data)
-    assert frame[0] == 0x00  # format 0, längd följer
+    assert frame[0] == 0x00  # format 0, length follows
     assert frame[1] == 70
     assert decode(frame).data == data
 

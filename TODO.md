@@ -1,70 +1,70 @@
 # TODO — discovery2-diag
 
-Uppdaterad 2026-08-19. Kryssa av när klart.
+Updated 2026-08-19. Check off when done.
 
-> **Avgränsning:** det här repot är verktyget. Bilens faktiska fel och
-> underhållsåtgärder hanteras i systerprojektet `../Discovery 2/` — felkoder vi
-> läser ut hör hemma där, inte här.
+> **Scope:** this repo is the tool. The car's actual faults and maintenance
+> work are handled in the sister project `../Discovery 2/` — fault codes we
+> read out belong there, not here.
 
-## Läget
+## Status
 
-TD5 och SLABS fungerar båda tillförlitligt sedan init-pulsen rättades 2026-08-19
-(TiniH var ~32 ms i stället för 25 ± 1 — se `references/slabs_protocol.md`).
-Dashboarden kopplar upp båda på första försöket och växlar modul utan problem.
-220 tester gröna.
+TD5 and SLABS both work reliably since the init pulse was corrected 2026-08-19
+(TiniH was ~32 ms instead of 25 ± 1 — see `references/slabs_protocol.md`).
+The dashboard connects to both on the first attempt and switches module without
+trouble. 220 tests green.
 
-## Nästa gång i bilen
+## Next time in the car
 
-- [ ] **Verifiera SLABS över flera tillfällen.** Fixen är testad under en enda
-      eftermiddag. Kör `tools/slabs_probe.py --quiet 5 --hold 30 --no-td5` vid
-      kall start, efter längre stillestånd och i kyla. Träffkvoten ska ligga kvar
-      runt 50 %+ per försök, och dashboarden koppla upp på första försöket.
-- [ ] **Sänk `retry_sleep`.** SLABS `establish` väntar 28 s mellan försöken — ett
-      arv från när init misslyckades av timing-skäl. Prova 3–5 s och mät; troligen
-      onödigt nu och gör reconnect onödigt trögt.
-- [ ] **Avgör W5 och P4.** Båda är implementerade men avstängda och obevisade:
-      `--init-idle 1000` respektive `--write-gaps 0,5`. P4-mätningen gjordes
-      dessutom innan väntan blev exakt, så den mätte fel värde.
-- [ ] **Läs fler SLABS-LID:er nu när sessionen är pålitlig.** Öppet enligt
-      `slabs_protocol.md`: analogskalning för `21 53/55` (supplies), `44/49/57`
-      (ventiler/spänningar), `50` (ABS-sensor V), och settings-LID:erna där
-      LID→funktion är olöst (kräver differential: ändra EN setting, se vilken
-      råbyte som rör sig).
+- [ ] **Verify SLABS across several occasions.** The fix has been tested over a
+      single afternoon. Run `tools/slabs_probe.py --quiet 5 --hold 30 --no-td5` on
+      cold start, after longer standstill and in the cold. The hit rate should stay
+      around 50 %+ per attempt, and the dashboard should connect on the first attempt.
+- [ ] **Lower `retry_sleep`.** SLABS `establish` waits 28 s between attempts — a
+      legacy from when init failed for timing reasons. Try 3–5 s and measure; probably
+      unnecessary now and makes reconnect needlessly sluggish.
+- [ ] **Decide W5 and P4.** Both are implemented but disabled and unproven:
+      `--init-idle 1000` and `--write-gaps 0,5` respectively. The P4 measurement was
+      also made before the wait became exact, so it measured the wrong value.
+- [ ] **Read more SLABS LIDs now that the session is reliable.** Open per
+      `slabs_protocol.md`: analog scaling for `21 53/55` (supplies), `44/49/57`
+      (valves/voltages), `50` (ABS-sensor V), and the settings LIDs where
+      LID→function is unsolved (requires differential: change ONE setting, see which
+      raw byte moves).
 
-## Kod / offline
+## Code / offline
 
-- [ ] **ACE, EAT och BCU** — underlag finns i sniffarna men är oimplementerat.
-      EAT ReadFaults är bekräftad: `72 05 04 00 73` → `72 09 60 01 00 00 00 00 1B`
-      (svarets innebörd okänd — tolka inte som felräknare än).
-- [ ] **Airbag** är read-only och experimentell; overifierad live.
-- [ ] **PyInstaller-distribution** (.app/.exe) för icke-tekniska användare.
-- [ ] **Torque-proxy:** hitta TD5:s fuel quantity/demand-LID (mg/slag = ECU:ns
-      momentkommando, i samma session som rpm/temp/gaspedal).
-- [ ] Översätt kodkommentarer och docstrings till engelska (koden är svensk).
-- [ ] Ev. återinföra store-driven SLABS-läsning — men inom 1 Hz-budgeten, som är
-      det som gör sessionen stabil.
+- [ ] **ACE, EAT and BCU** — material exists in the sniffs but is unimplemented.
+      EAT ReadFaults is confirmed: `72 05 04 00 73` → `72 09 60 01 00 00 00 00 1B`
+      (the response's meaning unknown — don't interpret as a fault counter yet).
+- [ ] **Airbag** is read-only and experimental; unverified live.
+- [ ] **PyInstaller distribution** (.app/.exe) for non-technical users.
+- [ ] **Torque proxy:** find the TD5's fuel quantity/demand LID (mg/stroke = the
+      ECU's torque command, in the same session as rpm/temp/throttle).
+- [ ] Translate code comments and docstrings to English (the code is in Swedish).
+- [ ] Possibly reintroduce store-driven SLABS reading — but within the 1 Hz budget,
+      which is what makes the session stable.
 
 ## Pi (discopi)
 
-- [ ] Nyckelbaserad inloggning (`ssh-copy-id`), fast IP, fungerande `discopi.local`.
-- [ ] Deploya repot, kör `pytest`, starta dashboarden → nå den från mobilen i bilen.
+- [ ] Key-based login (`ssh-copy-id`), static IP, working `discopi.local`.
+- [ ] Deploy the repo, run `pytest`, start the dashboard → reach it from the phone in the car.
 
-## Hårdvara
+## Hardware
 
-- [ ] **ESP32 i master-läge** — sketchen finns (`esp32/kline_test/`) och bit-bangar
-      pulsen med mikrosekundsnoggrannhet. Inte längre nödvändig för SLABS, men den
-      enda vägen att mäta de **fysiska** flankerna (vi ser bara vår mjukvarusida)
-      och ett stabilare alternativ till USB-KKL.
-- [ ] OBD-splitter med stift 7 genomkopplat för fortsatt sniffning.
+- [ ] **ESP32 in master mode** — the sketch exists (`esp32/kline_test/`) and
+      bit-bangs the pulse with microsecond precision. No longer necessary for SLABS,
+      but the only way to measure the **physical** edges (we only see our software side)
+      and a more stable alternative to USB-KKL.
+- [ ] OBD splitter with pin 7 wired through for continued sniffing.
 
-## Metodlärdomar (kostade en hel dag 2026-08-19)
+## Method lessons (cost a whole day 2026-08-19)
 
-- **Lås aldrig ett experiment till en variant innan frågan är avgjord.** Ett pass
-  låst till `fysisk/F7` gav 0/50 och såg ut som att modulen slutat svara.
-- **Blanda ordningen.** Fast variantordning gjorde att vi mätte försöksnumret och
-  trodde det var adressläget.
-- **Kör inte betingelser som separata tidsblock** — då mäter man klockan. En
-  "signifikant" skillnad (p=0,017) visade sig vara två olika tidpunkter.
-- **Mät det du påstår att du mäter.** Flera hypoteser föll på att mätvärdet
-  innehöll något annat (ekot i bursten, burst-läsningen i `to_frame_ms`,
-  `sleep`-överskjutning i P4).
+- **Never lock an experiment to one variant before the question is settled.** A run
+  locked to `physical/F7` gave 0/50 and looked as if the module had stopped responding.
+- **Mix the order.** A fixed variant order meant we measured the attempt number and
+  thought it was the addressing mode.
+- **Don't run conditions as separate time blocks** — then you measure the clock. A
+  "significant" difference (p=0.017) turned out to be two different points in time.
+- **Measure what you claim to measure.** Several hypotheses fell because the measured
+  value contained something else (the echo in the burst, the burst read in `to_frame_ms`,
+  `sleep` overshoot in P4).

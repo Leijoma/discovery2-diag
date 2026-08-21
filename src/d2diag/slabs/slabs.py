@@ -1,16 +1,16 @@
-"""Wabco SLABS (ABS + självnivellerande luftfjädring) modul-lager.
+"""Wabco SLABS (ABS + self-levelling air suspension) module layer.
 
-Protokollet är **belagt ur sniffad reference tool-trafik 2026-08-07** (se
-``references/slabs_protocol.md`` + rålogg ``references/captures/``). Till skillnad
-från Td5 krävs **ingen StartDiagnosticSession och ingen SecurityAccess** — efter
-fast init går man direkt på tjänsterna.
+The protocol is **proven from sniffed reference tool traffic 2026-08-07** (see
+``references/slabs_protocol.md`` + raw log ``references/captures/``). Unlike
+Td5, **no StartDiagnosticSession and no SecurityAccess** is required — after
+fast init you go straight to the services.
 
-  - **Adress 0x29**, FAST init: `81 29 F7 81 22` → `C1 57 8F` (KWP2000, KW2=8F).
-  - Oadresserade längd-ramar (`02 21 47 …`), keepalive `3E`→`7E`.
-  - Felkoder: `21 11` (loggade) / `21 47` (aktuella), 16-byte bit-per-fel; clear = `14 FF FF`.
-  - Live-data: `21 xx`. Ställdon/tester: `31 xx` (StartRoutine).
+  - **Address 0x29**, FAST init: `81 29 F7 81 22` → `C1 57 8F` (KWP2000, KW2=8F).
+  - Unaddressed length frames (`02 21 47 …`), keepalive `3E`→`7E`.
+  - Fault codes: `21 11` (logged) / `21 47` (current), 16-byte bit-per-fault; clear = `14 FF FF`.
+  - Live data: `21 xx`. Actuators/tests: `31 xx` (StartRoutine).
 
-Kräver **tändning PÅ** (tändningsmatad). Comms dör >8–20 km/h → kör stillastående.
+Requires **ignition ON** (ignition-fed). Comms die >8–20 km/h → run stationary.
 """
 from __future__ import annotations
 
@@ -22,17 +22,17 @@ from .faults import FAULT_BLOCK_LEN, decode_fault_block
 
 SLABS_ADDRESS = 0x29
 
-# ReadEcuIdentification-optioner (1A xx)
+# ReadEcuIdentification options (1A xx)
 ECU_ID_CONFIG = 0x8A
 ECU_ID_VERSIONS = 0x8B
 ECU_ID_VIN = 0x8D
 
-# Felminne
+# Fault memory
 LOGGED_FAULTS_LID = 0x11   # 21 11
 CURRENT_FAULTS_LID = 0x47  # 21 47
 CLEAR_FAULTS_SERVICE = 0x14  # 14 FF FF → 54
 
-# StartRoutine-identifierare (31 xx), belagda ur sniffen
+# StartRoutine identifiers (31 xx), proven from the sniff
 RID_PUMP_RELAY = 0x25
 RID_EXHAUST_VALVE = 0x2F
 RID_COMPRESSOR = 0x30
@@ -41,42 +41,42 @@ RID_RAISE_LEFT = 0x33
 RID_RAISE_RIGHT = 0x34
 RID_LOWER_LEFT = 0x35
 RID_LOWER_RIGHT = 0x36
-RID_ABS_TEST = 0x22  # bleed + hjultester; sub-byte väljer krets
+RID_ABS_TEST = 0x22  # bleed + wheel tests; sub-byte selects circuit
 
-# ABS_TEST-subkommandon (byte efter 0x22)
+# ABS_TEST subcommands (byte after 0x22)
 ABS_SUB_POWER_BLEED = 0x04
 ABS_SUB_FRONT_RIGHT = 0x10
 ABS_SUB_FRONT_LEFT = 0x11
 ABS_SUB_REAR_RIGHT = 0x12
 ABS_SUB_REAR_LEFT = 0x13
 
-_DEFAULT_IDLE = 0.3    # bevisat stabilt värde (sniff 2026-08-07)
-# MÄTT ur reference tool-sniffarna (2026-08-07/08/09, se slabs_protocol.md): VARJE
-# lyckad SLABS-init kom på första försöket efter 25–28 s utan trafik mot modulen —
-# 24.9, 26.5, 27.8, 28.0, 41.0, 51.5 s. Verktyget gjorde ALDRIG ett snabbt omförsök.
-# Modulen behöver alltså en tyst period för att släppa sin länk, och varje init vi
-# skickar under den nollställer väntan. Att hamra är därför aktivt skadligt: det är
-# vad som höll oss ute i ~2 min 2026-08-18.
+_DEFAULT_IDLE = 0.3    # proven stable value (sniff 2026-08-07)
+# MEASURED from the reference tool sniffs (2026-08-07/08/09, see slabs_protocol.md): EVERY
+# successful SLABS init came on the first attempt after 25–28 s with no traffic to the module —
+# 24.9, 26.5, 27.8, 28.0, 41.0, 51.5 s. The tool NEVER made a fast retry.
+# The module thus needs a quiet period to release its link, and every init we
+# send during it resets the wait. Hammering is therefore actively harmful: it is
+# what kept us locked out for ~2 min 2026-08-18.
 _DEFAULT_ATTEMPTS = 3
 _DEFAULT_RETRY_SLEEP = 28.0
-_CONFIRM_DELAY = 0.15  # paus mellan C1 och 1A 8A (reference tool: ~170 ms i sniffen)
+_CONFIRM_DELAY = 0.15  # pause between C1 and 1A 8A (reference tool: ~170 ms in the sniff)
 
 
 class Slabs(EcuSession):
-    """Wabco SLABS via fast init 0x29. Läs + rensa + ställdon.
+    """Wabco SLABS via fast init 0x29. Read + clear + actuators.
 
-    Livscykel (open/close/context), :meth:`read_block` och :meth:`tester_present`
-    ärvs från :class:`EcuSession`."""
+    Lifecycle (open/close/context), :meth:`read_block` and :meth:`tester_present`
+    are inherited from :class:`EcuSession`."""
 
     name = "SLABS"
-    _keepalive_sub = None  # SLABS vill ha bar 3E (sniffad ram 01 3e 3f), inte 3E 01
+    _keepalive_sub = None  # SLABS wants a bare 3E (sniffed frame 01 3e 3f), not 3E 01
 
-    # Växla adressläge mellan försöken. Funktionellt först eftersom de ramarna stod
-    # för 6 träffar av 24 mot fysiskt 1 av 21 i bilen 2026-08-19 — MEN den siffran är
-    # sammanblandad med försöksnumret: proben körde alltid varianterna i samma
-    # ordning, och fysisk/F7 låg alltid först. Det kan alltså lika gärna vara att
-    # första försöket väcker modulen och nästa kommer fram. Ordningen här är därför
-    # en gissning som inte kostar något; det viktiga är att FLERA försök görs.
+    # Cycle address mode between attempts. Functional first because those frames accounted
+    # for 6 hits out of 24 versus physical 1 out of 21 in the car 2026-08-19 — BUT that number is
+    # conflated with the attempt number: the probe always ran the variants in the same
+    # order, and physical/F7 always came first. It may therefore just as well be that
+    # the first attempt wakes the module and the next one gets through. The order here is thus
+    # a guess that costs nothing; what matters is that SEVERAL attempts are made.
     _init_variants = ((True, 0xF1), (True, 0xF7), (False, None))
 
     def establish(
@@ -87,20 +87,20 @@ class Slabs(EcuSession):
         sleep: Callable[[float], None] = time.sleep,
         progress: "Callable[[str], None] | None" = None,
     ) -> bytes:
-        """Bus-idle → tolerant fast init mot 0x29 (sök C1) → kvittens med `1A 8A`.
+        """Bus idle → tolerant fast init to 0x29 (search for C1) → acknowledgement with `1A 8A`.
 
-        Returnerar C1-datafältet (`57 8F`). Ingen session/unlock behövs
-        (``after=None``). Höjer :class:`KWP2000Error` efter ``attempts`` försök.
+        Returns the C1 data field (`57 8F`). No session/unlock needed
+        (``after=None``). Raises :class:`KWP2000Error` after ``attempts`` attempts.
 
-        **`1A 8A` som första begäran speglar reference tool.** I varje lyckad init
-        i sniffarna är verktygets första meddelande efter `C1` ett
-        `02 1a 8a a6` → `5a 8a …`, ~170 ms senare, innan keepalive och läsningar
-        börjar. Vi gör likadant och använder svaret som **kvittens på att sessionen
-        verkligen lever** — vår toleranta init letar bara efter ett `C1` i bursten
-        och kan i brus ge falskt positivt "session established" följt av noll
-        läsningar (sett i bilen 2026-08-18). Misslyckad kvittens river INTE
-        etableringen; den rapporteras via ``progress`` så anslutningsloggen visar
-        skillnaden mellan "uppe" och "trodde vi var uppe".
+        **`1A 8A` as the first request mirrors the reference tool.** In every successful init
+        in the sniffs, the tool's first message after `C1` is a
+        `02 1a 8a a6` → `5a 8a …`, ~170 ms later, before keepalive and reads
+        begin. We do the same and use the response as **acknowledgement that the session
+        really is alive** — our tolerant init only looks for a `C1` in the burst
+        and in noise can give a false positive "session established" followed by zero
+        reads (seen in the car 2026-08-18). A failed acknowledgement does NOT tear down
+        the establishment; it is reported via ``progress`` so the connection log shows
+        the difference between "up" and "thought we were up".
         """
         c1 = self._establish(
             after=None, idle=idle, attempts=attempts, retry_sleep=_DEFAULT_RETRY_SLEEP,
@@ -115,11 +115,11 @@ class Slabs(EcuSession):
         sleep: Callable[[float], None] = time.sleep,
         progress: "Callable[[str], None] | None" = None,
     ) -> bool:
-        """Skicka `1A 8A` som reference tool gör och rapportera utfallet. Best-effort."""
-        sleep(_CONFIRM_DELAY)  # verktyget väntar ~170 ms efter C1 innan 1A 8A
+        """Send `1A 8A` as the reference tool does and report the outcome. Best-effort."""
+        sleep(_CONFIRM_DELAY)  # the tool waits ~170 ms after C1 before 1A 8A
         try:
             ident = self.read_ecu_id(ECU_ID_CONFIG)
-        except Exception as exc:  # noqa: BLE001 — kvittensen får inte riva etableringen
+        except Exception as exc:  # noqa: BLE001 — the acknowledgement must not tear down the establishment
             if progress:
                 progress(f"no answer to 1A 8A ({type(exc).__name__}) — session may be dead")
             return False
@@ -127,9 +127,9 @@ class Slabs(EcuSession):
             progress(f"session confirmed (1A 8A → {ident[:6].hex(' ')}…)")
         return True
 
-    # ---- ECU-identitet (1A xx) --------------------------------------- #
+    # ---- ECU identity (1A xx) ---------------------------------------- #
     def read_ecu_id(self, option: int) -> bytes:
-        """ReadEcuIdentification. Returnerar datafältet (utan ekad option-byte)."""
+        """ReadEcuIdentification. Returns the data field (without the echoed option byte)."""
         return self._kwp.request(0x1A, bytes([option]))[1:]
 
     def read_vin(self) -> str:
@@ -139,7 +139,7 @@ class Slabs(EcuSession):
         raw = self.read_ecu_id(ECU_ID_VERSIONS)
         return [p.decode("ascii", "replace") for p in raw.split(b"\x00") if p]
 
-    # ---- felkoder ----------------------------------------------------- #
+    # ---- fault codes -------------------------------------------------- #
     def _fault_block(self, lid: int) -> bytes:
         return self._kwp.read_local_identifier(lid)[:FAULT_BLOCK_LEN]
 
@@ -150,98 +150,98 @@ class Slabs(EcuSession):
         return self._fault_block(CURRENT_FAULTS_LID)
 
     def read_faults(self) -> "dict[str, list[str]]":
-        """Avkodade felkoder: {"loggade": [...], "aktuella": [...]}."""
+        """Decoded fault codes: {"loggade": [...], "aktuella": [...]}."""
         return {
             "loggade": decode_fault_block(self.read_logged_faults_raw()),
             "aktuella": decode_fault_block(self.read_current_faults_raw()),
         }
 
     def clear_faults(self) -> None:
-        """ClearDiagnosticInformation (14 FF FF) → 54. Nollställer felminnet.
+        """ClearDiagnosticInformation (14 FF FF) → 54. Clears the fault memory.
 
-        ⚠️ Ack:en är FÖRDRÖJD: SLABS skriver till EEPROM och svarar `54` först
-        ~300 ms efter kommandot (belagt ur sniff session.log: TX @72560,
-        RX @72856). Standardläsningens 60 ms-gap returnerar då bara ekot och vi
-        kastade "tomt svar" trots att rensningen lyckades. Läs därför med bredare
-        fönster (gap 0.5 s, overall 2.5 s) så vi fångar `54`.
+        ⚠️ The ack is DELAYED: SLABS writes to EEPROM and only responds `54`
+        ~300 ms after the command (proven from sniff session.log: TX @72560,
+        RX @72856). The standard read's 60 ms gap then returns only the echo and we
+        threw "empty response" even though the clear succeeded. So read with a wider
+        window (gap 0.5 s, overall 2.5 s) so we catch `54`.
         """
         self._kwp.request(CLEAR_FAULTS_SERVICE, b"\xff\xff", overall=2.5, gap=0.5)
 
-    # ---- live-data (21 xx) ------------------------------------------- #
+    # ---- live data (21 xx) ------------------------------------------- #
     def read_data(self, lid: int) -> bytes:
-        """Rå ReadDataByLocalIdentifier (21 xx). Datafält utan ekad LID."""
+        """Raw ReadDataByLocalIdentifier (21 xx). Data field without the echoed LID."""
         return self._kwp.read_local_identifier(lid)
 
-    # ---- ställdon / tester (31 xx) ----------------------------------- #
-    # ⚠️ Alla dessa RÖR HÅRDVARA. Kör stillastående, tändning på.
+    # ---- actuators / tests (31 xx) ----------------------------------- #
+    # ⚠️ All of these TOUCH HARDWARE. Run stationary, ignition on.
     def start_routine(self, rid: int, params: bytes = b"") -> bytes:
-        """Generisk StartRoutine (31 xx). Returnerar svaret (börjar med ekad RID)."""
+        """Generic StartRoutine (31 xx). Returns the response (starts with the echoed RID)."""
         return self._kwp.start_routine(rid, params)
 
     def buzzer(self) -> None:
-        """⚠️ SLS-summer på (ofarligt, hörbart — bra skriv-verifiering)."""
+        """⚠️ SLS buzzer on (harmless, audible — good write verification)."""
         self.start_routine(RID_BUZZER, b"\x0a")
 
     def compressor(self) -> None:
-        """⚠️ SLS-kompressor."""
+        """⚠️ SLS compressor."""
         self.start_routine(RID_COMPRESSOR, b"\x28")
 
     def exhaust_valve(self) -> None:
-        """⚠️ SLS avluftningsventil."""
+        """⚠️ SLS exhaust valve."""
         self.start_routine(RID_EXHAUST_VALVE, b"\x28")
 
     def pump_relay(self, on: bool = True) -> None:
-        """⚠️ ABS-pumprelä. Param `08 fa`/`02 fa` belagd ur sniff (on/off preliminär;
-        avslutande byte i loggen = checksumma, ej param)."""
+        """⚠️ ABS pump relay. Param `08 fa`/`02 fa` proven from sniff (on/off preliminary;
+        trailing byte in the log = checksum, not param)."""
         self.start_routine(RID_PUMP_RELAY, b"\x08\xfa" if on else b"\x02\xfa")
 
     def raise_corner(self, side: str) -> None:
-        """⚠️ Höj luftfjädring. side ∈ {'left','right'}."""
+        """⚠️ Raise air suspension. side ∈ {'left','right'}."""
         self.start_routine(RID_RAISE_LEFT if side == "left" else RID_RAISE_RIGHT, b"\x28")
 
     def lower_corner(self, side: str) -> None:
-        """⚠️ Sänk luftfjädring. side ∈ {'left','right'}."""
+        """⚠️ Lower air suspension. side ∈ {'left','right'}."""
         self.start_routine(RID_LOWER_LEFT if side == "left" else RID_LOWER_RIGHT, b"\x28")
 
-    # Hjul → (sub, ventilmask). Belagt ur sniff: 2 bitar/hjul i ordning HF,VF,HB,VB.
+    # Wheel → (sub, valve mask). Proven from sniff: 2 bits/wheel in order FR,FL,RR,RL.
     _WHEEL = {
         "fr": (0x10, 0x03), "fl": (0x11, 0x0c),
         "rr": (0x12, 0x30), "rl": (0x13, 0xc0),
     }
 
     def wheel_test(self, corner: str) -> None:
-        """⚠️ ABS-ventiltest på ETT hjul. corner ∈ {'fl','fr','rl','rr'}.
-        `31 22 <sub> <mask> c1 f4` + 8 nollbyte (belagt ur sniff)."""
+        """⚠️ ABS valve test on ONE wheel. corner ∈ {'fl','fr','rl','rr'}.
+        `31 22 <sub> <mask> c1 f4` + 8 zero bytes (proven from sniff)."""
         sub, mask = self._WHEEL[corner]
         self.start_routine(RID_ABS_TEST, bytes([sub, mask, 0xc1, 0xf4]) + bytes(8))
 
-    # ---- ABS-luftning (belagt ur sniff 2026-08-07) ------------------------- #
-    # Två procedurer under RID_ABS_TEST (0x22), skilda från hjul-ventiltestet ovan:
-    #   * POWER BLEED — kör ABS-pumpen så vätska trycks genom modulatorn.
+    # ---- ABS bleed (proven from sniff 2026-08-07) -------------------------- #
+    # Two procedures under RID_ABS_TEST (0x22), distinct from the wheel valve test above:
+    #   * POWER BLEED — runs the ABS pump so fluid is forced through the modulator.
     #       start `31 22 04 00 49 c4 …`, stop `31 22 04 00 40 00 …`
-    #   * MODULE BLEED — cyklar modulatorns kretsar 0x11→0x14 i sekvens,
-    #       varje steg `31 22 <sub> 00 c0 7d 00 bb …` (~2,3 s mellan i sniffen).
+    #   * MODULE BLEED — cycles the modulator's circuits 0x11→0x14 in sequence,
+    #       each step `31 22 <sub> 00 c0 7d 00 bb …` (~2.3 s between in the sniff).
     def abs_power_bleed(self, on: bool = True) -> None:
-        """⚠️ ABS POWER BLEED — kör pumpen för att trycka bromsvätska genom
-        modulatorn. ``on`` startar (`04 00 49 c4`), ``on=False`` stoppar
-        (`04 00 40 00`). Bromssystem — endast stillastående, se säkerhetsnoter."""
+        """⚠️ ABS POWER BLEED — runs the pump to force brake fluid through the
+        modulator. ``on`` starts (`04 00 49 c4`), ``on=False`` stops
+        (`04 00 40 00`). Brake system — stationary only, see safety notes."""
         tail = b"\x00\x49\xc4" if on else b"\x00\x40\x00"
         self.start_routine(RID_ABS_TEST, bytes([0x04]) + tail + bytes(8))
 
-    _BLEED_STEPS = (0x11, 0x12, 0x13, 0x14)  # modulatorkretsar i sniffens ordning
+    _BLEED_STEPS = (0x11, 0x12, 0x13, 0x14)  # modulator circuits in the sniff's order
 
     def abs_module_bleed_step(self, step: int) -> None:
-        """⚠️ Ett steg i MODULE BLEED (``step`` 1–4 → sub 0x11–0x14).
-        `31 22 <sub> 00 c0 7d 00 bb` + 6 nollbyte. Bromssystem — stillastående."""
+        """⚠️ One step in MODULE BLEED (``step`` 1–4 → sub 0x11–0x14).
+        `31 22 <sub> 00 c0 7d 00 bb` + 6 zero bytes. Brake system — stationary."""
         if not 1 <= step <= 4:
-            raise ValueError("step måste vara 1–4")
+            raise ValueError("step must be 1–4")
         sub = self._BLEED_STEPS[step - 1]
         self.start_routine(RID_ABS_TEST, bytes([sub, 0x00, 0xc0, 0x7d, 0x00, 0xbb]) + bytes(6))
 
     def abs_module_bleed(self, sleep: "Callable[[float], None] | None" = None,
                          gap: float = 2.3) -> None:
-        """⚠️ Hela MODULE BLEED-sekvensen: fyra steg 0x11→0x14 med ``gap`` s emellan
-        (reference tools takt i sniffen). Bromssystem — stillastående, tändning på."""
+        """⚠️ The whole MODULE BLEED sequence: four steps 0x11→0x14 with ``gap`` s between
+        (the reference tool's cadence in the sniff). Brake system — stationary, ignition on."""
         _sleep = sleep or time.sleep
         for step in range(1, 5):
             self.abs_module_bleed_step(step)

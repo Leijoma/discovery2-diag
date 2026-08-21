@@ -1,15 +1,15 @@
-"""LoggingTransport — dekorerar en annan Transport och loggar all rå TX/RX.
+"""LoggingTransport — decorates another Transport and logs all raw TX/RX.
 
-Uppfyller kravet "alla paket skall kunna loggas … sparas till fil". Format:
+Fulfils the requirement "all packets shall be loggable … saved to file". Format:
 
     2026-07-21T12:00:00.123456Z TX 81 13 F7 81 0C
     2026-07-21T12:00:00.234567Z RX 83 F7 13 C1 EA 8F
 
-Eftersom den själv ÄR en Transport kan vilket högre lager som helst ligga ovanpå
-den utan att veta att loggning sker:
+Since it IS itself a Transport, any higher layer can sit on top of
+it without knowing that logging happens:
 
     t = LoggingTransport(SerialTransport("/dev/ttyUSB0"), logfile="run.log")
-    kwp = KWP2000(t)   # loggas transparent
+    kwp = KWP2000(t)   # logged transparently
 """
 from __future__ import annotations
 
@@ -41,10 +41,10 @@ class LoggingTransport(Transport):
         self._logpath = Path(logfile) if logfile is not None else None
         self._fh: "TextIO | None" = None
         self._echo = echo
-        # Rålogg på Raspberry Pi i bilen: strömmen kan brytas abrupt (motorn av).
-        # buffering=1 lämnar rader i OS-cachen → förlorade + risk för SD-korruption.
-        # Vi fsync:ar därför till kortet med jämna mellanrum (inte per rad — det ger
-        # onödigt SD-slitage vid ~20–40 skrivningar/s). Bundet: max ~intervall s tapp.
+        # Raw log on the Raspberry Pi in the car: power can be cut abruptly (engine off).
+        # buffering=1 leaves lines in the OS cache → lost + risk of SD corruption.
+        # We therefore fsync to the card at regular intervals (not per line — that causes
+        # unnecessary SD wear at ~20–40 writes/s). Bounded: at most ~interval s of loss.
         self._fsync_interval = 2.0
         self._last_fsync = 0.0
 
@@ -79,9 +79,9 @@ class LoggingTransport(Transport):
         return data
 
     def __getattr__(self, name: str):
-        # Delegera seriell lågnivåkontroll (send_break, reset_input_buffer,
-        # baudrate …) till den inre transporten, så wrappern inte döljer dem
-        # för K-Line-lagret. Anropas bara för attribut som inte finns här.
+        # Delegate serial low-level control (send_break, reset_input_buffer,
+        # baudrate …) to the inner transport, so the wrapper doesn't hide them
+        # from the K-Line layer. Called only for attributes that don't exist here.
         if name.startswith("_"):
             raise AttributeError(name)
         return getattr(self._inner, name)
@@ -94,7 +94,7 @@ class LoggingTransport(Transport):
             if now - self._last_fsync >= self._fsync_interval:
                 self._fh.flush()
                 try:
-                    os.fsync(self._fh.fileno())  # tvinga ner på SD-kortet
+                    os.fsync(self._fh.fileno())  # force it down to the SD card
                 except OSError:
                     pass
                 self._last_fsync = now

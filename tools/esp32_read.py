@@ -1,13 +1,13 @@
-"""Läs ESP32 K-line-sniffens (kline_sniff.ino) USB-serial + markörer → loggfil.
+"""Read the ESP32 K-line sniffer's (kline_sniff.ino) USB serial + markers → log file.
 
-    python3 tools/esp32_read.py [PORT] [utfil]
+    python3 tools/esp32_read.py [PORT] [outfile]
 
-ESP32:an ramar och tidsstämplar själv och skickar hex-rader @115200. Detta loggar
-dem + låter dig skriva **markörer** i realtid (text+Enter → `>>> `-rad) så bytes kan
-paras ihop med reference tool-åtgärden (läs/rensa-cykeln). ``q``+Enter avslutar.
+The ESP32 frames and timestamps by itself and sends hex rows @115200. This logs
+them + lets you type **markers** in real time (text+Enter → `>>> ` row) so bytes can
+be paired with the reference tool action (the read/clear cycle). ``q``+Enter quits.
 
-Default-port /dev/cu.usbserial-0001 (ESP32). OBS: när porten öppnas kan ESP32:an
-auto-resettas (den skriver då sin banner igen) — helt normalt.
+Default port /dev/cu.usbserial-0001 (ESP32). NOTE: when the port opens the ESP32 may
+auto-reset (it then prints its banner again) — completely normal.
 """
 import os
 import sys
@@ -31,7 +31,7 @@ def main() -> int:
     ser = serial.serial_for_url(port, baudrate=115200, timeout=0.2)
     fh = open(outfile, "a", encoding="utf-8")
     print(f"ESP32-sniff @ {port} → {outfile}")
-    print("Skriv text+Enter = markör (t.ex. 'SLABS läs felkoder'). q+Enter = avsluta.")
+    print("Type text+Enter = marker (e.g. 'SLABS read fault codes'). q+Enter = quit.")
     fh.write(f"=== SESSION {time.strftime('%Y-%m-%d %H:%M:%S')} — {port} ===\n")
     fh.flush()
 
@@ -58,7 +58,7 @@ def main() -> int:
                 break
             if m.strip().lower() in ("q", "quit", "exit"):
                 break
-            stamp = f">>> {m.strip() or '(markör)'}"
+            stamp = f">>> {m.strip() or '(marker)'}"
             with _lock:
                 print(stamp, flush=True)
                 fh.write(stamp + "\n")
@@ -69,10 +69,10 @@ def main() -> int:
         _stop.set()
         th.join(timeout=1.0)
         with _lock:
-            fh.write(f"=== SLUT {time.strftime('%H:%M:%S')} ===\n")
+            fh.write(f"=== END {time.strftime('%H:%M:%S')} ===\n")
             fh.close()
         ser.close()
-    print(f"\nklart → {outfile}")
+    print(f"\ndone → {outfile}")
     return 0
 
 

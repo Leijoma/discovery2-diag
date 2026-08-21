@@ -1,30 +1,30 @@
-# muki01 / OBD2_K-line_Reader — referens
+# muki01 / OBD2_K-line_Reader — reference
 
-Sparad referens (via Wayback Machine 2025-10) av **muki01/OBD2_K-line_Reader**,
-ett OBD2 K-line-bibliotek (ISO 9141 / ISO 14230 KWP2000, slow + fast init) för
-Arduino/ESP32. **Licens: MIT** (enligt PlatformIO/Arduino-registret). Upphovsman: muki01.
+Saved reference (via the Wayback Machine 2025-10) of **muki01/OBD2_K-line_Reader**,
+an OBD2 K-line library (ISO 9141 / ISO 14230 KWP2000, slow + fast init) for
+Arduino/ESP32. **License: MIT** (per the PlatformIO/Arduino registry). Author: muki01.
 
 - PlatformIO: https://registry.platformio.org/libraries/muki01/OBD2%20K-Line
-- Arkiverad källa (repot är borttaget från GitHub): `web.archive.org/.../muki01/OBD2_K-line_Reader`
+- Archived source (the repo has been removed from GitHub): `web.archive.org/.../muki01/OBD2_K-line_Reader`
 
-## Vad vi tar härifrån (till ESP32-porten)
+## What we take from here (into the ESP32 port)
 
 - **Fast init** (`K_Line.ino`): `digitalWrite(TX, LOW); delay(25); digitalWrite(TX, HIGH); delay(25)`
-  — 25 ms låg + 25 ms hög med **realtids-GPIO**. Positivt StartCommunication = `resultBuffer[3] == 0xC1`
-  (samma `C1` vi såg mot Td5:an). Bekräftar vårt angreppssätt.
-- **5-baud slow init**: skickar adress `0x33` med 200 ms/bit.
-- **Permissiv läsning** (`readData`): läser hela bursten tills ~60 ms tystnad (`DATA_REQUEST_INTERVAL`)
-  och indexerar fasta positioner — avvisar INTE på checksumma. Tål brus bättre. Vi återskapade
-  tekniken i `tools/live_raw.py`.
-- **Inter-byte `WRITE_DELAY`** vid sändning.
-- **Adressering:** muki01 är standard-OBD-II (`C1 33 F1 81`, funktionell adress 0x33, tester 0xF1),
-  INTE Td5:ans fysiska `81 13 F7 81` (ECU 0x13 / tester 0xF7). Td5-adresseringen + identifiers
-  kommer från Ekaitza_Itzali.
+  — 25 ms low + 25 ms high with **real-time GPIO**. Positive StartCommunication = `resultBuffer[3] == 0xC1`
+  (the same `C1` we saw against the Td5). Confirms our approach.
+- **5-baud slow init**: sends address `0x33` at 200 ms/bit.
+- **Permissive read** (`readData`): reads the whole burst until ~60 ms of silence (`DATA_REQUEST_INTERVAL`)
+  and indexes fixed positions — does NOT reject on checksum. Tolerates noise better. We recreated
+  the technique in `tools/live_raw.py`.
+- **Inter-byte `WRITE_DELAY`** when sending.
+- **Addressing:** muki01 is standard OBD-II (`C1 33 F1 81`, functional address 0x33, tester 0xF1),
+  NOT the Td5's physical `81 13 F7 81` (ECU 0x13 / tester 0xF7). The Td5 addressing + identifiers
+  come from Ekaitza_Itzali.
 
-## Scheman (`Schematics/`)
+## Schematics (`Schematics/`)
 
-- `L9637D.png` — K-line-transceiver (ST L9637D) som interface. Den robusta vägen.
-- `Transistor_Schematic.png` — diskret transistorinterface (motsvarar det användaren byggde till ESP32).
+- `L9637D.png` — K-line transceiver (ST L9637D) as the interface. The robust path.
+- `Transistor_Schematic.png` — discrete transistor interface (equivalent to the one the user built for the ESP32).
 
-Ekaitza-noten och dessa scheman pekar åt samma håll: **realtids-timing + brusfiltrering** ger
-pålitlig K-line — det som en billig USB-KKL + icke-realtids-OS inte klarar stabilt.
+The Ekaitza note and these schematics point the same way: **real-time timing + noise filtering** give
+reliable K-line — what a cheap USB-KKL + non-real-time OS cannot manage stably.

@@ -1,27 +1,28 @@
-"""Utökat SLABS-jakttest — hela pin-7-matrisen i EN körning med gemensam logg.
+"""Extended SLABS hunt — the whole pin-7 matrix in ONE run with a shared log.
 
-    PYTHONPATH=src python3 tools/slabs_hunt.py PORT [profil] [logg-katalog]
+    PYTHONPATH=src python3 tools/slabs_hunt.py PORT [profile] [log-dir]
 
-profil:  quick  = bara kandidatadresser i alla lägen + sniff  (~3 min)
-         full   = 0x01–0xFF (fast/func) + kandidat-slow + sniff (~15 min)  [default]
+profile: quick  = candidate addresses only, in all modes + sniff  (~3 min)
+         full   = 0x01–0xFF (fast/func) + candidate slow + sniff (~15 min)  [default]
 
-Kör stillastående, tändning på. Detta är sista uttömmande försöket med VÅR KKL
-(pin 7) INNAN vi sniffar ett lånat verktyg. Faser:
+Run stationary, ignition on. This is the last exhaustive attempt with OUR KKL
+(pin 7) BEFORE we sniff a borrowed tool. Phases:
 
-  1. LÄNKKOLL   fast init mot motorn 0x13 → förväntar C1 57 8F. Bevisar att
-               kabel/OBD/jord/tajming är OK, så att tystnad från SLABS är ETT SVAR
-               (inte trasig länk). Sedan lång idle så motorsessionen dör.
-  2. SNIFF      passiv RX-only ~20 s vid nyckel-på — BCU=gateway kan polla moduler
-               på delade bussen → fånga SLABS adress/init UTAN att gissa. (K-line
-               är ofta tyst utan testare; låg sannolikhet men gratis.)
-  3. MATRIS     aktiv skanning i lägena fast-f1 / func-f1 / func-f7 / slow. Söker
-               C1 (positivt) eller 7F (svar-men-avvisat) resp. 0x55 (slow-sync).
-               Motorn 0x13 hoppas alltid över (öppen session maskerar bussen).
+  1. LINK CHECK fast init against the engine 0x13 → expects C1 57 8F. Proves that
+               cable/OBD/ground/timing are OK, so that silence from SLABS is A
+               RESPONSE (not a broken link). Then a long idle so the engine session dies.
+  2. SNIFF      passive RX-only ~20 s at key-on — BCU=gateway may poll modules
+               on the shared bus → capture the SLABS address/init WITHOUT guessing.
+               (K-line is often silent without a tester; low odds but free.)
+  3. MATRIX     active scan in the modes fast-f1 / func-f1 / func-f7 / slow. Looks
+               for C1 (positive) or 7F (responded-but-rejected), resp. 0x55 (slow-sync).
+               The engine 0x13 is always skipped (an open session masks the bus).
 
-KREATIV VARIABEL: kör en gång med motorn AV (tändning på) och en gång med motorn
-på TOMGÅNG — SLABS/EAS/SLS är då aktiva och modulen kan vara "vaken" på ett annat
-sätt. Total tystnad i BÅDA → starkt stöd för pin-8-hypotesen; svar med motorn på
-→ modulen kräver aktiv drift. Allt loggas per körning så de kan jämföras.
+CREATIVE VARIABLE: run once with the engine OFF (ignition on) and once with the
+engine IDLING — SLABS/EAS/SLS are then active and the module may be "awake" in a
+different way. Total silence in BOTH → strong support for the pin-8 hypothesis; a
+response with the engine on → the module requires active operation. Everything is
+logged per run so they can be compared.
 """
 import sys
 import time
@@ -32,8 +33,8 @@ from d2diag.kline import TESTER_ADDRESS, KLine, encode
 from d2diag.sniff import describe
 from d2diag.transport import SerialTransport
 
-# Kandidatadresser att alltid prova (även i quick). Kända ur research + vanliga
-# KWP-ABS/kroppsadresser. 0x29/0x34 = pyTD5Tester/Android-fynd; övriga = gissningar.
+# Candidate addresses to always try (even in quick). Known from research + common
+# KWP-ABS/body addresses. 0x29/0x34 = pyTD5Tester/Android finds; the rest = guesses.
 CANDIDATES = [0x29, 0x34, 0x28, 0x38, 0x18, 0x08, 0x33, 0x14, 0x40, 0x44, 0x50]
 
 MODES = ("fast-f1", "func-f1", "func-f7", "slow")
@@ -41,7 +42,7 @@ MODES = ("fast-f1", "func-f1", "func-f7", "slow")
 
 def build_frame(mode: str, addr: int) -> bytes:
     tester = 0xF1 if mode.endswith("f1") else 0xF7
-    fmt = 0xC1 if mode.startswith("func") else 0x81   # funktionell vs fysisk
+    fmt = 0xC1 if mode.startswith("func") else 0x81   # functional vs physical
     b = bytes([fmt, addr, tester, 0x81])
     return b + bytes([sum(b) & 0xFF])
 
@@ -53,7 +54,7 @@ def log_line(fh, msg: str) -> None:
 
 
 def phase_linkcheck(port: str, fh) -> None:
-    log_line(fh, "\n=== FAS 1: LÄNKKOLL (motor 0x13, förväntar C1 57 8F) ===")
+    log_line(fh, "\n=== PHASE 1: LINK CHECK (engine 0x13, expecting C1 57 8F) ===")
     t = SerialTransport(port, timeout=1.0)
     t.open()
     try:
@@ -65,17 +66,17 @@ def phase_linkcheck(port: str, fh) -> None:
         idx = raw.find(echo)
         resp = raw[idx + len(echo):] if idx >= 0 else raw
         if 0xC1 in resp:
-            log_line(fh, f"  ✓ LÄNK OK — motorn svarar C1  ({resp.hex(' ')})")
+            log_line(fh, f"  ✓ LINK OK — engine responds C1  ({resp.hex(' ')})")
         else:
-            log_line(fh, f"  ✗ INGEN C1 — kolla kabel/OBD/tändning FÖRST!  ({raw.hex(' ') or 'tyst'})")
+            log_line(fh, f"  ✗ NO C1 — check cable/OBD/ignition FIRST!  ({raw.hex(' ') or 'silent'})")
     finally:
         t.close()
-    log_line(fh, "  idle 15 s (låt motorsessionen dö)...")
+    log_line(fh, "  idle 15 s (let the engine session die)...")
     time.sleep(15)
 
 
 def phase_sniff(port: str, fh, seconds: float = 20.0) -> None:
-    log_line(fh, f"\n=== FAS 2: PASSIV SNIFF {seconds:.0f} s (RX-only, BCU kan polla) ===")
+    log_line(fh, f"\n=== PHASE 2: PASSIVE SNIFF {seconds:.0f} s (RX-only, BCU may poll) ===")
     ser = serial.serial_for_url(
         port, baudrate=10400, bytesize=8, parity="N", stopbits=1, timeout=0.007
     )
@@ -85,7 +86,7 @@ def phase_sniff(port: str, fh, seconds: float = 20.0) -> None:
     n = 0
     try:
         while (time.monotonic() - t0) < seconds:
-            b = ser.read(1)          # SÄND ALDRIG
+            b = ser.read(1)          # NEVER TRANSMIT
             now = time.monotonic()
             if b:
                 cur += b
@@ -98,11 +99,11 @@ def phase_sniff(port: str, fh, seconds: float = 20.0) -> None:
                 n += 1
     finally:
         ser.close()
-    log_line(fh, f"  {n} meddelanden fångade" + (" — TYST (väntat utan testare)" if n == 0 else ""))
+    log_line(fh, f"  {n} messages captured" + (" — SILENT (expected without a tester)" if n == 0 else ""))
 
 
 def phase_matrix(port: str, fh, addrs, do_slow: bool) -> list:
-    log_line(fh, f"\n=== FAS 3: AKTIV MATRIS ({len(addrs)} adresser, lägen {', '.join(MODES)}) ===")
+    log_line(fh, f"\n=== PHASE 3: ACTIVE MATRIX ({len(addrs)} addresses, modes {', '.join(MODES)}) ===")
     hits = []
     t = SerialTransport(port, timeout=1.0)
     t.open()
@@ -130,10 +131,10 @@ def phase_matrix(port: str, fh, addrs, do_slow: bool) -> list:
                 i = raw.find(frame)
                 resp = raw[i + len(frame):] if i >= 0 else raw
                 if 0xC1 in resp:
-                    log_line(fh, f"  0x{addr:02X}: C1! POSITIVT  {resp.hex(' ')}")
+                    log_line(fh, f"  0x{addr:02X}: C1! POSITIVE  {resp.hex(' ')}")
                     hits.append((mode, addr, "C1"))
                 elif 0x7F in resp:
-                    log_line(fh, f"  0x{addr:02X}: 7F (svar!)  {resp.hex(' ')}")
+                    log_line(fh, f"  0x{addr:02X}: 7F (response!)  {resp.hex(' ')}")
                     hits.append((mode, addr, "7F"))
     finally:
         t.close()
@@ -145,7 +146,7 @@ def main() -> int:
     profile = sys.argv[2] if len(sys.argv) > 2 else "full"
     logdir = sys.argv[3] if len(sys.argv) > 3 else "logs"
     if profile not in ("quick", "full"):
-        print(f"okänt profil: {profile} (quick|full)")
+        print(f"unknown profile: {profile} (quick|full)")
         return 2
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -161,19 +162,19 @@ def main() -> int:
     else:
         addrs = list(range(0x01, 0x100))
         do_slow = True
-        slow_addrs = CANDIDATES   # slow är långsamt (2,6 s/adr) → bara kandidater
+        slow_addrs = CANDIDATES   # slow is slow (2.6 s/addr) → candidates only
 
-    log_line(fh, f"SLABS-JAKT ({profile}) — {stamp} — port {port}")
-    log_line(fh, "Stillastående, tändning på. Ctrl-C avbryter (loggen sparas).")
+    log_line(fh, f"SLABS HUNT ({profile}) — {stamp} — port {port}")
+    log_line(fh, "Stationary, ignition on. Ctrl-C aborts (the log is saved).")
 
     all_hits = []
     try:
         phase_linkcheck(port, fh)
         phase_sniff(port, fh)
-        # fast/func över full lista, slow bara kandidater
+        # fast/func over the full list, slow only candidates
         all_hits += phase_matrix(port, fh, addrs, do_slow=False)
         if do_slow:
-            log_line(fh, f"\n  -- slow (bara kandidater, 2,6 s/adr) --")
+            log_line(fh, f"\n  -- slow (candidates only, 2.6 s/addr) --")
             t = SerialTransport(port, timeout=1.0)
             t.open()
             try:
@@ -186,17 +187,17 @@ def main() -> int:
             finally:
                 t.close()
     except KeyboardInterrupt:
-        log_line(fh, "\n[avbrutet av användaren]")
+        log_line(fh, "\n[aborted by user]")
 
-    log_line(fh, "\n=== SAMMANFATTNING ===")
+    log_line(fh, "\n=== SUMMARY ===")
     if all_hits:
         for mode, addr, tag in all_hits:
-            log_line(fh, f"  TRÄFF  {mode:8s} 0x{addr:02X} = {tag}")
-        log_line(fh, "  ⇒ ny modul svarar på pin 7! Notera läge+adress, bygg lager.")
+            log_line(fh, f"  HIT    {mode:8s} 0x{addr:02X} = {tag}")
+        log_line(fh, "  ⇒ a new module responds on pin 7! Note mode+address, build a layer.")
     else:
-        log_line(fh, "  inga träffar — SLABS tyst i alla lägen på pin 7.")
-        log_line(fh, "  ⇒ nästa: (a) fysisk pin-koll (pin 8?), (b) sniffa lånat verktyg.")
-    log_line(fh, f"\nlogg: {path}")
+        log_line(fh, "  no hits — SLABS silent in all modes on pin 7.")
+        log_line(fh, "  ⇒ next: (a) physical pin check (pin 8?), (b) sniff a borrowed tool.")
+    log_line(fh, f"\nlog: {path}")
     fh.close()
     return 0
 

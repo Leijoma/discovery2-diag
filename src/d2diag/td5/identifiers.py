@@ -1,15 +1,15 @@
-"""Td5 ReadDataByLocalIdentifier (0x21) — kända identifiers och skalning.
+"""Td5 ReadDataByLocalIdentifier (0x21) — known identifiers and scaling.
 
-Fältdefinitionerna bor numera i den deklarativa storen
-:mod:`d2diag.signals` (``signals/td5.json``) — **samma fil som automap läser och
-skriver**, så en bekräftad mappning hamnar direkt här utan handinklistring. Detta
-modul-API (``SIGNALS``, ``BY_NAME``, ``LIDS``, ``LIMITS``, ``decode_lid`` …) är
-oförändrat och härleds ur storen.
+The field definitions now live in the declarative store
+:mod:`d2diag.signals` (``signals/td5.json``) — **the same file automap reads and
+writes**, so a confirmed mapping ends up here directly without hand-pasting. This
+module API (``SIGNALS``, ``BY_NAME``, ``LIDS``, ``LIMITS``, ``decode_lid`` …) is
+unchanged and is derived from the store.
 
-Protokollfakta (LID-nummer, offset, skalning) härledda ur referensverktyget
-**Ekaitza_Itzali** (EA2EGA); ingen kod därifrån är kopierad (se
-THIRD_PARTY_LICENSES.md). Offset räknas i **datafältet** (efter positiv SID 0x61
-och ekad identifierare), dvs det :meth:`KWP2000.read_local_identifier` returnerar.
+Protocol facts (LID numbers, offset, scaling) derived from the reference tool
+**Ekaitza_Itzali** (EA2EGA); no code from it is copied (see
+THIRD_PARTY_LICENSES.md). Offset is counted in the **data field** (after positive SID 0x61
+and the echoed identifier), i.e. what :meth:`KWP2000.read_local_identifier` returns.
 """
 from __future__ import annotations
 
@@ -19,20 +19,20 @@ SIGNALS = load_signals("td5")
 BY_NAME = {s.name: s for s in SIGNALS}
 LIDS = sorted({s.lid for s in SIGNALS})
 
-# Driftsintervall (min_ok, max_ok) för avvikelseflaggning — härleds ur storen.
-# Signaler utan gränser flaggas inte (ext_temp = oansluten givare; maf_raw = okänd skala).
+# Operating range (min_ok, max_ok) for deviation flagging — derived from the store.
+# Signals without limits are not flagged (ext_temp = unconnected sensor; maf_raw = unknown scale).
 LIMITS = {s.name: s.limits for s in SIGNALS if s.limits}
 
 
 def signal_status(name: str, value: "float | None") -> "str | None":
-    """Returnera 'ok' / 'low' / 'high' / 'suspect' mot driftsintervallet, eller
-    None om signalen saknar intervall (flaggas ej).
+    """Return 'ok' / 'low' / 'high' / 'suspect' against the operating range, or
+    None if the signal has no range (not flagged).
 
-    ``suspect`` = fysiskt orimligt värde (utanför intervallet med mer än HELA dess
-    spann) → nästan säkert en brusig felavläsning, inte riktig data. Belagt på
-    motorväg 2026-08-21: KKL-kabeln kastar enstaka spikar (MAP 4,5 bar, kylvatten
-    429°, gas 41 V) som passerar framing men är skräp. Flaggas — döljs INTE, för
-    ett äkta givarbortfall (IAT som droppar) är också "suspect" och ÄR signalen.
+    ``suspect`` = physically implausible value (outside the range by more than its
+    ENTIRE span) → almost certainly a noisy misread, not real data. Proven on the
+    motorway 2026-08-21: the KKL cable throws occasional spikes (MAP 4.5 bar, coolant
+    429°, throttle 41 V) that pass framing but are garbage. Flagged — NOT hidden, since
+    a genuine sensor dropout (IAT dropping out) is also "suspect" and IS the signal.
     """
     lim = LIMITS.get(name)
     if lim is None or value is None:
@@ -53,5 +53,5 @@ def signals_for_lid(lid: int) -> "list[Signal]":
 
 
 def decode_lid(lid: int, data: bytes) -> "dict[str, float]":
-    """Avkoda alla signaler i en LID ur dess datafält (hoppar över de som inte får plats)."""
+    """Decode all signals in a LID from its data field (skips those that do not fit)."""
     return {s.name: s.decode(data) for s in signals_for_lid(lid) if s.fits(data)}

@@ -1,9 +1,9 @@
-"""Frame-parsning + LID-lager för den passiva sniff-kalibreringen.
+"""Frame parsing + LID layer for the passive sniff calibration.
 
-Ingesterar hex-rader (ESP32-format ``[  t] 02 21 09 2c …`` eller rå hex), spårar
-aktiv modul via fast-init-signatur, och lagrar **senaste råa datafält per LID**
-(ur ``61 <lid> …``-svar). Ger en snapshot till webbvyn med vår nuvarande avkodning
-bredvid råbytesen.
+Ingests hex lines (ESP32 format ``[  t] 02 21 09 2c …`` or raw hex), tracks the
+active module via the fast-init signature, and stores the **latest raw data field per LID**
+(from ``61 <lid> …`` responses). Provides a snapshot to the web view with our current
+decoding next to the raw bytes.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import re
 
 from ..signals import load_signals
 
-# Fast-init-signaturer → modul (så vi vet vilken ECU LID:erna hör till).
+# Fast-init signatures → module (so we know which ECU the LIDs belong to).
 _INIT_SIGS = {
     (0x81, 0x13, 0xF7, 0x81): "td5",
     (0x81, 0x29, 0xF7, 0x81): "slabs",
@@ -21,7 +21,7 @@ _HEX_AFTER_BRACKET = re.compile(r"\]\s*([0-9a-fA-F ]+)")
 
 
 def parse_hex_line(line: str) -> "list[int] | None":
-    """Plocka bytelistan ur en ESP32-loggrad (``[  t] hex …``) eller ren hex-rad."""
+    """Pick the byte list out of an ESP32 log line (``[  t] hex …``) or a plain hex line."""
     if ">>>" in line or "===" in line:
         return None
     m = _HEX_AFTER_BRACKET.search(line)
@@ -39,7 +39,7 @@ def _is_hex(t: str) -> bool:
 
 
 def _frames(b: "list[int]") -> "list[list[int]]":
-    """Dela bytelista i ramar via längd-prefix ``<len><payload><cs>`` (0x00 = gap)."""
+    """Split a byte list into frames via length prefix ``<len><payload><cs>`` (0x00 = gap)."""
     out, i, n = [], 0, len(b)
     while i < n:
         if b[i] == 0x00:
@@ -59,11 +59,11 @@ def _contains(seq: "list[int]", sub: "tuple[int, ...]") -> bool:
 
 
 def decode_known(module: str, lid: int, data: bytes) -> "list[dict]":
-    """Vår nuvarande avkodning av en LID (för jämförelse mot reference tool-skärmen).
+    """Our current decoding of a LID (for comparison against the reference tool screen).
 
-    Modulgenerisk: läser fältdefinitionerna ur den deklarativa storen
-    (:mod:`d2diag.signals`). Ett fält med ``states`` (t.ex. any_door) ger sin
-    tillståndsetikett som ``value``; övriga ger sitt numeriska värde."""
+    Module-generic: reads the field definitions from the declarative store
+    (:mod:`d2diag.signals`). A field with ``states`` (e.g. any_door) gives its
+    state label as ``value``; the rest give their numeric value."""
     out: "list[dict]" = []
     for s in load_signals(module):
         if s.lid != lid or not s.fits(data):
@@ -80,11 +80,11 @@ def decode_known(module: str, lid: int, data: bytes) -> "list[dict]":
 
 
 class LidStore:
-    """Senaste råa datafält per (modul, LID), matat ur sniffade hex-rader."""
+    """Latest raw data field per (module, LID), fed from sniffed hex lines."""
 
     def __init__(self) -> None:
         self.module: "str | None" = None
-        self.frames = 0  # totalt antal avkodade svarsramar (för färskhets-mätning)
+        self.frames = 0  # total number of decoded response frames (for freshness measurement)
         self._data: "dict[str, dict[int, dict]]" = {}
 
     def ingest_line(self, line: str) -> None:
@@ -98,7 +98,7 @@ class LidStore:
                 self.module = name
         for fr in _frames(b):
             payload = fr[1 : 1 + fr[0]]
-            # ReadDataByLocalId-svar: 61 <lid> <data…>
+            # ReadDataByLocalId response: 61 <lid> <data…>
             if len(payload) >= 2 and payload[0] == 0x61:
                 lid = payload[1]
                 data = bytes(payload[2:])

@@ -1,8 +1,8 @@
-"""Tester för aktiv differential-mappning (tools/diffmap.py) + stödmekanik.
+"""Tests for active differential mapping (tools/diffmap.py) + supporting mechanics.
 
-Täcker: skriptat FakeKLineEcu-läge (värden ändras mellan avläsningar),
-``stable_diff`` (brushärdning), och diffmaps rena logik (moved/build_record/
-ReadOnlyEcu-guarden). Den interaktiva CLI:n testas inte (kräver input()).
+Covers: scripted FakeKLineEcu mode (values change between reads),
+``stable_diff`` (noise hardening), and diffmap's pure logic (moved/build_record/
+the ReadOnlyEcu guard). The interactive CLI is not tested (requires input()).
 """
 import pytest
 
@@ -23,7 +23,7 @@ class _Dummy(EcuSession):
     name = "D"
 
 
-# ---- skriptat FakeKLineEcu-läge ----------------------------------------- #
+# ---- scripted FakeKLineEcu mode ----------------------------------------- #
 def test_scripted_fake_sequence_changes_between_reads():
     resp = {_f(b"\x21\x54"): [_f(b"\x61\x54\x10\x20"), _f(b"\x61\x54\x10\x99")]}
     s = _Dummy(KWP2000(KLine(FakeKLineEcu(resp))))
@@ -31,7 +31,7 @@ def test_scripted_fake_sequence_changes_between_reads():
         a = s.read_block([0x54])
         b = s.read_block([0x54])
     assert a["54"] == bytes.fromhex("1020")
-    assert b["54"] == bytes.fromhex("1099")   # andra avläsningen skiljer
+    assert b["54"] == bytes.fromhex("1099")   # second read differs
 
 
 def test_scripted_fake_callable():
@@ -44,20 +44,20 @@ def test_scripted_fake_callable():
 
 
 def test_static_response_still_backward_compatible():
-    resp = {_f(b"\x21\x54"): _f(b"\x61\x54\xaa")}   # gammal statisk form
+    resp = {_f(b"\x21\x54"): _f(b"\x61\x54\xaa")}   # old static form
     s = _Dummy(KWP2000(KLine(FakeKLineEcu(resp))))
     with s:
         assert s.read_block([0x54])["54"] == b"\xaa"
-        assert s.read_block([0x54])["54"] == b"\xaa"   # samma varje gång
+        assert s.read_block([0x54])["54"] == b"\xaa"   # same every time
 
 
-# ---- stable_diff (brushärdning) ----------------------------------------- #
+# ---- stable_diff (noise hardening) -------------------------------------- #
 def test_stable_diff_ignores_noise_and_finds_moved_byte():
     bases = [
         {"raws": {"54": bytes.fromhex("102030")}},
-        {"raws": {"54": bytes.fromhex("102530")}},   # byte1 flackar = brus
+        {"raws": {"54": bytes.fromhex("102530")}},   # byte1 flickers = noise
     ]
-    after = {"raws": {"54": bytes.fromhex("102099")}}  # byte2 stabil 0x30 → 0x99
+    after = {"raws": {"54": bytes.fromhex("102099")}}  # byte2 stable 0x30 → 0x99
     mv = stable_diff(bases, after, ["54"])
     assert mv == [{"lid": "54", "byte": 2, "baseline": 0x30, "after": 0x99}]
 
@@ -73,7 +73,7 @@ def test_read_block_differential_over_scripted_fake():
     ]
 
 
-# ---- diffmap ren logik --------------------------------------------------- #
+# ---- diffmap pure logic -------------------------------------------------- #
 def test_build_record_numeric():
     res = {"ok": True, "mode": "numeric", "lid": "1c", "offset": 0,
            "kind": "u16", "scale": 0.0001, "bias": 0.0}
@@ -84,10 +84,10 @@ def test_build_record_numeric():
 
 def test_build_record_state_bit_inverts_mapping():
     res = {"ok": True, "mode": "state", "lid": "56", "offset": 0, "bit": 0,
-           "mapping": {"öppen": 1, "stängd": 0}}
+           "mapping": {"open": 1, "closed": 0}}
     rec = dm.build_record(res, "any_door", "", "kandidat")
     assert rec["kind"] == "bit" and rec["bit"] == 0
-    assert rec["states"] == {1: "öppen", 0: "stängd"}
+    assert rec["states"] == {1: "open", 0: "closed"}
 
 
 def test_readonly_guard_blocks_actuators():
@@ -96,11 +96,11 @@ def test_readonly_guard_blocks_actuators():
             return {"ok": True}
 
         def buzzer(self):
-            raise AssertionError("ställdon ska aldrig nås via harnessen")
+            raise AssertionError("actuators must never be reached through the harness")
 
     ro = dm.ReadOnlyEcu(_Sess())
-    assert ro.read_block([]) == {"ok": True}     # läsning tillåten
+    assert ro.read_block([]) == {"ok": True}     # reading allowed
     with pytest.raises(AttributeError):
-        ro.buzzer                                 # ställdon blockeras
+        ro.buzzer                                 # actuators blocked
     with pytest.raises(AttributeError):
         ro.clear_faults

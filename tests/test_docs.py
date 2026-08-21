@@ -1,4 +1,4 @@
-"""Tester för markdown-renderaren och dokumentbiblioteket (Dokument-fliken)."""
+"""Tests for the markdown renderer and the document library (the Documents tab)."""
 from __future__ import annotations
 
 import pathlib
@@ -28,7 +28,7 @@ def test_gfm_table_with_inline_cells():
     assert "<th>Kod</th>" in out
     assert "<td><code>21 11</code> byte 3</td>" in out
     assert "<td><strong>strongly reported</strong></td>" in out
-    assert 'class="tablewrap"' in out  # horisontell scroll-container
+    assert 'class="tablewrap"' in out  # horizontal scroll container
 
 
 def test_html_is_escaped_outside_and_inside_code():
@@ -40,14 +40,14 @@ def test_html_is_escaped_outside_and_inside_code():
 
 def test_blockquote_list_hr_fence_link():
     out = md.render(
-        "> rad ett\n> rad två\n\n- a\n- b\n\n1. x\n2. y\n\n---\n\n"
-        "```text\nrå 81 29\n```\n\n[lnk](http://a?b=1&c=2)\n"
+        "> line one\n> line two\n\n- a\n- b\n\n1. x\n2. y\n\n---\n\n"
+        "```text\nraw 81 29\n```\n\n[lnk](http://a?b=1&c=2)\n"
     )
-    assert "<blockquote>rad ett<br>rad två</blockquote>" in out
+    assert "<blockquote>line one<br>line two</blockquote>" in out
     assert "<ul><li>a</li><li>b</li></ul>" in out
     assert "<ol><li>x</li><li>y</li></ol>" in out
     assert "<hr>" in out
-    assert "<pre><code>rå 81 29</code></pre>" in out
+    assert "<pre><code>raw 81 29</code></pre>" in out
     assert out.count("<a ") == 1 and 'href="http://a?b=1&amp;c=2"' in out
 
 
@@ -56,25 +56,25 @@ def test_doclibrary_reads_fresh_and_skips_missing(tmp_path: pathlib.Path):
     f.write_text("# SLABS\n\nv1.\n", encoding="utf-8")
     lib = (
         DocLibrary()
-        .add_file(tmp_path / "saknas.md", title="Borta")  # finns ej → utelämnas
-        .add_dir(tmp_path, group="Referens")
+        .add_file(tmp_path / "missing.md", title="Gone")  # does not exist → omitted
+        .add_dir(tmp_path, group="Reference")
     )
     idx = lib.index()
     ids = {x["title"] for x in idx}
-    assert "SLABS" in ids and "Borta" not in ids
-    assert lib.html("borta") is None  # saknad fil → None (inte krasch)
+    assert "SLABS" in ids and "Gone" not in ids
+    assert lib.html("gone") is None  # missing file → None (not a crash)
 
     doc_id = next(x["id"] for x in idx if x["title"] == "SLABS")
     assert "<h1>SLABS</h1>" in lib.html(doc_id)
 
-    # färsk läsning: ändra filen → ny rendering utan att röra biblioteket
-    f.write_text("# SLABS\n\nv2 uppdaterad.\n", encoding="utf-8")
-    assert "v2 uppdaterad." in lib.html(doc_id)
+    # fresh read: change the file → new rendering without touching the library
+    f.write_text("# SLABS\n\nv2 updated.\n", encoding="utf-8")
+    assert "v2 updated." in lib.html(doc_id)
 
 
 def test_doclibrary_title_from_h1_and_unique_ids(tmp_path: pathlib.Path):
-    (tmp_path / "a.md").write_text("# Samma\n", encoding="utf-8")
-    (tmp_path / "b.md").write_text("# Samma\n", encoding="utf-8")
+    (tmp_path / "a.md").write_text("# Same\n", encoding="utf-8")
+    (tmp_path / "b.md").write_text("# Same\n", encoding="utf-8")
     lib = DocLibrary().add_dir(tmp_path)
     ids = [x["id"] for x in lib.index()]
-    assert len(ids) == len(set(ids))  # kollisioner suffixas
+    assert len(ids) == len(set(ids))  # collisions get suffixed

@@ -1,12 +1,12 @@
-"""Öppna en Td5-diagnostiksession och läs identifiers — dumpar rå data.
+"""Open a Td5 diagnostic session and read identifiers — dumps raw data.
 
     PYTHONPATH=src python3 tools/session.py /dev/ttyUSB0 [lid_hex ...]
 
 fast init → StartDiagnosticSession (10 A0) → ReadDataByLocalIdentifier (21 xx).
-Kör med tändning på men motorn AV.
+Run with ignition on but the engine OFF.
 
-Init:en är intermittent (brus/turnaround), så vi försöker om: brus → nytt försök;
-7F (session redan öppen) → vänta ut timeouten och ta en färsk C1.
+The init is intermittent (noise/turnaround), so we retry: noise → new attempt;
+7F (session already open) → wait out the timeout and grab a fresh C1.
 """
 import sys
 import time
@@ -19,20 +19,20 @@ DEFAULT_LIDS = [0x09, 0x1A, 0x1B, 0x40, 0x10, 0x11, 0x15, 0x20, 0x21, 0x22]
 
 
 def open_session(kline: KLine, tries: int = 8) -> "bytes | None":
-    """Kör fast init tills vi får ett positivt StartCommunication (C1)."""
+    """Run fast init until we get a positive StartCommunication (C1)."""
     for i in range(tries):
         try:
             sc = kline.fast_init()
         except KLineTimeout:
-            print(f"  init-försök {i + 1}: brus/timeout, försöker igen")
+            print(f"  init attempt {i + 1}: noise/timeout, retrying")
             continue
         if sc[:1] == b"\xc1":
             return sc
         if sc[:1] == b"\x7f":
-            print(f"  init-försök {i + 1}: 7F (session redan öppen) — väntar ut timeout")
+            print(f"  init attempt {i + 1}: 7F (session already open) — waiting out the timeout")
             time.sleep(6)
             continue
-        print(f"  init-försök {i + 1}: oväntat svar {sc.hex(' ')}")
+        print(f"  init attempt {i + 1}: unexpected response {sc.hex(' ')}")
     return None
 
 
@@ -46,15 +46,15 @@ def main() -> int:
     with kline:
         sc = open_session(kline)
         if sc is None:
-            print("Kunde inte öppna session efter flera försök.")
+            print("Could not open a session after several attempts.")
             return 1
-        print(f"fast init OK: {sc.hex(' ')}  (nyckelbytes {sc[1:].hex(' ')})")
+        print(f"fast init OK: {sc.hex(' ')}  (key bytes {sc[1:].hex(' ')})")
 
         try:
             sess = kwp.start_diagnostic_session(0xA0)
             print(f"StartDiagnosticSession 10 A0 → 50 {sess.hex(' ')}")
         except (NegativeResponse, KWP2000Error) as exc:
-            print(f"StartDiagnosticSession nekad: {exc}")
+            print(f"StartDiagnosticSession rejected: {exc}")
             return 1
 
         print("--- identifiers (21 xx) ---")
@@ -63,7 +63,7 @@ def main() -> int:
                 data = kwp.read_local_identifier(lid)
                 print(f"  21 {lid:02X} → {data.hex(' ')}  ({len(data)} bytes)")
             except NegativeResponse as exc:
-                print(f"  21 {lid:02X} → nekad (NRC 0x{exc.nrc:02X})")
+                print(f"  21 {lid:02X} → rejected (NRC 0x{exc.nrc:02X})")
             except Exception as exc:  # noqa: BLE001
                 print(f"  21 {lid:02X} → {type(exc).__name__}: {exc}")
             try:

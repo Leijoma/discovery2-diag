@@ -1,22 +1,22 @@
 """Td5 SecurityAccess seed→key.
 
-Porterad från **td5keygen** (BSD-2-Clause):
+Ported from **td5keygen** (BSD-2-Clause):
     Copyright (c) 2017, paul@discotd5.com
-    Python-variant: Copyright (c) 2017, xabiergarmendia@gmail.com
-Se THIRD_PARTY_LICENSES.md i repo-roten för fullständig licenstext.
+    Python variant: Copyright (c) 2017, xabiergarmendia@gmail.com
+See THIRD_PARTY_LICENSES.md in the repo root for the full licence text.
 
-Algoritmen är en LFSR-variant härledd ur ECU-disassembly. C-originalet använder
-XOR i tap-beräkningen, Python-originalet ``+``; de ger identiskt resultat eftersom
-``(a + b + c + d) & 1 == a ^ b ^ c ^ d``. Ekvivalensen bevisas mot en ordagrann
-referens över alla 65536 seeds i testerna.
+The algorithm is an LFSR variant derived from ECU disassembly. The C original uses
+XOR in the tap computation, the Python original ``+``; they give identical results because
+``(a + b + c + d) & 1 == a ^ b ^ c ^ d``. The equivalence is proven against a verbatim
+reference over all 65536 seeds in the tests.
 """
 from __future__ import annotations
 
 
 def key_from_seed(seed: int) -> int:
-    """Beräkna 16-bitars nyckel ur 16-bitars seed."""
+    """Compute a 16-bit key from a 16-bit seed."""
     if not 0 <= seed <= 0xFFFF:
-        raise ValueError(f"seed utanför 16 bitar: {seed}")
+        raise ValueError(f"seed outside 16 bits: {seed}")
     count = (
         (seed >> 0xC & 0x8)
         | (seed >> 0x5 & 0x4)
@@ -34,6 +34,6 @@ def key_from_seed(seed: int) -> int:
 
 
 def key_bytes_from_seed(seed_hi: int, seed_lo: int) -> bytes:
-    """Ta seed som två bytes, returnera nyckeln som två bytes (hög, låg)."""
+    """Take the seed as two bytes, return the key as two bytes (high, low)."""
     key = key_from_seed((seed_hi << 8) | seed_lo)
     return bytes([(key >> 8) & 0xFF, key & 0xFF])

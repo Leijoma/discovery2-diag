@@ -1,26 +1,26 @@
-"""Tester för transportlagret. Körs utan hårdvara via pyserials ``loop://``."""
+"""Tests for the transport layer. Runs without hardware via pyserial's ``loop://``."""
 from d2diag.transport import LoggingTransport, SerialTransport
 
 
 def test_slow_init_bits_frame():
-    # 5-baud init-ram: startbit(0), 8 databitar LSB-först, stoppbit(1) — 8N1.
+    # 5-baud init frame: start bit(0), 8 data bits LSB-first, stop bit(1) — 8N1.
     for addr in (0x33, 0x13, 0x29, 0x34, 0x00, 0xFF):
         bits = SerialTransport.slow_init_bits(addr)
         assert len(bits) == 10
-        assert bits[0] == 0 and bits[9] == 1          # start / stopp
-        data = bits[1:9]                               # 8 databitar LSB-först
+        assert bits[0] == 0 and bits[9] == 1          # start / stop
+        data = bits[1:9]                               # 8 data bits LSB-first
         assert sum(b << i for i, b in enumerate(data)) == addr
-    # regressionsvakt: 0x29 skickas nu som 0x29 (inte 0xA9 som med gamla paritetsbuggen)
+    # regression guard: 0x29 is now sent as 0x29 (not 0xA9 as with the old parity bug)
     assert SerialTransport.slow_init_bits(0x29)[1:9] == [1, 0, 0, 1, 0, 1, 0, 0]
 
 
 def test_parse_slow_init():
-    # 0x55 sync + KW1 KW2 → (KW1, KW2); annars None
+    # 0x55 sync + KW1 KW2 → (KW1, KW2); otherwise None
     assert SerialTransport.parse_slow_init(b"\x55\x8f\xea\x15") == (0x8F, 0xEA)
     assert SerialTransport.parse_slow_init(b"\x55\x01\x02") == (0x01, 0x02)
     assert SerialTransport.parse_slow_init(b"") is None
-    assert SerialTransport.parse_slow_init(b"\x00\x8f\xea") is None  # ingen 0x55
-    assert SerialTransport.parse_slow_init(b"\x55\x8f") is None       # för kort
+    assert SerialTransport.parse_slow_init(b"\x00\x8f\xea") is None  # no 0x55
+    assert SerialTransport.parse_slow_init(b"\x55\x8f") is None       # too short
 
 
 def test_serial_loopback_send_receive():
@@ -42,7 +42,7 @@ def test_send_before_open_raises():
     except RuntimeError:
         pass
     else:  # pragma: no cover
-        raise AssertionError("förväntade RuntimeError när transporten är stängd")
+        raise AssertionError("expected RuntimeError when the transport is closed")
 
 
 def test_logging_transport_writes_tx_and_rx(tmp_path):
@@ -56,40 +56,40 @@ def test_logging_transport_writes_tx_and_rx(tmp_path):
 
 
 def test_logging_transport_is_a_transport():
-    # Ett högre lager ska kunna ta emot LoggingTransport utan att veta något.
+    # A higher layer should be able to accept LoggingTransport without knowing anything.
     from d2diag.transport import Transport
 
     assert isinstance(LoggingTransport(SerialTransport(url="loop://")), Transport)
 
 
 def test_serial_fast_init_low_restores_baud_and_flushes_echo(monkeypatch):
-    # Baud-drop-pulsen (macOS-vägen): sänk baud, skicka 0x00, återställ baud, töm ekot.
-    # Tvinga icke-Linux så baud-tricket testas oavsett värdplattform.
+    # The baud-drop pulse (the macOS path): lower baud, send 0x00, restore baud, flush the echo.
+    # Force non-Linux so the baud trick is tested regardless of host platform.
     import d2diag.transport.serial_transport as st
     monkeypatch.setattr(st.sys, "platform", "darwin")
     with SerialTransport(url="loop://", baudrate=10400, timeout=0.3) as t:
         t.fast_init_low(0.025)
-        assert t.baudrate == 10400          # baud återställd efteråt
-        assert t.receive(1, timeout=0.05) == b""  # ekot av puls-byten tömt
+        assert t.baudrate == 10400          # baud restored afterwards
+        assert t.receive(1, timeout=0.05) == b""  # the echo of the pulse byte flushed
 
 
 def test_serial_fast_init_low_uses_break_on_linux(monkeypatch):
-    # På Linux (Raspberry Pi/FTDI) klarar inte hårdvaran 360 baud → låg-pulsen
-    # måste komma från en OS-timad break i stället. Belagt i bilen 2026-08-21.
+    # On Linux (Raspberry Pi/FTDI) the hardware can't do 360 baud → the low pulse
+    # must come from an OS-timed break instead. Confirmed in the car 2026-08-21.
     import d2diag.transport.serial_transport as st
     monkeypatch.setattr(st.sys, "platform", "linux")
     calls = {}
     with SerialTransport(url="loop://", baudrate=10400, timeout=0.3) as t:
         monkeypatch.setattr(t, "send_break", lambda d=0.025: calls.__setitem__("dur", d))
         already_high = t.fast_init_low(0.025)
-    assert calls.get("dur") == 0.025    # låg-pulsen kom via break
-    assert already_high == 0.0          # ingen stoppbit att kompensera för
-    assert t.baudrate == 10400          # baud orörd
+    assert calls.get("dur") == 0.025    # the low pulse came via break
+    assert already_high == 0.0          # no stop bit to compensate for
+    assert t.baudrate == 10400          # baud untouched
 
 
 def test_logging_transport_delegates_serial_hooks():
-    # send_break/reset_input_buffer måste nå den inre transporten, annars döljer
-    # wrappern dem för K-Line-lagrets fast init.
+    # send_break/reset_input_buffer must reach the inner transport, otherwise the
+    # wrapper hides them from the K-Line layer's fast init.
     from d2diag.transport import Transport
 
     class _Inner(Transport):

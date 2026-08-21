@@ -1,4 +1,4 @@
-"""Test för Td5-lagret: hela stacken Td5 → KWP2000 → K-Line → simulerad ECU."""
+"""Test for the Td5 layer: the whole stack Td5 → KWP2000 → K-Line → simulated ECU."""
 from d2diag.kline import KLine, encode
 from d2diag.kwp2000 import KWP2000
 from d2diag.td5 import Td5
@@ -15,12 +15,12 @@ def test_unlock_computes_and_sends_correct_key():
     key = key_bytes_from_seed(seed[0], seed[1])
     responses = {
         _frame(b"\x27\x01"): _frame(b"\x67\x01" + seed),            # seed
-        _frame(b"\x27\x02" + key): _frame(b"\x67\x02"),            # nyckel accepteras
+        _frame(b"\x27\x02" + key): _frame(b"\x67\x02"),            # key accepted
     }
     ecu = FakeKLineEcu(responses)
     with Td5(KWP2000(KLine(ecu))) as td5:
         td5.unlock()
-    assert _frame(b"\x27\x02" + key) in ecu.sent  # rätt nyckel skickades
+    assert _frame(b"\x27\x02" + key) in ecu.sent  # the correct key was sent
 
 
 def test_start_session():

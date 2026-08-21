@@ -1,8 +1,8 @@
-"""Modul-menyregister — driver dashboardens Karta-/täckningsflik.
+"""Module menu registry — drives the dashboard's Map/coverage tab.
 
-Varje modul har en meny-lista (reference tool-meny + vår status), samma format som
-:data:`d2diag.slabs.menu.SLABS_MENU`. Tomma listor = ännu ej dokumenterade (roadmap).
-Uppdatera respektive ``*/menu.py`` under sniffning → Karta-fliken speglar det.
+Each module has a menu list (reference tool menu + our status), the same format as
+:data:`d2diag.slabs.menu.SLABS_MENU`. Empty lists = not yet documented (roadmap).
+Update the respective ``*/menu.py`` while sniffing → the Map tab mirrors it.
 """
 from .ace.menu import ACE_MENU
 from .airbag.menu import AIRBAG_MENU

@@ -1,15 +1,112 @@
 {
   "generated_from": [
-    "logs/session.log",
+    "logs/bcu_probe-20260820-093119.log",
+    "logs/bcu_probe-20260820-093119.raw.log",
+    "logs/bcu_probe-20260820-144132.log",
+    "logs/bcu_probe-20260820-144132.raw.log",
+    "logs/bcu_probe-20260820-144231.log",
+    "logs/bcu_probe-20260820-144231.raw.log",
+    "logs/bcu_probe-20260820-144237.log",
+    "logs/bcu_probe-20260820-144237.raw.log",
+    "logs/bcu_probe-20260820-144244.log",
+    "logs/bcu_probe-20260820-144244.raw.log",
+    "logs/connection.log",
+    "logs/dashboard.log",
+    "logs/esp32_live.log",
+    "logs/esp32_sniff-20260808-133538.log",
+    "logs/esp32_sniff-20260808-164312.log",
+    "logs/faultread-20260809-2.log",
+    "logs/faultread-20260809-3.log",
+    "logs/faultread-20260809-4.log",
     "logs/faultread-20260809.log",
-    "logs/faultread-20260809-2.log"
+    "logs/livetest.log",
+    "logs/nanocom_sniff-20260807-122356.log",
+    "logs/nanocom_sniff-20260807-142725.log",
+    "logs/session.log",
+    "logs/slabs_hunt-20260805-114812.log",
+    "logs/slabs_probe-20260819-132510.log",
+    "logs/slabs_probe-20260819-132510.raw.log",
+    "logs/slabs_probe-20260819-132804.log",
+    "logs/slabs_probe-20260819-132804.raw.log",
+    "logs/slabs_probe-20260819-133251.log",
+    "logs/slabs_probe-20260819-133251.raw.log",
+    "logs/slabs_probe-20260819-133637.log",
+    "logs/slabs_probe-20260819-133637.raw.log",
+    "logs/slabs_probe-20260819-133853.log",
+    "logs/slabs_probe-20260819-133853.raw.log",
+    "logs/slabs_probe-20260819-134226.log",
+    "logs/slabs_probe-20260819-134226.raw.log",
+    "logs/slabs_probe-20260819-134641.log",
+    "logs/slabs_probe-20260819-134641.raw.log",
+    "logs/slabs_probe-20260819-134737.log",
+    "logs/slabs_probe-20260819-134737.raw.log",
+    "logs/slabs_probe-20260819-153116.log",
+    "logs/slabs_probe-20260819-153116.raw.log",
+    "logs/slabs_probe-20260819-153154.log",
+    "logs/slabs_probe-20260819-153154.raw.log",
+    "logs/slabs_probe-20260819-153248.log",
+    "logs/slabs_probe-20260819-153248.raw.log",
+    "logs/slabs_probe-20260819-153348.log",
+    "logs/slabs_probe-20260819-153348.raw.log",
+    "logs/slabs_probe-20260819-153420.log",
+    "logs/slabs_probe-20260819-153420.raw.log",
+    "logs/slabs_probe-20260819-153507.log",
+    "logs/slabs_probe-20260819-153507.raw.log",
+    "logs/slabs_probe-20260819-160335.log",
+    "logs/slabs_probe-20260819-160335.raw.log",
+    "logs/slabs_probe-20260819-160420.log",
+    "logs/slabs_probe-20260819-160420.raw.log",
+    "logs/slabs_probe-20260819-160500.log",
+    "logs/slabs_probe-20260819-160500.raw.log",
+    "logs/slabs_probe-20260819-160514.log",
+    "logs/slabs_probe-20260819-160514.raw.log",
+    "logs/slabs_probe-20260819-160540.log",
+    "logs/slabs_probe-20260819-160540.raw.log",
+    "logs/slabs_probe-20260819-160625.log",
+    "logs/slabs_probe-20260819-160625.raw.log",
+    "logs/slabs_probe-20260819-172631.log",
+    "logs/slabs_probe-20260819-172631.raw.log",
+    "logs/slabs_probe-20260819-172648.log",
+    "logs/slabs_probe-20260819-172648.raw.log",
+    "logs/slabs_probe-20260819-172701.log",
+    "logs/slabs_probe-20260819-172701.raw.log",
+    "logs/slabs_probe-20260819-172714.log",
+    "logs/slabs_probe-20260819-172714.raw.log",
+    "logs/slabs_probe-20260819-172738.log",
+    "logs/slabs_probe-20260819-172738.raw.log",
+    "logs/slabs_probe-20260819-172846.log",
+    "logs/slabs_probe-20260819-172846.raw.log",
+    "logs/slabs_probe-20260819-172902.log",
+    "logs/slabs_probe-20260819-172902.raw.log",
+    "logs/slabs_probe-20260819-172926.log",
+    "logs/slabs_probe-20260819-172926.raw.log",
+    "logs/slabs_probe-20260819-173003.log",
+    "logs/slabs_probe-20260819-173003.raw.log",
+    "logs/slabs_probe-20260819-173036.log",
+    "logs/slabs_probe-20260819-173036.raw.log",
+    "logs/slabs_probe-20260819-173100.log",
+    "logs/slabs_probe-20260819-173100.raw.log",
+    "logs/slabs_torture-20260819-144056.log",
+    "logs/slabs_torture-20260819-144056.raw.log",
+    "logs/slabs_torture-20260819-144806.log",
+    "logs/slabs_torture-20260819-144806.raw.log",
+    "logs/slabs_torture-20260819-150834.log",
+    "logs/slabs_torture-20260819-150834.raw.log",
+    "logs/slabs_torture-20260819-151102.log",
+    "logs/slabs_torture-20260819-151102.raw.log",
+    "logs/slow_sweep-20260806-110805.log",
+    "logs/slow_sweep-20260806-111013.log"
   ],
   "modules": {
     "slabs": {
       "protocol": "kwp2000-lengthprefix",
       "lids": [
+        "01",
+        "02",
         "11",
+        "20",
         "22",
+        "23",
         "25",
         "2f",
         "30",
@@ -37,15 +134,49 @@
         "8a",
         "8b",
         "8d",
+        "c1",
+        "c2",
         "ff"
       ],
       "transactions": [
+        {
+          "req": "23 20 00 1e 02",
+          "service": null,
+          "lid": "20",
+          "example_resp": null,
+          "count": 1,
+          "annotations": []
+        },
+        {
+          "req": "23 20 00 3a 02",
+          "service": null,
+          "lid": "20",
+          "example_resp": null,
+          "count": 1,
+          "annotations": []
+        },
+        {
+          "req": "63 ff 09",
+          "service": null,
+          "lid": "ff",
+          "example_resp": null,
+          "count": 1,
+          "annotations": []
+        },
+        {
+          "req": "63 ff 0f",
+          "service": null,
+          "lid": "ff",
+          "example_resp": "63 ff 09",
+          "count": 1,
+          "annotations": []
+        },
         {
           "req": "14 ff ff",
           "service": "ClearFaults",
           "lid": "ff",
           "example_resp": null,
-          "count": 1,
+          "count": 2,
           "annotations": [
             "clear faults"
           ]
@@ -55,12 +186,12 @@
           "service": "ReadEcuId",
           "lid": "8a",
           "example_resp": "5a 8a 00 37 44 60 44 03 10 ff 31 90 10 86 40 ff 06 29 00 00 00 00 00 ff 00 00 23 d6",
-          "count": 5,
+          "count": 9,
           "annotations": [
             "abs module bleed",
             "abs-sls switsh",
-            "read settings",
-            "tändning av fungerade ej"
+            "front left in",
+            "read settings"
           ]
         },
         {
@@ -68,7 +199,7 @@
           "service": "ReadEcuId",
           "lid": "8b",
           "example_resp": "5a 8b 4b 52 54 45 34 39 42 30 00 30 30 30 30 30 30 30 30 00 48 44 54 45 31 36 41 30 00 45 42 54 45 38 37 41 30 00 43 44 54 45 39 31 41 30 00 4b 57 54 50 31 31 41 30",
-          "count": 2,
+          "count": 4,
           "annotations": [
             "read settings"
           ]
@@ -77,8 +208,8 @@
           "req": "1a 8d",
           "service": "ReadEcuId",
           "lid": "8d",
-          "example_resp": "5a 8d 53 41 4c 4c 54 47 4d 39 34 59 41 32 35 37 32 35 32",
-          "count": 2,
+          "example_resp": "5a 8d 53 41 4c 4c 58 58 58 58 58 58 58 58 58 58 58 58 58",
+          "count": 4,
           "annotations": [
             "read settings"
           ]
@@ -87,10 +218,10 @@
           "req": "21 11",
           "service": "ReadLocalId",
           "lid": "11",
-          "example_resp": "61 11 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
-          "count": 1,
+          "example_resp": "61 11 00 00 00 10 00 00 00 00 00 00 10 00 00 00 00 00",
+          "count": 2,
           "annotations": [
-            "tändning av fungerade ej"
+            "ignition off did not work"
           ]
         },
         {
@@ -137,7 +268,7 @@
           "service": "ReadLocalId",
           "lid": "45",
           "example_resp": "61 45 7f",
-          "count": 2,
+          "count": 4,
           "annotations": [
             "read settings"
           ]
@@ -147,7 +278,7 @@
           "service": "ReadLocalId",
           "lid": "46",
           "example_resp": "61 46 78 76",
-          "count": 2,
+          "count": 4,
           "annotations": [
             "read settings"
           ]
@@ -157,9 +288,9 @@
           "service": "ReadLocalId",
           "lid": "47",
           "example_resp": "61 47 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
-          "count": 1,
+          "count": 2,
           "annotations": [
-            "tändning av fungerade ej"
+            "ignition off did not work"
           ]
         },
         {
@@ -180,7 +311,7 @@
           "service": "ReadLocalId",
           "lid": "49",
           "example_resp": "61 49 00 00 01",
-          "count": 278,
+          "count": 280,
           "annotations": [
             "abs inputds",
             "abs inputs",
@@ -206,7 +337,7 @@
           "service": "ReadLocalId",
           "lid": "53",
           "example_resp": "61 53 d2 d2 0f 0f",
-          "count": 256,
+          "count": 286,
           "annotations": [
             "compressor",
             "exhause valve",
@@ -218,8 +349,8 @@
           "req": "21 54",
           "service": "ReadLocalId",
           "lid": "54",
-          "example_resp": "61 54 91 9c 0f 0f",
-          "count": 260,
+          "example_resp": "61 54 95 a3 0f 0f",
+          "count": 292,
           "annotations": [
             "compressor",
             "exhause valve",
@@ -232,7 +363,7 @@
           "service": "ReadLocalId",
           "lid": "55",
           "example_resp": "61 55 00 00 00 02",
-          "count": 256,
+          "count": 286,
           "annotations": [
             "compressor",
             "exhause valve",
@@ -284,9 +415,40 @@
           "service": "ReadLocalId",
           "lid": "59",
           "example_resp": "61 59 00 0f 0f 0f",
-          "count": 2,
+          "count": 4,
           "annotations": [
             "read settings"
+          ]
+        },
+        {
+          "req": "27 01",
+          "service": "SecurityAccess",
+          "lid": "01",
+          "example_resp": null,
+          "count": 2,
+          "annotations": [
+            "front fog light",
+            "front fog lights"
+          ]
+        },
+        {
+          "req": "27 02 4a 8a",
+          "service": "SecurityAccess",
+          "lid": "02",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "front fog lights"
+          ]
+        },
+        {
+          "req": "27 02 c0 10",
+          "service": "SecurityAccess",
+          "lid": "02",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "front fog light"
           ]
         },
         {
@@ -478,464 +640,62 @@
           "annotations": [
             "lower right"
           ]
-        }
-      ]
-    },
-    "td5": {
-      "protocol": "kwp2000-lengthprefix",
-      "lids": [
-        "01",
-        "02",
-        "09",
-        "0d",
-        "0e",
-        "10",
-        "1a",
-        "1b",
-        "1c",
-        "1e",
-        "20",
-        "21",
-        "23",
-        "24",
-        "32",
-        "36",
-        "37",
-        "38",
-        "3b",
-        "3d",
-        "40",
-        "57",
-        "87",
-        "a0",
-        "a1",
-        "a2",
-        "a3",
-        "a4",
-        "b3",
-        "b7",
-        "ba",
-        "bd",
-        "be",
-        "c0",
-        "c2"
-      ],
-      "transactions": [
+        },
         {
-          "req": "c1 57 8f",
-          "service": null,
-          "lid": "57",
+          "req": "3b 22 00 00 00 00",
+          "service": "WriteLocalId",
+          "lid": "22",
           "example_resp": null,
-          "count": 1,
+          "count": 14,
           "annotations": [
-            "slabs end"
+            "fdaylight running lights",
+            "front fog lights",
+            "front left wiindow up",
+            "front left window down"
           ]
         },
         {
-          "req": "30 a1 ff",
-          "service": "IOControl",
-          "lid": "a1",
-          "example_resp": "70 a1",
-          "count": 1,
-          "annotations": [
-            "fuel pump"
-          ]
-        },
-        {
-          "req": "30 a2 ff",
-          "service": "IOControl",
-          "lid": "a2",
-          "example_resp": "70 a2",
-          "count": 1,
-          "annotations": [
-            "mil lamp"
-          ]
-        },
-        {
-          "req": "30 a3 ff",
-          "service": "IOControl",
-          "lid": "a3",
-          "example_resp": "70 a3",
-          "count": 3,
-          "annotations": [
-            "ac clutch",
-            "test outputs"
-          ]
-        },
-        {
-          "req": "30 a4 ff",
-          "service": "IOControl",
-          "lid": "a4",
-          "example_resp": "70 a4",
-          "count": 1,
-          "annotations": [
-            "ac fan"
-          ]
-        },
-        {
-          "req": "30 b3 ff",
-          "service": "IOControl",
-          "lid": "b3",
-          "example_resp": "70 b3",
-          "count": 1,
-          "annotations": [
-            "glow plugs"
-          ]
-        },
-        {
-          "req": "30 b7 ff",
-          "service": "IOControl",
-          "lid": "b7",
-          "example_resp": "70 b7",
-          "count": 1,
-          "annotations": [
-            "pulse rev counter"
-          ]
-        },
-        {
-          "req": "30 ba ff",
-          "service": "IOControl",
-          "lid": "ba",
-          "example_resp": "70 ba",
-          "count": 1,
-          "annotations": [
-            "temp guager"
-          ]
-        },
-        {
-          "req": "30 bd ff 00 fa 13 88",
-          "service": "IOControl",
-          "lid": "bd",
-          "example_resp": "70 bd",
-          "count": 1,
-          "annotations": [
-            "egr throttle"
-          ]
-        },
-        {
-          "req": "30 be ff 00 0a 13 88",
-          "service": "IOControl",
-          "lid": "be",
-          "example_resp": "70 be",
-          "count": 1,
-          "annotations": [
-            "(markör)"
-          ]
-        },
-        {
-          "req": "30 c0 f0",
-          "service": "IOControl",
-          "lid": "c0",
-          "example_resp": "70 c0",
-          "count": 5,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "1a 87",
-          "service": "ReadEcuId",
-          "lid": "87",
-          "example_resp": null,
-          "count": 1,
-          "annotations": [
-            "read settings"
-          ]
-        },
-        {
-          "req": "21 09",
-          "service": "ReadLocalId",
-          "lid": "09",
-          "example_resp": "61 09 02 fa",
-          "count": 5,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "21 0d",
-          "service": "ReadLocalId",
-          "lid": "0d",
-          "example_resp": "61 0d 00",
-          "count": 5,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "21 0e",
-          "service": "ReadLocalId",
-          "lid": "0e",
-          "example_resp": "61 0e 73 73 75 75 74 74 64 64 70 70 30 30 30 30 38 38",
-          "count": 1,
-          "annotations": [
-            "read settings"
-          ]
-        },
-        {
-          "req": "21 10",
-          "service": "ReadLocalId",
-          "lid": "10",
-          "example_resp": "61 10 35 ab 35 da",
-          "count": 5,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "21 1a",
-          "service": "ReadLocalId",
-          "lid": "1a",
-          "example_resp": "61 1a 0d 24 04 81 0b dd 09 5f 10 88 00 04 0c 51 07 59",
-          "count": 5,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "21 1b",
-          "service": "ReadLocalId",
-          "lid": "1b",
-          "example_resp": "61 1b 02 86 11 21 00 00 13 92",
-          "count": 5,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "21 1c",
-          "service": "ReadLocalId",
-          "lid": "1c",
-          "example_resp": "61 1c 27 5e 27 74 00 00 00 9c",
-          "count": 5,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "21 1e",
-          "service": "ReadLocalId",
-          "lid": "1e",
-          "example_resp": "61 1e 00 ca",
-          "count": 10,
-          "annotations": [
-            "read switch"
-          ]
-        },
-        {
-          "req": "21 20",
-          "service": "ReadLocalId",
-          "lid": "20",
-          "example_resp": "61 20 1b bb 0c 8f",
-          "count": 2,
-          "annotations": [
-            "read fuelling",
-            "read settings"
-          ]
-        },
-        {
-          "req": "21 21",
-          "service": "ReadLocalId",
-          "lid": "21",
-          "example_resp": "61 21 00 03",
-          "count": 5,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "21 23",
-          "service": "ReadLocalId",
+          "req": "3b 23 00 00 00 00",
+          "service": "WriteLocalId",
           "lid": "23",
-          "example_resp": "61 23 27 30 27 46",
-          "count": 5,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "21 24",
-          "service": "ReadLocalId",
-          "lid": "24",
-          "example_resp": "61 24 02",
-          "count": 1,
-          "annotations": [
-            "read settings"
-          ]
-        },
-        {
-          "req": "21 32",
-          "service": "ReadLocalId",
-          "lid": "32",
-          "example_resp": "61 32 73 75 74 64 70 30 30 38 73 75 68 64 65 30 32 34 34 31 34 35 20 20 20 20",
-          "count": 1,
-          "annotations": [
-            "read settings"
-          ]
-        },
-        {
-          "req": "21 36",
-          "service": "ReadLocalId",
-          "lid": "36",
-          "example_resp": "61 36 00 0d",
-          "count": 10,
-          "annotations": [
-            "read switch"
-          ]
-        },
-        {
-          "req": "21 37",
-          "service": "ReadLocalId",
-          "lid": "37",
-          "example_resp": "61 37 00 00",
-          "count": 5,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "21 38",
-          "service": "ReadLocalId",
-          "lid": "38",
-          "example_resp": "61 38 00 00",
-          "count": 10,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "21 3b",
-          "service": "ReadLocalId",
-          "lid": "3b",
-          "example_resp": "61 3b 40 00 00 01 40 00 00 00 00 00 00 00 00 00 00 44 00 40 00 00 00 20 00 00 00 20 00 00 00 00 00 00 00 00 00",
-          "count": 1,
-          "annotations": [
-            "slabs end"
-          ]
-        },
-        {
-          "req": "21 3d",
-          "service": "ReadLocalId",
-          "lid": "3d",
-          "example_resp": "61 3d 02 04 fc 02 0c 00 12 0e 20 14 0a 00 00 02 00 00 00 00",
-          "count": 1,
-          "annotations": [
-            "read settings"
-          ]
-        },
-        {
-          "req": "21 40",
-          "service": "ReadLocalId",
-          "lid": "40",
-          "example_resp": "61 40 00 01 ff ff ff fe 00 02 00 00",
-          "count": 5,
-          "annotations": [
-            "read fuelling"
-          ]
-        },
-        {
-          "req": "33 c0",
-          "service": "RoutineResults",
-          "lid": "c0",
-          "example_resp": "73 c0 03",
-          "count": 1,
-          "annotations": [
-            "security status"
-          ]
-        },
-        {
-          "req": "27 01",
-          "service": "SecurityAccess",
-          "lid": "01",
-          "example_resp": "67 01 d3 e6",
-          "count": 1,
-          "annotations": [
-            "slabs end"
-          ]
-        },
-        {
-          "req": "27 02 ad 87",
-          "service": "SecurityAccess",
-          "lid": "02",
-          "example_resp": "67 02",
-          "count": 1,
-          "annotations": [
-            "slabs end"
-          ]
-        },
-        {
-          "req": "10 a0",
-          "service": "StartDiagSession",
-          "lid": "a0",
           "example_resp": null,
-          "count": 1,
+          "count": 13,
           "annotations": [
-            "slabs end"
+            "fdaylight running lights",
+            "front fog lights",
+            "front left wiindow up",
+            "front left window down"
           ]
         },
         {
-          "req": "31 c0",
-          "service": "StartRoutine",
-          "lid": "c0",
-          "example_resp": "71 c0",
-          "count": 1,
+          "req": "3b c1 00 00 00 00",
+          "service": "WriteLocalId",
+          "lid": "c1",
+          "example_resp": null,
+          "count": 13,
           "annotations": [
-            "security status"
+            "fdaylight running lights",
+            "front fog lights",
+            "front left wiindow up",
+            "front left window down"
           ]
         },
         {
-          "req": "31 c2 01",
-          "service": "StartRoutine",
+          "req": "3b c2 00 00 00 00",
+          "service": "WriteLocalId",
           "lid": "c2",
-          "example_resp": "71 c2",
-          "count": 1,
+          "example_resp": null,
+          "count": 13,
           "annotations": [
-            "injector 1"
-          ]
-        },
-        {
-          "req": "31 c2 02",
-          "service": "StartRoutine",
-          "lid": "c2",
-          "example_resp": "71 c2",
-          "count": 1,
-          "annotations": [
-            "injector 1"
-          ]
-        },
-        {
-          "req": "31 c2 03",
-          "service": "StartRoutine",
-          "lid": "c2",
-          "example_resp": "71 c2",
-          "count": 1,
-          "annotations": [
-            "injector 1"
-          ]
-        },
-        {
-          "req": "31 c2 04",
-          "service": "StartRoutine",
-          "lid": "c2",
-          "example_resp": "71 c2",
-          "count": 1,
-          "annotations": [
-            "injector 1"
-          ]
-        },
-        {
-          "req": "31 c2 05",
-          "service": "StartRoutine",
-          "lid": "c2",
-          "example_resp": "71 c2",
-          "count": 1,
-          "annotations": [
-            "injector 1"
+            "fdaylight running lights",
+            "front fog lights",
+            "front left wiindow up",
+            "front left window down"
           ]
         }
       ]
     },
-    "okänd": {
+    "unknown": {
       "protocol": "kwp2000-lengthprefix",
       "lids": [
         "01",
@@ -1356,16 +1116,474 @@
         }
       ]
     },
+    "td5": {
+      "protocol": "kwp2000-lengthprefix",
+      "lids": [
+        "01",
+        "02",
+        "09",
+        "0d",
+        "0e",
+        "10",
+        "1a",
+        "1b",
+        "1c",
+        "1e",
+        "20",
+        "21",
+        "23",
+        "24",
+        "32",
+        "36",
+        "37",
+        "38",
+        "3b",
+        "3d",
+        "40",
+        "57",
+        "87",
+        "a0",
+        "a1",
+        "a2",
+        "a3",
+        "a4",
+        "b3",
+        "b7",
+        "ba",
+        "bd",
+        "be",
+        "c0",
+        "c2"
+      ],
+      "transactions": [
+        {
+          "req": "c1 57 8f",
+          "service": null,
+          "lid": "57",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "slabs end"
+          ]
+        },
+        {
+          "req": "30 a1 ff",
+          "service": "IOControl",
+          "lid": "a1",
+          "example_resp": "70 a1",
+          "count": 1,
+          "annotations": [
+            "fuel pump"
+          ]
+        },
+        {
+          "req": "30 a2 ff",
+          "service": "IOControl",
+          "lid": "a2",
+          "example_resp": "70 a2",
+          "count": 1,
+          "annotations": [
+            "mil lamp"
+          ]
+        },
+        {
+          "req": "30 a3 ff",
+          "service": "IOControl",
+          "lid": "a3",
+          "example_resp": "70 a3",
+          "count": 3,
+          "annotations": [
+            "ac clutch",
+            "test outputs"
+          ]
+        },
+        {
+          "req": "30 a4 ff",
+          "service": "IOControl",
+          "lid": "a4",
+          "example_resp": "70 a4",
+          "count": 1,
+          "annotations": [
+            "ac fan"
+          ]
+        },
+        {
+          "req": "30 b3 ff",
+          "service": "IOControl",
+          "lid": "b3",
+          "example_resp": "70 b3",
+          "count": 1,
+          "annotations": [
+            "glow plugs"
+          ]
+        },
+        {
+          "req": "30 b7 ff",
+          "service": "IOControl",
+          "lid": "b7",
+          "example_resp": "70 b7",
+          "count": 1,
+          "annotations": [
+            "pulse rev counter"
+          ]
+        },
+        {
+          "req": "30 ba ff",
+          "service": "IOControl",
+          "lid": "ba",
+          "example_resp": "70 ba",
+          "count": 1,
+          "annotations": [
+            "temp guager"
+          ]
+        },
+        {
+          "req": "30 bd ff 00 fa 13 88",
+          "service": "IOControl",
+          "lid": "bd",
+          "example_resp": "70 bd",
+          "count": 1,
+          "annotations": [
+            "egr throttle"
+          ]
+        },
+        {
+          "req": "30 be ff 00 0a 13 88",
+          "service": "IOControl",
+          "lid": "be",
+          "example_resp": "70 be",
+          "count": 1,
+          "annotations": [
+            "(marker)"
+          ]
+        },
+        {
+          "req": "30 c0 f0",
+          "service": "IOControl",
+          "lid": "c0",
+          "example_resp": "70 c0",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "1a 87",
+          "service": "ReadEcuId",
+          "lid": "87",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 09",
+          "service": "ReadLocalId",
+          "lid": "09",
+          "example_resp": "61 09 02 fa",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 0d",
+          "service": "ReadLocalId",
+          "lid": "0d",
+          "example_resp": "61 0d 00",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 0e",
+          "service": "ReadLocalId",
+          "lid": "0e",
+          "example_resp": "61 0e 73 73 75 75 74 74 64 64 70 70 30 30 30 30 38 38",
+          "count": 1,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 10",
+          "service": "ReadLocalId",
+          "lid": "10",
+          "example_resp": "61 10 35 ab 35 da",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 1a",
+          "service": "ReadLocalId",
+          "lid": "1a",
+          "example_resp": "61 1a 0d 24 04 81 0b dd 09 5f 10 88 00 04 0c 51 07 59",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 1b",
+          "service": "ReadLocalId",
+          "lid": "1b",
+          "example_resp": "61 1b 02 86 11 21 00 00 13 92",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 1c",
+          "service": "ReadLocalId",
+          "lid": "1c",
+          "example_resp": "61 1c 27 5e 27 74 00 00 00 9c",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 1e",
+          "service": "ReadLocalId",
+          "lid": "1e",
+          "example_resp": "61 1e 00 ca",
+          "count": 10,
+          "annotations": [
+            "read switch"
+          ]
+        },
+        {
+          "req": "21 20",
+          "service": "ReadLocalId",
+          "lid": "20",
+          "example_resp": "61 20 1b bb 0c 8f",
+          "count": 2,
+          "annotations": [
+            "read fuelling",
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 21",
+          "service": "ReadLocalId",
+          "lid": "21",
+          "example_resp": "61 21 00 03",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 23",
+          "service": "ReadLocalId",
+          "lid": "23",
+          "example_resp": "61 23 27 30 27 46",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 24",
+          "service": "ReadLocalId",
+          "lid": "24",
+          "example_resp": "61 24 02",
+          "count": 1,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 32",
+          "service": "ReadLocalId",
+          "lid": "32",
+          "example_resp": "61 32 73 75 74 64 70 30 30 38 73 75 68 64 65 30 32 34 34 31 34 35 20 20 20 20",
+          "count": 1,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 36",
+          "service": "ReadLocalId",
+          "lid": "36",
+          "example_resp": "61 36 00 0d",
+          "count": 10,
+          "annotations": [
+            "read switch"
+          ]
+        },
+        {
+          "req": "21 37",
+          "service": "ReadLocalId",
+          "lid": "37",
+          "example_resp": "61 37 00 00",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 38",
+          "service": "ReadLocalId",
+          "lid": "38",
+          "example_resp": "61 38 00 00",
+          "count": 10,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "21 3b",
+          "service": "ReadLocalId",
+          "lid": "3b",
+          "example_resp": "61 3b 40 00 00 01 40 00 00 00 00 00 00 00 00 00 00 44 00 40 00 00 00 20 00 00 00 20 00 00 00 00 00 00 00 00 00",
+          "count": 1,
+          "annotations": [
+            "slabs end"
+          ]
+        },
+        {
+          "req": "21 3d",
+          "service": "ReadLocalId",
+          "lid": "3d",
+          "example_resp": "61 3d 02 04 fc 02 0c 00 12 0e 20 14 0a 00 00 02 00 00 00 00",
+          "count": 1,
+          "annotations": [
+            "read settings"
+          ]
+        },
+        {
+          "req": "21 40",
+          "service": "ReadLocalId",
+          "lid": "40",
+          "example_resp": "61 40 00 01 ff ff ff fe 00 02 00 00",
+          "count": 5,
+          "annotations": [
+            "read fuelling"
+          ]
+        },
+        {
+          "req": "33 c0",
+          "service": "RoutineResults",
+          "lid": "c0",
+          "example_resp": "73 c0 03",
+          "count": 1,
+          "annotations": [
+            "security status"
+          ]
+        },
+        {
+          "req": "27 01",
+          "service": "SecurityAccess",
+          "lid": "01",
+          "example_resp": "67 01 d3 e6",
+          "count": 1,
+          "annotations": [
+            "slabs end"
+          ]
+        },
+        {
+          "req": "27 02 ad 87",
+          "service": "SecurityAccess",
+          "lid": "02",
+          "example_resp": "67 02",
+          "count": 1,
+          "annotations": [
+            "slabs end"
+          ]
+        },
+        {
+          "req": "10 a0",
+          "service": "StartDiagSession",
+          "lid": "a0",
+          "example_resp": null,
+          "count": 1,
+          "annotations": [
+            "slabs end"
+          ]
+        },
+        {
+          "req": "31 c0",
+          "service": "StartRoutine",
+          "lid": "c0",
+          "example_resp": "71 c0",
+          "count": 1,
+          "annotations": [
+            "security status"
+          ]
+        },
+        {
+          "req": "31 c2 01",
+          "service": "StartRoutine",
+          "lid": "c2",
+          "example_resp": "71 c2",
+          "count": 1,
+          "annotations": [
+            "injector 1"
+          ]
+        },
+        {
+          "req": "31 c2 02",
+          "service": "StartRoutine",
+          "lid": "c2",
+          "example_resp": "71 c2",
+          "count": 1,
+          "annotations": [
+            "injector 1"
+          ]
+        },
+        {
+          "req": "31 c2 03",
+          "service": "StartRoutine",
+          "lid": "c2",
+          "example_resp": "71 c2",
+          "count": 1,
+          "annotations": [
+            "injector 1"
+          ]
+        },
+        {
+          "req": "31 c2 04",
+          "service": "StartRoutine",
+          "lid": "c2",
+          "example_resp": "71 c2",
+          "count": 1,
+          "annotations": [
+            "injector 1"
+          ]
+        },
+        {
+          "req": "31 c2 05",
+          "service": "StartRoutine",
+          "lid": "c2",
+          "example_resp": "71 c2",
+          "count": 1,
+          "annotations": [
+            "injector 1"
+          ]
+        }
+      ]
+    },
     "td5_settings": {
-      "note": "TD5 settings ID-strängar är ASCII-avkodbara (belagt)",
-      "21 0e": "Config Tune ID, varannan-byte-dubblerad → 'sutdp008' (RDL 016)",
-      "21 32": "Config+Fuel Tune ID, rak ASCII → 'sutdp008' + 'suhde0244145' (RDL 016)",
-      "21 3d": "feature/config-block, 20 byte packat (docx: 21 flaggor) — kräver differential"
+      "note": "TD5 settings ID strings are ASCII-decodable (proven)",
+      "21 0e": "Config Tune ID, every-other-byte-doubled → 'sutdp008' (RDL 016)",
+      "21 32": "Config+Fuel Tune ID, straight ASCII → 'sutdp008' + 'suhde0244145' (RDL 016)",
+      "21 3d": "feature/config-block, 20 bytes packed (docx: 21 flags) — requires differential"
     },
     "autobox": {
       "protocol": "proprietary-72",
-      "framing": "72 <len> <data> <XOR-cs> (request; XOR verifierat). Svar: 72 <len> 60 <data> <cs>",
-      "note": "reference tool 'unable to perform the function' men ECU:n SVARAR med datablock",
+      "framing": "72 <len> <data> <XOR-cs> (request; XOR verified). Response: 72 <len> 60 <data> <cs>",
+      "note": "reference tool 'unable to perform the function' but the ECU RESPONDS with a data block",
+      "confirmed": {
+        "read_faults": "72 05 04 00 73 -> 72 09 60 01 00 00 00 00 1b (reproduced in 2 sessions)",
+        "clear_faults": "72 04 05 73 -> 72 04 60 99 ff"
+      },
       "functions": {
         "read_faults": "72 05 04 00 73",
         "clear_faults": "72 04 05 73",
@@ -1375,10 +1593,14 @@
         "reset_adaptive": "72 06 83 ff 07 08 ff"
       },
       "response_marker": "72 <len> 60 <data> <cs>",
-      "open": "ramformat/checksum + innehållstolkning (kräver lyckad session)"
+      "caveats": [
+        "72 04 60 99 ff = GENERIC ack (= the response to keepalive 72 04 1e 68), NOT fault-specific",
+        "read-fault-payload 01 00 00 00 00: do NOT interpret as count/empty-list/DTC yet"
+      ],
+      "open": "content interpretation, meaning of 60, why the reference tool rejects the response (requires a successful session)"
     },
     "ace": {
-      "protocol": "bulk; par-vis framing (67 67 / e0 e0 / f0 f0 — EJ uniform → protokoll, ej artefakt)",
+      "protocol": "bulk; pair-wise framing (67 67 / e0 e0 / f0 f0 — NOT uniform → protocol, not artifact)",
       "fault_block": "67 67 11 e0 e0 f0 f0 00 00 00 1a 00 00 08 09 80 92 00 00",
       "fault_set_seen": [
         "004-02",
@@ -1395,18 +1617,21 @@
         "04 04 00",
         "07 07 00"
       ],
-      "open": "inputs = ett bulk-block → differential-captures för fält-mappning"
+      "open": "inputs = one bulk block → differential captures for field mapping"
     },
     "airbag": {
-      "protocol": "kwp-variant",
+      "protocol": "kwp-addressed",
+      "address": "0x5B (addressed framing per message, NOT unaddressed session frames)",
+      "framing_example": "82 5b f7 21 02 -> f7 5b 61 02 90 04 90 16 00 00 (faultread-20260809.log line 885)",
       "fault_read": "21 02",
       "clear": "14 -> 54",
-      "record": "[status][number]; number = reference tools display-nr (90 04 = 004, 90 16 = 022)",
+      "record": "[status][number]; number = the reference tool's display number (90 04 = 004, 90 16 = 022)",
       "status_seen": {
-        "0x90": "open circuit intermittent (kandidat)"
+        "0x90": "open circuit intermittent (candidate)"
       },
+      "security": "SecurityAccess on 0x5B: seed 44 8E -> key 00 6E -> positive 67 02 (probably before clear). CORR: this pair is AIRBAG, not 'insecure/BCU' (the only complete seed->key with a positive acknowledgement)",
       "decoded_in_code": "src/d2diag/airbag/faults.py",
-      "open": "statusbytens bit-betydelser; 21 01 vs 21 02"
+      "open": "status byte's bit meanings; 21 01 vs 21 02; comms class requires addressed framing"
     },
     "bcu": {
       "protocol": "valeo",
@@ -1426,7 +1651,25 @@
         "d6",
         "d7"
       ],
-      "connect": "tänd-cykling: off→key→on→key"
+      "connect": "ignition cycling: off→key→on→key",
+      "security": {
+        "note": "SecurityAccess required before output-writes (HIGH). 27 01->67 01 <seed>; 27 02 <key>->pos/neg",
+        "captured_attempt": "seed EB CD -> key C0 10 -> DENIED 7f 27 83; after restart key 4A 8A -> writes started",
+        "caveat": "no clean 67 02 for a successful attempt -> 'succeeded' is the inferred conclusion; do NOT mark 4A 8A as universally valid",
+        "extra_pairs": "4B 5C (-2.log, seed corrupt=unusable). NOTE: seed 44 8E->key 00 6E +67 02 on addr 0x5B is AIRBAG (see KNOWN['airbag']), NOT BCU"
+      },
+      "outputs": {
+        "service": "3B WriteLocalId; four 4-byte banks (PROVEN structure, cs validated)",
+        "banks": [
+          "06 3b 22 00000000 63",
+          "06 3b 23 00000000 64",
+          "06 3b c1 00000000 02",
+          "06 3b c2 00000000 03"
+        ],
+        "hypothesis": "22/23/c1/c2 = 32-bit output/control bitfields (STRONG hypothesis)",
+        "warning": "ALL captured payloads = 00000000 (probably reset/disable-all). NEVER link output->bank/bit via annotation. The ON frame is missing."
+      },
+      "open": "elicit non-zero bank state; map output bits; seed->key algorithm; which session bank-writes require"
     }
   }
 }
