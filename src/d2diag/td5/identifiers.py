@@ -25,12 +25,22 @@ LIMITS = {s.name: s.limits for s in SIGNALS if s.limits}
 
 
 def signal_status(name: str, value: "float | None") -> "str | None":
-    """Returnera 'ok' / 'low' / 'high' mot driftsintervallet, eller None om
-    signalen saknar intervall (flaggas ej)."""
+    """Returnera 'ok' / 'low' / 'high' / 'suspect' mot driftsintervallet, eller
+    None om signalen saknar intervall (flaggas ej).
+
+    ``suspect`` = fysiskt orimligt värde (utanför intervallet med mer än HELA dess
+    spann) → nästan säkert en brusig felavläsning, inte riktig data. Belagt på
+    motorväg 2026-08-21: KKL-kabeln kastar enstaka spikar (MAP 4,5 bar, kylvatten
+    429°, gas 41 V) som passerar framing men är skräp. Flaggas — döljs INTE, för
+    ett äkta givarbortfall (IAT som droppar) är också "suspect" och ÄR signalen.
+    """
     lim = LIMITS.get(name)
     if lim is None or value is None:
         return None
     lo, hi = lim
+    span = (hi - lo) or 1.0
+    if value < lo - span or value > hi + span:
+        return "suspect"
     if value < lo:
         return "low"
     if value > hi:

@@ -57,6 +57,8 @@ h2{font-size:20px;line-height:28px;font-weight:700;margin:0}
 .flag.ok{background:var(--bg-green);color:var(--ic-green)}
 .flag.exp{background:var(--bg-yellow);color:var(--ic-yellow)}
 .flag.lo,.flag.hi{background:var(--bg-red);color:var(--ic-red)}
+.flag.sus{background:var(--bg-yellow);color:var(--ic-yellow)}
+.ro.sus .ro-val{color:var(--fg-dis);text-decoration:line-through}
 .ro{border:1px solid var(--border);border-radius:10px;background:var(--bg-card);overflow:hidden}
 .ro.dim{opacity:.5}
 .ro-top{display:flex;align-items:center;gap:10px;padding:8px 14px}
@@ -259,6 +261,7 @@ fetch("/snapshot").then(r=>r.json()).then(onSnap).catch(()=>{});
 // ---- confidence / status helpers ----
 function flagFor(n, s, f){
   const st = s && s.s;
+  if(st==="suspect") return {cls:"sus",txt:"SUSPECT"};
   if(st==="low") return {cls:"lo",txt:"LOW"};
   if(st==="high") return {cls:"hi",txt:"HIGH"};
   const c = (s&&s.c) || (f&&f.c);
@@ -319,8 +322,8 @@ function readoutCard(n, s, f){
   const m = META[n]||{};
   const range = lim ? `Normal ${lim[0]}–${lim[1]}${(s&&s.u)||(f&&f.u)||""}` : "";
   const meta = [m.d, range].filter(Boolean).join(" · ");
-  const hasInfo = !!meta, open = OPEN.has(n);
-  return `<div class="ro${dim?' dim':''}${open?' open':''}">
+  const hasInfo = !!meta, open = OPEN.has(n), sus = flag.cls==="sus";
+  return `<div class="ro${dim?' dim':''}${open?' open':''}${sus?' sus':''}">
     <div class="ro-top">
       <div class="ro-lbl">${LABELS[n]||n}</div>
       <div class="ro-val">${val}<span class="ro-u"> ${unit}</span></div>
