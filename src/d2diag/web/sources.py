@@ -49,8 +49,11 @@ def _transport(port: str, raw_log_path: "str | None"):
 # körning (så hittades MAF i 1D 2026-08-21). "Kasta inte bort de bytes vi inte döpt."
 #
 # TD5 (ej sessionskänslig): läs extra-LID:erna VARJE cykel så de samplas jämte rpm
-# för korrelation. Bekräftat svarande i fuelling-blocket via lid_sweep 2026-08-21.
-_TD5_COVERAGE_EXTRA = (0x1E, 0x1F, 0x20)
+# för korrelation. 1E/1F/20 = bekräftat svarande i fuelling-blocket (lid_sweep
+# 2026-08-21). 37/38 = KANDIDATER från SimonRafferty/Td5-Arduino (EGR- resp
+# wastegate-position, %) — OVERIFIERADE, fångas i råloggen för att bekräftas mot
+# bilen (EGR-positionen är relevant för RDL016:s EGR-fel 001-07).
+_TD5_COVERAGE_EXTRA = (0x1E, 0x1F, 0x20, 0x37, 0x38)
 # SLABS (MÅSTE pollas lätt — block-läsning dödar sessionen): dessa LID:er roteras
 # EN per cykel (0x54-höjderna läses ändå varje cykel). Källa: slabs/menu.py +
 # references/reference_tool_menu_map.md (reference tool-menyns input-block).
