@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>D2 Diag</title>
 <style>
-/* Astryx neutral theme (facebook/astryx) — inbäddat som rena CSS-variabler.
-   Figtree via CDN med systemfont-fallback (garage utan nät → fallbacken gäller). */
+/* Astryx neutral theme (facebook/astryx) — embedded as plain CSS variables.
+   Figtree via CDN with a system-font fallback (garage without network → the fallback applies). */
 @import url("https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap");
 :root{
   --font-base:Figtree,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
@@ -37,9 +37,9 @@ html,body{margin:0;padding:0;background:var(--bg-body)}
 ::-webkit-scrollbar{width:0;height:0}
 @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.3}}
 body{font-family:var(--font-base);color:var(--fg);font-size:14px;line-height:20px;font-variant-numeric:tabular-nums}
-/* height:100dvh = faktiska synliga ytan på mobil (100vh räknar in ytan bakom
-   webbläsarens verktygsfält → navet hamnade under vikningen och "scrollade bort").
-   100vh först som fallback för äldre browsers, dvh vinner där det stöds. */
+/* height:100dvh = the actual visible area on mobile (100vh counts the area behind
+   the browser's toolbar → the nav ended up below the fold and "scrolled away").
+   100vh first as a fallback for older browsers, dvh wins where it is supported. */
 .app{display:flex;flex-direction:column;height:100vh;height:100dvh;max-width:900px;margin:0 auto;background:var(--bg-body);overflow:hidden}
 header{display:flex;flex-shrink:0;align-items:center;gap:12px;padding:8px 16px;min-height:56px;background:var(--bg-surface);border-bottom:1px solid var(--border)}
 .htitle{font-size:12px;font-weight:700}
@@ -144,14 +144,14 @@ function toast(msg, bad){
   clearTimeout(_toastT); _toastT=setTimeout(()=>el.className="",3200);
 }
 window.toast=toast;
-// ---- admin-läge: EN app, EN routing. /admin serverar samma sida och avslöjar
-// mappnings-flikarna. Basic Auth (inskriven vid /admin) följer med till de
-// gated endpoints:en automatiskt. ----
+// ---- admin mode: ONE app, ONE routing. /admin serves the same page and reveals
+// the mapping tabs. Basic Auth (entered at /admin) is carried along to the
+// gated endpoints automatically. ----
 const ADMIN = /^\/admin\/?$/.test(location.pathname);
 
-// ---- skärm-register: ETT mönster för alla flikar. En post = {label, render
-// (→HTML), mount (valfri event-koppling efter injektion), admin (bara på /admin)}.
-// Lägg till en flik = en rad här. render()/renderNav() rörs aldrig igen. ----
+// ---- screen registry: ONE pattern for all tabs. One entry = {label, render
+// (→HTML), mount (optional event wiring after injection), admin (only on /admin)}.
+// Add a tab = one row here. render()/renderNav() are never touched again. ----
 const SCREENS = {
   connect: {label:"Connect",   render:renderConnect,   mount:mountConnect},
   faults:  {label:"Faults",     render:renderFaults,    mount:mountFaults},
@@ -165,7 +165,7 @@ const TAB_ORDER = ["connect","faults","inputs","outputs","utils","map","capture"
 function tabList(){ return TAB_ORDER.filter(id => SCREENS[id] && (ADMIN || !SCREENS[id].admin)); }
 let TAB = ADMIN ? "map" : "inputs";
 
-// ---- preferenser (localStorage) + community-state ----
+// ---- preferences (localStorage) + community state ----
 const PREFS = Object.assign({trust:"trusted", consentDone:false, share:null, theme:"dark"},
   JSON.parse(localStorage.getItem("d2diag.v2")||"{}"));
 function savePrefs(){ localStorage.setItem("d2diag.v2", JSON.stringify(PREFS)); }
@@ -174,7 +174,7 @@ let COMMUNITY = null;
 function loadCommunity(){ fetch("/community").then(r=>r.json()).then(d=>{COMMUNITY=d;}).catch(()=>{}); }
 loadCommunity();
 
-// ---- signal-metadata (grupp + beskrivning). Speglar dashboard.html:s META. ----
+// ---- signal metadata (group + description). Mirrors dashboard.html's META. ----
 const GROUPS = ["Engine","Temperatures","Fuelling","Pressures","Accelerator","Ride height","Wheels","Electrical","Inputs","Other"];
 const META = {
   rpm:{g:"Engine",d:"Engine speed."},
@@ -229,13 +229,13 @@ const MODULE_NAME = {motor:"TD5 (engine)", slabs:"SLABS (ABS + air suspension)"}
 
 // ---- state ----
 let SNAP = null, FIELDS = {}, MODULE = "motor";
-const HISTORY = {};           // namn → array av {t, v} (ring-buffert ~60 s)
-const OPEN = new Set();       // vilka readouts som har infon uppfälld (överlever omritning)
+const HISTORY = {};           // name → array of {t, v} (ring buffer ~60 s)
+const OPEN = new Set();       // which readouts have their info expanded (survives redraw)
 function toggleInfo(n){ OPEN.has(n)?OPEN.delete(n):OPEN.add(n); render(); }
 window.toggleInfo=toggleInfo;
-let SEQ = [];                 // anslutningssekvens: {phase, t} — ackumulerad connect_phase
+let SEQ = [];                 // connection sequence: {phase, t} — accumulated connect_phase
 let SEQ_DONE = false;
-const PLOT = new Set();       // valda kanaler för trendgrafen
+const PLOT = new Set();       // selected channels for the trend graph
 const HISTLEN = 60;
 let recording = false;
 
@@ -256,8 +256,8 @@ function pushHistory(sig){
 }
 function onSnap(d){
   const mod = d.module || MODULE;
-  if(mod !== MODULE){ MODULE = mod; for(const k in HISTORY) delete HISTORY[k]; PLOT.clear(); SEQ=[]; SEQ_DONE=false; }  // ny modul → ny historik + sekvens
-  // Anslutningssekvens: fånga varje ny connect_phase medan vi kopplar upp.
+  if(mod !== MODULE){ MODULE = mod; for(const k in HISTORY) delete HISTORY[k]; PLOT.clear(); SEQ=[]; SEQ_DONE=false; }  // new module → new history + sequence
+  // Connection sequence: capture each new connect_phase while we connect.
   const ph = d.connect_phase;
   if(ph && (!SEQ.length || SEQ[SEQ.length-1].phase!==ph)){ SEQ.push({phase:ph, t:Date.now()}); SEQ_DONE=false; }
   if(d.status==="connected" && SEQ.length && !SEQ_DONE){ SEQ.push({phase:"session established", t:Date.now(), ok:true}); SEQ_DONE=true; }
@@ -359,7 +359,7 @@ function statusGate(){
       <div style="font-size:13px;color:var(--fg2);text-wrap:pretty;margin-top:4px">${(SNAP&&SNAP.error)||"The module did not answer."}</div>
       <button class="btn accent" style="margin-top:10px" onclick="TAB='connect';renderNav();render()">Go to Connect</button></div>`;
   }
-  // connecting / okänt
+  // connecting / unknown
   const last = SEQ.length ? SEQ[SEQ.length-1].phase : "connecting…";
   return `<div class="card"><div class="row" style="gap:10px"><span class="pdot" style="background:var(--ic-yellow);animation:blink 1s infinite"></span>
     <div style="flex:1;min-width:0"><div style="font-weight:700">Connecting to ${name}…</div>
@@ -369,12 +369,12 @@ function statusGate(){
 function renderInputs(){
   const sig = (SNAP&&SNAP.signals)||{}, fmap = FIELDS[MODULE]||{};
   const names = [...new Set([...Object.keys(fmap), ...Object.keys(sig)])].filter(n=>!n.endsWith("_mm"));
-  // kanalväljare (bara numeriska, live)
+  // channel picker (numeric only, live)
   const chan = names.filter(n=>sig[n] && typeof sig[n].v==="number").sort().map(n=>{
     const on = PLOT.has(n);
     return `<button class="chan${on?' on':''}" data-chan="${n}"><span class="pdot" style="background:${on?'var(--ic-blue)':'var(--fg-dis)'}"></span>${LABELS[n]||n}</button>`;
   }).join("");
-  // grupperade readouts
+  // grouped readouts
   const byG = {}; names.forEach(n=>{ (byG[groupOf(n)] ||= []).push(n); });
   const order = GROUPS.filter(g=>byG[g]).concat(Object.keys(byG).filter(g=>!GROUPS.includes(g)));
   const groups = order.map(g=>{
@@ -403,7 +403,7 @@ function renderInputs(){
     ${trend}
   `;
 }
-// ---- Outputs-katalog per modul (riktiga /command-actions) ----
+// ---- Outputs catalog per module (real /command actions) ----
 const OUTPUTS = {
   slabs: [
     {grp:"ABS", n:"ABS pump", cmd:"31 25 08/02 fa", tag:"verified",
@@ -510,7 +510,7 @@ function renderStub(tab){
 function render(){
   EXPERIMENTAL = isExperimental();
   $("#expbanner").style.display = EXPERIMENTAL ? "flex" : "none";
-  // Första start: consent-overlay blockerar tills den besvarats
+  // First start: the consent overlay blocks until it is answered
   if(!PREFS.consentDone){ renderConsent(); return; }
   document.getElementById("consent-ov")?.remove();
   const s = SCREENS[TAB] || {render:()=>renderStub(TAB)};
@@ -526,7 +526,7 @@ function mountConnect(){
       if(recording && !confirm(`Recording is on.\nSwitching to ${MODULE_NAME[m]||m} rotates the log to a new file — the current module's data pauses while ${MODULE_NAME[m]||m} is active (the K-line carries one session at a time).\n\nSwitch anyway?`)) return;
       await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({action:"select_module",params:{module:m}})}).catch(()=>{});
-      TAB="faults"; renderNav(); render();   // landa på Faults efter uppkoppling
+      TAB="faults"; renderNav(); render();   // land on Faults after connecting
     });
     const rt=$("#retry"); if(rt) rt.onclick=()=>fetch("/snapshot").then(r=>r.json()).then(onSnap);
   }
@@ -561,7 +561,7 @@ function mountInputs(){
       const starting=!recording;
       if(starting && MODULE==="slabs" &&
          !confirm("SLABS only communicates while stationary — comms drop above ~8–20 km/h.\nThis log will NOT capture a drive. To log a drive (rpm, speed, boost, temps), switch to TD5 first.\n\nStart the SLABS log anyway?")) return;
-      recording=starting;                                  // optimistiskt: uppdatera direkt
+      recording=starting;                                  // optimistic: update immediately
       rl.className="iconbtn"+(starting?" rec":""); rl.innerHTML=`<span class="d"></span>${starting?'Stop':'Log CSV'}`;
       toast(starting?"recording…":"stopping…");
       try{
@@ -572,8 +572,8 @@ function mountInputs(){
       }catch(_){ toast("network error",true); }
     };
   }
-// ---- Map (admin): reference tool-täckning per modul ur /map ----
-let MAP=null, MAP_MOD=null;   // /map-svar + vilken modul det gäller
+// ---- Map (admin): reference tool coverage per module from /map ----
+let MAP=null, MAP_MOD=null;   // /map response + which module it applies to
 const MAP_ST = {ok:["var(--ic-green)","mapped"], maybe:["var(--ic-yellow)","unverified"]};
 function mapDot(col){ return `<span class="pdot" style="background:${col}"></span>`; }
 function renderMap(){
@@ -616,12 +616,12 @@ function mountMap(){
   }
 }
 
-// ---- Capture (admin): läs en LID rå och märk den → labeled_captures.jsonl ----
-// Samma dataset som auto-mappern läser. Read-only mot ECU:n (bara 21-läsning).
-let CAPS=[];        // fångster sparade denna session (server-listning kommer senare)
-let CAP_LAST=null;  // {lid, raw} senast lästa, väntar på etikett
+// ---- Capture (admin): read a LID raw and label it → labeled_captures.jsonl ----
+// Same dataset the auto-mapper reads. Read-only against the ECU (21-read only).
+let CAPS=[];        // captures saved this session (server listing comes later)
+let CAP_LAST=null;  // {lid, raw} last read, waiting for a label
 const spacedHex = h => (h||"").replace(/(..)/g,"$1 ").trim();
-function storeModule(m){ return m==="motor" ? "td5" : m; }   // UI-namn → store-modul
+function storeModule(m){ return m==="motor" ? "td5" : m; }   // UI name → store module
 function renderCapture(){
   const name = MODULE_NAME[MODULE]||MODULE;
   const connected = SNAP && SNAP.status==="connected";
@@ -740,11 +740,15 @@ function renderConnect(){
   const mods = MODULES.map(m=>{
     const on = m.id===active, col=TAGCOL[m.tag]||TAGCOL.partial;
     const dis = !m.connectable;
-    const tag = on ? "connected" : (dis ? m.tag : m.tag);
+    // "connected" only when this module is selected AND the session is actually up —
+    // being the selected module without a live link (no cable → status "error") must
+    // NOT read as connected.
+    const live = on && st==="connected";
+    const tag = live ? "connected" : m.tag;
     return `<button class="opt${on?' on':''}" ${dis?'disabled':`data-mod="${m.id}"`}
       style="${dis?'opacity:.55;cursor:not-allowed':''}">
       <div style="flex:1;min-width:0"><div class="on-name">${m.name}</div><div class="on-desc">${m.desc}</div></div>
-      <span class="mtag" style="background:${on?'var(--bg-green)':col[0]};color:${on?'var(--ic-green)':col[1]}">${tag}</span>
+      <span class="mtag" style="background:${live?'var(--bg-green)':col[0]};color:${live?'var(--ic-green)':col[1]}">${tag}</span>
     </button>`;
   }).join("");
   let seq = "";
