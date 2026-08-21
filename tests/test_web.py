@@ -31,7 +31,7 @@ def test_signal_status_ranges():
     assert signal_status("battery", 13.5) == "ok"
     assert signal_status("battery", 10.0) == "low"
     assert signal_status("coolant_temp", 120) == "high"
-    assert signal_status("ext_temp", 150) is None   # oansluten givare → flaggas ej
+    assert signal_status("ext_temp", 150) == "suspect"  # spöke-konstant, ej monterad givare → överstruken
     assert signal_status("maf_raw", 999) is None
     assert signal_status("okänd", 1) is None
 

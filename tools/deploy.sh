@@ -28,7 +28,8 @@ rsync -az pyproject.toml "${PI}:${DEST}/pyproject.toml" 2>/dev/null || true
 # Testa på Pi:n → stämpla version → starta om tjänsten.
 ssh "$PI" "set -e
   cd ${DEST}
-  python3 -m pytest tests/test_web.py tests/test_transport.py -q 2>&1 | tail -1
+  python3 -m pytest tests/test_web.py tests/test_transport.py -q 2>&1 | tail -3
+  [ \${PIPESTATUS[0]} -eq 0 ] || { echo 'TESTER RÖDA på Pi:n — avbryter deploy (ingen omstart)'; exit 1; }
   echo '${stamp}' > DEPLOYED_VERSION
   sudo systemctl restart d2diag.service
   sleep 3

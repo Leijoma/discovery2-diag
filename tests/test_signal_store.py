@@ -27,6 +27,7 @@ _SPEC = [
     ("accel_supply", 0x1B, 6, "u16", 0.001, 0.0, "V"),
     ("manifold_press", 0x1C, 0, "u16", 0.0001, 0.0, "bar"),
     ("maf_raw", 0x1C, 4, "u16", 1.0, 0.0, ""),
+    ("maf", 0x1D, 5, "u8", 1.0, 0.0, "kg/hr"),
     ("rpm_error", 0x21, 0, "s16", 1.0, 0.0, "rpm"),
     ("ambient_press_1", 0x23, 0, "u16", 0.0001, 0.0, "bar"),
     ("ambient_press_2", 0x23, 2, "u16", 0.0001, 0.0, "bar"),
@@ -40,6 +41,8 @@ _SPEC = [
 _SPEC_LIMITS = {
     "rpm": (0, 4800), "speed": (0, 200), "battery": (11.5, 15.5),
     "coolant_temp": (-40, 105), "air_temp": (-30, 80), "fuel_temp": (-30, 90),
+    "ext_temp": (-40, 50),        # spöke: 150°C → suspect (givare ej monterad)
+    "maf": (0, 650),              # kg/hr; overboost-cut ~618-650
     "manifold_press": (0.8, 2.6), "ambient_press_1": (0.8, 1.1),
     "ambient_press_2": (0.8, 1.1), "rpm_error": (-300, 300),
     "accel_way1": (0.0, 5.1), "accel_way2": (0.0, 5.1), "accel_way3": (0.0, 5.1),
