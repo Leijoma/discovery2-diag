@@ -17,3 +17,6 @@ data/
 logs/
 captures/
 *.raw.log
+
+# Fuel trip-computer lifetime state (local)
+fuel_totals.json

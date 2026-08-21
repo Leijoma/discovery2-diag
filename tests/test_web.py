@@ -745,3 +745,20 @@ def test_conf_of_reads_store():
     assert _conf_of("td5", "rpm_error", conf) == "belagt"
     assert _conf_of("td5", "balance_3", conf) == "belagt"
     assert _conf_of("td5", "maf_raw", conf) == "kandidat"
+
+
+def test_fuel_computer_rate_trip_economy():
+    from d2diag.web.sources import _FuelComputer
+    t = [0.0]
+    fc = _FuelComputer(clock=lambda: t[0])
+    # idle: 12 mg/stroke, 750 rpm, stationary → ~1.62 L/h, no economy (not moving)
+    r = fc.update(12.0, 750, 0)
+    assert abs(r["fuel_rate"] - 1.62) < 0.1
+    assert "economy" not in r
+    # drive 10 s: 20 mg/stroke, 2000 rpm, 90 km/h in 1 s steps
+    for _ in range(10):
+        t[0] += 1.0
+        r = fc.update(20.0, 2000, 90)
+    assert abs(r["fuel_rate"] - 7.21) < 0.1        # L/h
+    assert 6 < r["economy"] < 10                    # momentary L/100km
+    assert 6 < r["trip_economy"] < 10               # trip average

@@ -9,6 +9,7 @@ from __future__ import annotations
 import abc
 import datetime as _dt
 import glob
+import json
 import math
 import os
 import random
@@ -61,6 +62,91 @@ _SLABS_COVERAGE = frozenset({
     0x11, 0x3B, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49,
     0x50, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59,
 })
+
+# Bränsledator: härledda fält ur injektionsmängd + varvtal + fart. Ej LID-läsning →
+# enhet + confidence anges här (injection_qty är kandidat, så förbrukningen med).
+_INJ_PER_REV = 2.5          # 5-cyl 4-takt: 5/2 insprutningar per vevaxelvarv
+_DIESEL_G_PER_L = 832.0     # diesel densitet
+_DERIVED_TD5 = {
+    "fuel_rate":        ("L/h", "kandidat"),
+    "economy":          ("L/100km", "kandidat"),
+    "trip_economy":     ("L/100km", "kandidat"),
+    "lifetime_economy": ("L/100km", "kandidat"),
+}
+
+
+class _FuelComputer:
+    """Momentan förbrukning + trip- och livstidssnitt ur injektionsmängd (mg/stroke),
+    varvtal och fart. Integrerar med VERKLIG tid mellan pollar (time.monotonic).
+
+    L/h = inj[mg/stroke] × insprutn/varv × rpm × 60 / 1e6 / (densitet g/ml).
+    Trip = sedan objektet skapades (dashboard-start). Livstid = persistad i fil.
+    """
+
+    def __init__(self, state_path: "str | None" = None,
+                 clock: "callable" = time.monotonic) -> None:
+        self._state_path = state_path
+        self._clock = clock
+        self._last: "float | None" = None
+        self._trip_fuel = 0.0   # L
+        self._trip_dist = 0.0   # km
+        self._life_fuel, self._life_dist = self._load()
+        self._tick = 0
+
+    def _load(self) -> "tuple[float, float]":
+        if self._state_path and os.path.exists(self._state_path):
+            try:
+                d = json.load(open(self._state_path, encoding="utf-8"))
+                return float(d.get("fuel_l", 0.0)), float(d.get("dist_km", 0.0))
+            except (OSError, ValueError, TypeError):
+                pass
+        return 0.0, 0.0
+
+    def _save(self) -> None:
+        if not self._state_path:
+            return
+        try:
+            tmp = self._state_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump({"fuel_l": round(self._life_fuel, 4),
+                           "dist_km": round(self._life_dist, 3)}, fh)
+            os.replace(tmp, self._state_path)
+        except OSError:
+            pass
+
+    def pause(self) -> None:
+        """Nolla klockan (vid modulbyte/reconnect) så en lucka inte integreras."""
+        self._last = None
+
+    def update(self, inj_mg: "float | None", rpm: "float | None",
+               speed_kmh: "float | None") -> "dict":
+        now = self._clock()
+        rate = None
+        if inj_mg is not None and rpm:
+            rate = inj_mg * _INJ_PER_REV * rpm * 60.0 / 1e6 / (_DIESEL_G_PER_L / 1000.0)
+        if self._last is not None and rate is not None:
+            dt_h = min(now - self._last, 3.0) / 3600.0   # cap 3 s → ingen spik efter paus
+            self._trip_fuel += rate * dt_h
+            self._life_fuel += rate * dt_h
+            if speed_kmh:
+                d = speed_kmh * dt_h
+                self._trip_dist += d
+                self._life_dist += d
+        self._last = now
+
+        out: "dict[str, float]" = {}
+        if rate is not None:
+            out["fuel_rate"] = round(rate, 2)
+            if speed_kmh and speed_kmh > 5:                 # ekonomi bara i rörelse
+                out["economy"] = round(rate / speed_kmh * 100.0, 1)
+        if self._trip_dist > 0.1:
+            out["trip_economy"] = round(self._trip_fuel / self._trip_dist * 100.0, 1)
+        if self._life_dist > 1.0:
+            out["lifetime_economy"] = round(self._life_fuel / self._life_dist * 100.0, 1)
+        self._tick += 1
+        if self._tick % 60 == 0:                            # persist livstid ~var 30-60 s
+            self._save()
+        return out
 
 # Chip-ledtrådar för att känna igen en KKL/OBD-kabel bland flera USB-seriella enheter.
 _KKL_HINTS = ("ft232", "ftdi", "ch340", "cp210", "usb-serial", "usb_uart", "obd", "kkl")
@@ -124,8 +210,11 @@ def _sig(values: "dict[str, float]", module: str = "td5") -> "dict[str, dict]":
     out = {}
     for k, v in values.items():
         vr = round(v, 2)
-        out[k] = {"v": vr, "u": UNITS.get(k, ""), "s": signal_status(k, vr),
-                  "c": _conf_of(module, k, conf)}
+        if k in _DERIVED_TD5:                # beräknade fält (bränsledator)
+            unit, c = _DERIVED_TD5[k]
+        else:
+            unit, c = UNITS.get(k, ""), _conf_of(module, k, conf)
+        out[k] = {"v": vr, "u": unit, "s": signal_status(k, vr), "c": c}
     return out
 
 
@@ -260,10 +349,12 @@ class Td5DataSource(DataSource):
     name = "td5"
 
     def __init__(self, port: str, read_faults: bool = True,
-                 raw_log_dir: "str | None" = None) -> None:
+                 raw_log_dir: "str | None" = None,
+                 fuel_state_path: "str | None" = None) -> None:
         self._port = port
         self._read_faults = read_faults
         self._raw_log_path = _raw_log_path("td5", raw_log_dir)
+        self._fuel = _FuelComputer(fuel_state_path)  # bränsledator (momentan/trip/livstid)
         self._td5 = None
         self._faults: "list[str]" = []
         self._fault_tick = 0
@@ -295,6 +386,7 @@ class Td5DataSource(DataSource):
         except Exception:  # noqa: BLE001
             pass
         self._td5 = None
+        self._fuel.pause()  # nolla bränsledatorns klocka så reconnect-luckan inte räknas
 
     def menu_map(self) -> "list":
         from ..td5.menu import TD5_MENU
@@ -316,6 +408,10 @@ class Td5DataSource(DataSource):
                 self._td5.read_block(_TD5_COVERAGE_EXTRA)
             except Exception:  # noqa: BLE001
                 pass
+            # Bränsledator: momentan L/h + L/100km, trip- och livstidssnitt, ur
+            # injektionsmängd + varvtal + fart. Härledda fält, integreras över tid.
+            signals.update(self._fuel.update(
+                signals.get("injection_qty"), signals.get("rpm"), signals.get("speed")))
             # läs felkoder mer sällan (dyrt); var ~10:e poll
             if self._read_faults and self._fault_tick % self.fault_every == 0:
                 try:

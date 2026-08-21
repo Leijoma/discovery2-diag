@@ -325,5 +325,20 @@
       650
     ],
     "source": "21 1D byte5 u8 kg/hr — MAF (luftmassa). HITTAD via lid_sweep 2026-08-21: tomgang 69, 2000 rpm 184, foljer belastning (2.7x). Matchar publicerade Td5 reference tool-intervall (tomgang 55-65, 2000 rpm 185-200; overboost-cut ~618-650). OBS: matchat mot forum-intervall, ej reference tool-avlast pa RDL016 sjalv. Givaren FRISK (resistans pin1-2=17k OK, 12V pa pin3, live foljer rpm)."
+  },
+  {
+    "name": "injection_qty",
+    "lid": "1D",
+    "offset": 6,
+    "kind": "u16",
+    "scale": 0.01,
+    "bias": 0.0,
+    "unit": "mg/stroke",
+    "confidence": "kandidat",
+    "limits": [
+      0,
+      90
+    ],
+    "source": "21 1D@6 u16 x0.01 mg/stroke — INJEKTIONSMANGD (kandidat). Bilprov 2026-08-21: tomgang ~12, last ~23, OVERRUN ~3.6 (faller under tomgang = branslecut) = ratt fuelling-signatur. Skala x0.01 fran SimonRafferty; Ekaitza kallar 21 1D 'fuel-usage'. Ger rimlig ekonomi ~8 L/100km. Bekrafta med tydlig overrun-korning."
   }
 ]

@@ -62,10 +62,10 @@ def main() -> int:
     args = ap.parse_args()
 
     # Rå busslogg (TX/RX) för mappning — av som standard, på med --raw-log.
-    raw_log_dir = None
-    if args.raw_log:
-        raw_log_dir = os.path.join(
-            os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "logs")
+    _repo = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    raw_log_dir = os.path.join(_repo, "logs") if args.raw_log else None
+    # Bränsledatorns livstidssumma persistas här (överlever omstart). Gitignoreras.
+    fuel_state_path = os.path.join(_repo, "fuel_totals.json")
 
     # Både mock- och live-varianter byggs för varje modul; läget (mock/live) väljs
     # i UI:t och kan bytas i drift. Live-källor autodetekterar porten (``auto``) om
@@ -73,7 +73,8 @@ def main() -> int:
     # STARTläget. Multi-modul: bara EN modul aktiv åt gången (K-line = delad buss).
     port = args.serial or "auto"
     variants = {
-        "motor": {"mock": MockDataSource(), "live": Td5DataSource(port, raw_log_dir=raw_log_dir)},
+        "motor": {"mock": MockDataSource(),
+                  "live": Td5DataSource(port, raw_log_dir=raw_log_dir, fuel_state_path=fuel_state_path)},
         "slabs": {"mock": MockSlabsDataSource(), "live": SlabsDataSource(port, raw_log_dir=raw_log_dir)},
     }
     # Public build is LIVE-only (a real user plugs in the cable). --mock forces mock
