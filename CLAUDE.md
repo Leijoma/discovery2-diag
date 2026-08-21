@@ -115,9 +115,11 @@ Violating these produces bugs that only show up against the real car:
 
 ## Conventions
 
-- **Language:** code comments, docstrings, references/, TODO.md and commit
-  messages are **Swedish**; README.md, server/ and community/ (outward-facing) are
-  English. Follow whatever the file already uses.
+- **Language: English, everywhere.** The repo is public and English-facing, so
+  **all new content is English** — code comments, docstrings, `references/`,
+  `docs/`, `TODO.md`, and commit messages. (This changed 2026-08-21; older Swedish
+  comments/notes remain until translated — when you edit a file, write new content
+  in English and translate the nearby Swedish you're already touching.)
 - **Zero dependencies above pyserial.** The web layer is stdlib HTTP + SSE and the
   dashboard is a single vanilla-JS HTML file — no frameworks, no build step.
 - **Tests run without hardware** against `tests/fakes.py::FakeKLineEcu`, a
