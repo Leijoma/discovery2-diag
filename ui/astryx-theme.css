@@ -1,5 +1,5 @@
 /* Astryx — neutral theme, curated tokens
- * Values lifted from facebook/astryx packages/themes/neutral/src/neutralTheme.ts
+ * Token values adapted from facebook/astryx (MIT, Meta Platforms) packages/themes/neutral/src/neutralTheme.ts
  * :root = light, [data-theme="dark"] = dark
  */
 @import url("https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap");

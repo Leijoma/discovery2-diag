@@ -8,7 +8,7 @@ responsive to desktop. Built on Astryx (facebook/astryx, neutral theme).
 | File | What it is |
 | --- | --- |
 | `D2 Diag Phone.dc.html` | The whole prototype — markup + logic in one file. Open it directly in a browser, no build step. |
-| `astryx-theme.css` | Astryx neutral theme tokens (light + dark pairs) lifted from `packages/themes/neutral/src/neutralTheme.ts`. This is the visual contract. |
+| `astryx-theme.css` | Astryx neutral theme tokens (light + dark pairs) adapted from facebook/astryx `packages/themes/neutral` (MIT). This is the visual contract. |
 | `support.js` | Runtime that renders the component file. Prototype only — not needed in a real app. |
 
 ## Screens

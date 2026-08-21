@@ -3,7 +3,7 @@
 Funktionell referens för ett framtida **BCU-lager**. Beskriver *vad* Valeo Body
 Control Unit exponerar diagnostiskt — inte råprotokollet (adress/init okänt).
 
-**Källa:** a commercial vendor/reference tool "Discovery II Valeo BCU ECU Guide" (20 s). Faktauppgifter
+**Källa:** a commercial vendor "Discovery II Valeo BCU ECU Guide" (20 s). Faktauppgifter
 sammanställda i egen struktur; ingen text kopierad ordagrant.
 
 ## Om modulen

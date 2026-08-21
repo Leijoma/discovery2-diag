@@ -208,6 +208,8 @@ used are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
   disassembly) and Luca72 (Arduino reference).
 - **K-line front-end** (fast-init timing, burst reads, L9637D):
   [muki01/OBD2_K-line_Reader](https://registry.platformio.org/libraries/muki01/OBD2%20K-Line) (MIT).
+- **UI theme tokens**: [facebook/astryx](https://astryx.atmeta.com/) neutral theme
+  (Meta's open-source design system, MIT) — colour/spacing values only.
 - **Td5 fault-code text**: cross-validated against a public, community-maintained
   Td5 fault-code list (offset/bit → fault text only).
 - Thanks to the **Land Rover community** (forums and shared notes) for fault

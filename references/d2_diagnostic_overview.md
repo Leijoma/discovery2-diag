@@ -34,13 +34,13 @@ AVGÖR pin-frågan definitivt (slut på gissningar).
 | **HEVAC** | Klimat. | Ej kartlagt |
 | **EAT** | Automatlåda — **bilen är AUTOMAT**, så modulen är relevant. | Ej kartlagt |
 
-## Resurs: reference tool/a commercial vendor modul-guider (funktionella kapabiliteter)
+## Resurs: a commercial vendor modul-guider (funktionella kapabiliteter)
 a commercial vendor publicerar per-modul-guider (PDF) som beskriver *vad* varje
 modul exponerar (inputs/settings/outputs/fault codes) — utmärkt för att bygga
 respektive lager. Extraherbara med `pdftotext`. Kända URL:er:
 - BCU: `reference tool-diagnostics.com/uploads/downloads/Discovery II Valeo BCU ECU Guide.pdf`
 - SLABS: `reference tool-diagnostics.com/downloads/preview/wabco-slabs`
-- Hjälpsidor per modul: `a commercial vendor/help/SMxxx.html` (SLABS = SM016).
+- Hjälpsidor per modul: `a commercial vendor's module help pages` (SLABS = SM016).
 Fler moduler (SRS/HEVAC/ACE/EAT) har troligen motsvarande guider på samma
 download-sökväg — värt att prova när vi tar oss an dem.
 
@@ -117,7 +117,7 @@ init** (ISO 9141) svarar flera moduler med **komplett, reproducerbar handskaknin
   ligga på en oskannad slow-adress. **Nästa biltest: `tools/slow_sweep.py <port>`** —
   uttömmande slow-svep 0x01–0xFF med handskakningsklassning (KOMPLETT/SYNC/tyst) +
   auto-omverifiering (3×/8 s) + KW/protokoll-tolkning. Ett kommando, ~13 min, tändning på.
-Källor: discoii.wordpress OBDII, a commercial vendor SM016, reference tool Valeo-BCU/Wabco-guider,
+Källor: discoii.wordpress OBDII, a commercial module guide, reference tool Valeo-BCU/Wabco-guider,
 obd-cable ISO9141-5-baud (0x33 std-adress, 55 08 08=ISO9141 / 55 8F..=KWP).
 
 **Strömdomän-fingeravtryck (3 nyckellägen, 2026-08-05):** 0x40 svarar **även i läge 0
@@ -181,7 +181,7 @@ med 7→8 databitar rättad 2026-08-04, för ev. andra moduler).
 
 ## Sniffning — bästa vägen till okända protokoll
 K-line är en tråd, halvduplex → en **passiv RX-lyssnare fångar hela samtalet**
-(både verktygets frågor och ECU:ns svar). Med ett lånat verktyg (reference tool/a commercial tool/
+(både verktygets frågor och ECU:ns svar). Med ett lånat verktyg (a commercial tool (
 a commercial tool) som läser SLABS får vi adress, init, tjänstebytes och felstruktur ur
 verklig trafik — precis så Ekaitzas `Sniffing/*.log` (och därmed vår Td5-kunskap)
 skapades.
