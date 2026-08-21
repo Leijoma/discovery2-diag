@@ -76,14 +76,14 @@ def test_find_digits_identifies_the_encoding_with_a_known_code():
     # Med facit behöver formatet inte gissas: sök den kända koden i råsvaret.
     # Koden skickas in av anroparen och lagras aldrig i repot (publikt).
     from d2diag.bcu.bcu import find_digits
-    code = [7, 9, 8, 6]
+    code = [1, 2, 3, 4]  # FAKE code — the real EKA is never stored in this repo
 
-    one_per_byte = bytes.fromhex("61 cc XX XX XX XX 4a")
+    one_per_byte = bytes.fromhex("61 cc 01 02 03 04 4a")
     assert find_digits(one_per_byte, code) == {
-        "encoding": "bytes", "offset": 2, "bytes": "XX XX XX XX"}
+        "encoding": "bytes", "offset": 2, "bytes": "01 02 03 04"}
 
-    packed = bytes.fromhex("61 cc 79 86 00 4a")
+    packed = bytes.fromhex("61 cc 12 34 00 4a")
     assert find_digits(packed, code) == {
-        "encoding": "nibbles", "offset": 2, "bytes": "79 86"}
+        "encoding": "nibbles", "offset": 2, "bytes": "12 34"}
 
     assert find_digits(bytes.fromhex("61 cc de ad be ef"), code) is None

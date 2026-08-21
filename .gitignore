@@ -12,3 +12,8 @@ logs/*.csv
 *.sqlite3
 data/
 .DS_Store
+
+# Car data dumps — never publish (may contain EKA/VIN)
+logs/
+captures/
+*.raw.log

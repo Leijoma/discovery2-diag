@@ -70,7 +70,7 @@ def main() -> int:
     ap.add_argument("--no-prompt", action="store_true",
                     help="hoppa över tändningscykel-guidningen")
     ap.add_argument("--expect", metavar="KOD",
-                    help="känd EKA-kod (t.ex. XXXX) att söka efter i svaret. Med facit "
+                    help="känd EKA-kod (t.ex. 1234) att söka efter i svaret. Med facit "
                          "behöver formatet inte gissas — skriptet visar exakt hur koden "
                          "är kodad. Skickas som argument och sparas ALDRIG i repot.")
     args = ap.parse_args()
