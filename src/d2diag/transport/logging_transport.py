@@ -14,6 +14,8 @@ den utan att veta att loggning sker:
 from __future__ import annotations
 
 import datetime as _dt
+import os
+import time
 from pathlib import Path
 from typing import TextIO
 
@@ -39,6 +41,12 @@ class LoggingTransport(Transport):
         self._logpath = Path(logfile) if logfile is not None else None
         self._fh: "TextIO | None" = None
         self._echo = echo
+        # Rålogg på Raspberry Pi i bilen: strömmen kan brytas abrupt (motorn av).
+        # buffering=1 lämnar rader i OS-cachen → förlorade + risk för SD-korruption.
+        # Vi fsync:ar därför till kortet med jämna mellanrum (inte per rad — det ger
+        # onödigt SD-slitage vid ~20–40 skrivningar/s). Bundet: max ~intervall s tapp.
+        self._fsync_interval = 2.0
+        self._last_fsync = 0.0
 
     def open(self) -> None:
         self._inner.open()
@@ -51,6 +59,11 @@ class LoggingTransport(Transport):
             self._inner.close()
         finally:
             if self._fh is not None:
+                try:
+                    self._fh.flush()
+                    os.fsync(self._fh.fileno())
+                except OSError:
+                    pass
                 self._fh.close()
                 self._fh = None
             self._is_open = False
@@ -77,5 +90,13 @@ class LoggingTransport(Transport):
         line = f"{_timestamp()} {direction} {_hex(data)}"
         if self._fh is not None:
             self._fh.write(line + "\n")
+            now = time.monotonic()
+            if now - self._last_fsync >= self._fsync_interval:
+                self._fh.flush()
+                try:
+                    os.fsync(self._fh.fileno())  # tvinga ner på SD-kortet
+                except OSError:
+                    pass
+                self._last_fsync = now
         if self._echo:
             print(line)

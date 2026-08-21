@@ -108,6 +108,8 @@ class CsvLogger:
             line.append("" if v is None else v)
         with open(self.path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(line)
+            f.flush()
+            os.fsync(f.fileno())  # varje rad durabelt på SD-kortet (bilen bryter ström abrupt)
         self.rows += 1
 
     def _rotate(self, module: "str | None") -> None:
