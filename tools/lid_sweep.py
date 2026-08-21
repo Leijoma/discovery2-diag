@@ -35,13 +35,31 @@ from d2diag.td5 import Td5  # noqa: E402
 from d2diag.transport import SerialTransport  # noqa: E402
 from d2diag.web.sources import resolve_serial_port  # noqa: E402
 
-# Standard: "luft/bränsle"-kvarteret där MAF rimligen bor, plus några grannar.
-_DEFAULT_LIDS = "1C,1B,1A,1D,1E,1F,20"
+# Standard: RPM (09) som korrelations-referens + "luft/bränsle"-kvarteret där MAF
+# rimligen bor, plus några grannar. MAF ska FÖLJA varvtalet → 09 måste vara med.
+_DEFAULT_LIDS = "09,1C,1B,1A,1D,1E,1F,20"
+_RPM_KEY = "09@0"   # 21 09 u16 = varvtal; referens att korrelera mot
 
 
 def _u16s(raw: bytes) -> "list[int]":
     """Alla u16 (big-endian) på jämna offset — så varje 2-byte-fält syns."""
     return [int.from_bytes(raw[i:i + 2], "big") for i in range(0, len(raw) - 1, 2)]
+
+
+def _pearson(xs: "list[float]", ys: "list[float]") -> "float | None":
+    """Pearson-korrelation utan numpy. None om för få/konstanta värden."""
+    pts = [(x, y) for x, y in zip(xs, ys) if x is not None and y is not None]
+    n = len(pts)
+    if n < 3:
+        return None
+    mx = sum(p[0] for p in pts) / n
+    my = sum(p[1] for p in pts) / n
+    sxy = sum((p[0] - mx) * (p[1] - my) for p in pts)
+    sxx = sum((p[0] - mx) ** 2 for p in pts)
+    syy = sum((p[1] - my) ** 2 for p in pts)
+    if sxx == 0 or syy == 0:
+        return None
+    return sxy / (sxx * syy) ** 0.5
 
 
 def main() -> int:
@@ -69,6 +87,7 @@ def main() -> int:
     t = Td5(KWP2000(KLine(SerialTransport(port, timeout=1.0)), tolerant=True))
     t.open()
     span: "dict[str, list[int]]" = {}   # "1C@2" -> [min, max]
+    samples: "list[dict]" = []          # per cykel: {key: värde} för korrelation
     fh = open(out_path, "w", encoding="utf-8")
     period = 1.0 / max(0.1, args.hz)
     n = 0
@@ -81,6 +100,7 @@ def main() -> int:
         while True:
             row: "dict[str, str]" = {}
             cells = []
+            cyc: "dict[str, int]" = {}
             for lid in lids:
                 try:
                     raw = t.read_local(lid)
@@ -93,8 +113,10 @@ def main() -> int:
                 cells.append(f"{lid:02X}[" + " ".join(str(v) for v in vals) + "]")
                 for off, v in enumerate(vals):
                     key = f"{lid:02X}@{off*2}"
+                    cyc[key] = v
                     lo, hi = span.get(key, [v, v])
                     span[key] = [min(lo, v), max(hi, v)]
+            samples.append(cyc)
             fh.write(json.dumps({"n": n, "t": round(time.perf_counter() - t0, 2), **row}) + "\n")
             fh.flush()
             n += 1
@@ -115,14 +137,35 @@ def main() -> int:
             pass
         fh.close()
 
-    # Sammanfattning: störst spann överst = mest dynamiska (last-/luftkandidater).
+    # --- Korrelation mot RPM: MAF ska FÖLJA varvtalet. Detta är discriminatorn:
+    # temp-fält har också spann men korrelerar inte med rpm. ---
+    rpm = [c.get(_RPM_KEY) for c in samples]
+    rpm_vals = [x for x in rpm if x is not None]
+    rpm_moved = rpm_vals and (max(rpm_vals) - min(rpm_vals) >= 100)
+    if rpm_moved:
+        print(f"\n=== korrelation mot RPM ({_RPM_KEY}) — MAF-kandidat överst ===")
+        print(f"    (rpm rörde sig {min(rpm_vals)}→{max(rpm_vals)} över {n} sampel)")
+        corrs = []
+        for key in span:
+            if key == _RPM_KEY:
+                continue
+            c = _pearson([s.get(key) for s in samples], rpm)
+            if c is not None:
+                corrs.append((key, c, span[key][1] - span[key][0]))
+        for key, c, sp in sorted(corrs, key=lambda x: abs(x[1]), reverse=True):
+            mark = "  <== följer RPM starkt" if abs(c) >= 0.9 else ("  < möjlig" if abs(c) >= 0.7 else "")
+            print(f"  {key:8}  r={c:+.3f}  spann {sp:6}{mark}")
+        print("\n  MAF = högst positiv r mot RPM (och rör sig med gaspådrag).")
+    else:
+        print("\n⚠ RPM rörde sig inte (motorn av eller inga blipp) — kan inte korrelera.")
+        print("  Kör om med MOTORN IGÅNG och blippa gasen 2000–2500 rpm några gånger.")
+
+    # Spann-tabell (dynamik oavsett rpm) — behålls som referens.
     print(f"\n=== spann per fält ({n} läsningar) — störst rörelse överst ===")
-    ranked = sorted(span.items(), key=lambda kv: kv[1][1] - kv[1][0], reverse=True)
-    for key, (lo, hi) in ranked:
+    for key, (lo, hi) in sorted(span.items(), key=lambda kv: kv[1][1] - kv[1][0], reverse=True):
         bar = "#" * min(40, (hi - lo) // 50) if hi > lo else ""
         print(f"  {key:8}  min {lo:6}  max {hi:6}  spann {hi-lo:6}  {bar}")
     print(f"\nRådata: {out_path}")
-    print("MAF-kandidat = stort spann som följer gaspådrag; konstant/status = spann ~0.")
     return 0
 
 
