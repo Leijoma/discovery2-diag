@@ -534,11 +534,23 @@ function mountConnect(){
 function mountFaults(){
     const rd=$("#freads"); if(rd) rd.onclick=()=>fetch("/snapshot").then(r=>r.json()).then(onSnap);
     const wf=$("#fwrite"); if(wf) wf.onclick=()=>writeFaultsFile();
+    const fw=$("#fwatch"); if(fw) fw.onclick=async()=>{
+      const on=!(SNAP&&SNAP.fault_watch);
+      toast(on?"fault watch ON — polling every cycle":"fault watch off");
+      await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"set_fault_watch",params:{on}})}).catch(()=>{});
+      fetch("/snapshot").then(r=>r.json()).then(onSnap);
+    };
     const cl=$("#fclear"); if(cl) cl.onclick=async()=>{
       const n=((SNAP&&SNAP.faults)||[]).length;
       if(!confirm(`Clear ${n} fault code(s) from ${MODULE_NAME[MODULE]||MODULE}?\nWrites to the ECU. Cannot be undone.`)) return;
-      await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({action:"clear_faults"})}).catch(()=>{});
+      toast("clearing…");
+      try{
+        const r=await(await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({action:"clear_faults"})})).json();
+        toast(r.ok?(r.message||"clear sent — re-reading…"):(r.error||"clear failed"), !r.ok);
+      }catch(e){ toast("network error",true); }
+      setTimeout(()=>fetch("/snapshot").then(r=>r.json()).then(onSnap), 1500);
     };
 }
 function mountInputs(){
@@ -691,8 +703,10 @@ function renderFaults(){
   const connected = SNAP&&SNAP.status==="connected";
   const gate = statusGate();
   if(gate) return `<div class="row"><h2>Faults</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${MODULE_NAME[MODULE]||MODULE}</span></div>${gate}`;
+  const fw = SNAP && SNAP.fault_watch;
   return `<div class="row"><h2>Faults</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${MODULE_NAME[MODULE]||MODULE}</span>
-      <button class="iconbtn" id="freads" style="margin-left:auto"><span class="d" style="background:var(--fg2)"></span>Read</button></div>
+      <button class="iconbtn" id="fwatch" style="margin-left:auto${fw?';border-color:var(--ic-yellow);color:var(--ic-yellow)':''}"><span class="d"${fw?' style="background:var(--ic-yellow)"':''}></span>${fw?'Watch ON':'Fault watch'}</button>
+      <button class="iconbtn" id="freads"><span class="d" style="background:var(--fg2)"></span>Read</button></div>
     ${group(cur,"Current","var(--ic-red)","present now")}
     ${group(log,"Logged","var(--ic-yellow)","stored history")}
     ${empty}
