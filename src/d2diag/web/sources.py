@@ -49,12 +49,12 @@ def _transport(port: str, raw_log_path: "str | None"):
 # råloggen fångar ALL tillgänglig data — då kan omappade fält hittas ur en vanlig
 # körning (så hittades MAF i 1D 2026-08-21). "Kasta inte bort de bytes vi inte döpt."
 #
-# TD5 (ej sessionskänslig): läs extra-LID:erna VARJE cykel så de samplas jämte rpm
-# för korrelation. 1E/1F/20 = bekräftat svarande i fuelling-blocket (lid_sweep
-# 2026-08-21). 37/38 = KANDIDATER från SimonRafferty/Td5-Arduino (EGR- resp
-# wastegate-position, %) — OVERIFIERADE, fångas i råloggen för att bekräftas mot
-# bilen (EGR-positionen är relevant för RDL016:s EGR-fel 001-07).
-_TD5_COVERAGE_EXTRA = (0x1E, 0x1F, 0x20, 0x37, 0x38)
+# TD5 (ej sessionskänslig): läs extra-LID:erna VARJE cykel så de samplas jämte rpm.
+# 1E/1F/20 = bekräftat svarande i fuelling-blocket (lid_sweep 2026-08-21); 1E bär
+# switch-/digital-in-bitar (byte0 bit0 = broms, biltest 2026-08-21). 36 = andra
+# switch-blocket (Ekaitza) — läggs till för att fånga A/C/handbroms-bitar. (37/38
+# från SimonRafferty svarar INTE på RDL016, borttagna.)
+_TD5_COVERAGE_EXTRA = (0x1E, 0x1F, 0x20, 0x36)
 # SLABS (MÅSTE pollas lätt — block-läsning dödar sessionen): dessa LID:er roteras
 # EN per cykel (0x54-höjderna läses ändå varje cykel). Källa: slabs/menu.py +
 # references/reference_tool_menu_map.md (reference tool-menyns input-block).

@@ -334,11 +334,11 @@
     "scale": 0.01,
     "bias": 0.0,
     "unit": "mg/stroke",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       0,
       90
     ],
-    "source": "21 1D@6 u16 x0.01 mg/stroke — INJEKTIONSMANGD (kandidat). Bilprov 2026-08-21: tomgang ~12, last ~23, OVERRUN ~3.6 (faller under tomgang = branslecut) = ratt fuelling-signatur. Skala x0.01 fran SimonRafferty; Ekaitza kallar 21 1D 'fuel-usage'. Ger rimlig ekonomi ~8 L/100km. Bekrafta med tydlig overrun-korning."
+    "source": "21 1D@6 u16 x0.01 mg/stroke = INJEKTIONSMANGD. BELAGT (falt) via bilprov 2026-08-21 med avsiktliga overrun-lyft: tomgang 11.1, last 23.9, OVERRUN 4.7 mg/stroke (faller under tomgang = branslecut) = entydig fuelling-signatur. Ger rimlig live-ekonomi ~7.6 L/100km. Ekaitza kallar 21 1D 'fuel-usage'. OBS: exakta SKALAN (x0.01) ar matchad mot SimonRafferty-referens, ej korslast mot fabriksverktyg pa RDL016 — plausibel men finjusterbar. Driver bransledatorn (fuel_rate/economy, kandidat)."
   }
 ]
