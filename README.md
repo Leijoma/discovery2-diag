@@ -28,18 +28,24 @@ extend to the Rover V8 platforms over time. Start at
   suspension) are proven against the car; SRS/airbag is **experimental** and
   strictly read-only.
 - **Live engine data** from the TD5 ECU — rpm, coolant/air/fuel temperatures,
-  manifold (boost) pressure, battery, accelerator tracks, injector balance, …
+  manifold (boost) pressure, **mass air flow (MAF)**, battery, accelerator tracks,
+  cylinder injector balance, immobiliser status, …
 - **SLABS actuator tests** — ABS pump, per-wheel valve tests and the **ABS
   bleed procedure**, ride-height raise/lower, compressor, exhaust valve, buzzer.
 - **BCU** — connect (5-baud slow init) and read immobiliser status. The EKA
   (emergency key access) code turned out to be **gated behind SecurityAccess**
   (Valeo seed→key unknown), so it can't be read — see the [BCU knowledge-base page](docs/discovery-2-td5/bcu.md).
-- **Web dashboard** — a mock mode to explore without a car, and a live mode that
-  talks to the vehicle; switchable at runtime. Plus a "Faults" tab that reads
-  the fault memory from every module in one click.
+- **Mobile-first web dashboard** — a single vanilla-JS app (Connect · Faults ·
+  Inputs · Outputs · Utilities), mock ↔ live switchable at runtime, with a
+  one-click fault scan across every module. A password-gated **`/admin` mapping
+  console** (coverage map, labelled capture) is the *same app* with the
+  reverse-engineering tabs revealed.
 - **Reverse-engineering tools** — a passive sniff decoder, an active
-  differential-mapping harness, and a declarative signal store that turns each
-  session into permanent, machine-readable knowledge.
+  differential-mapping harness, full **raw TX/RX logging** of every live session,
+  and an offline analyser (`tools/raw_analyze.py`) that surfaces every *unmapped*
+  byte and correlates it against rpm — this is how the MAF field was found. A
+  declarative signal store turns confirmed mappings into permanent, machine-readable
+  knowledge, and feeds the [knowledge base](docs/README.md).
 
 ACE, the automatic gearbox (EAT) and BCU fault lists are partially
 reverse-engineered but not yet decoded in code.
@@ -107,6 +113,15 @@ the same network. You can switch mock ↔ live from the header. The machine with
 the cable runs the server; the phone is just a browser (it never touches the
 cable).
 
+### Running on a Raspberry Pi (in the car)
+
+The natural home is a **Raspberry Pi** wired to the OBD port — power it, connect
+your phone, open the dashboard. Runs on the system Python (`PYTHONPATH=src` +
+`python3-serial`, no venv needed); autostart it with a `systemd` service and reach
+it at `http://<pi>.local:8080`. `--serial auto` finds the KKL cable and keeps
+retrying until it's plugged in, so the UI is always up. Add `--raw-log` to capture
+all bus traffic for later mapping, and `--admin-password` to protect `/admin`.
+
 Read-only sanity check against a module:
 
 ```bash
@@ -128,6 +143,17 @@ pass the port explicitly.
 - FTDI's default 16 ms latency timer can jitter K-line fast init, but the
   tolerant `converse()`/`establish()` retry compensates — keep `tolerant=True`.
 
+### Serial port on Linux / Raspberry Pi
+
+- Ports are `/dev/ttyUSB*` (or the stable `/dev/serial/by-id/*`, which
+  `resolve_serial_port("auto")` prefers). The user must be in the **`dialout`** group.
+- **FTDI fast-init gotcha:** the fast-init low pulse uses a ~360-baud trick that
+  FTDI on Linux can't set — it clamps to a much higher rate, giving a ~2 ms pulse
+  instead of 25 ms, and the ECU never wakes. The transport detects Linux and uses an
+  OS-timed `send_break` instead (proven in the car, 2026-08-21). Also set the FTDI
+  **latency timer to 1 ms** (`/sys/bus/usb-serial/devices/ttyUSB0/latency_timer`, or
+  a udev rule) for snappy K-line timing.
+
 ## Safety
 
 K-line is a shared bus and this tool can *write* to ECUs. The design is
@@ -145,7 +171,8 @@ read-first and conservative:
 ## Status
 
 - [x] Transport, K-Line (addressed + unaddressed framing, fast + slow init), KWP2000
-- [x] Td5 — SecurityAccess seed→key, session, identifiers/scaling (validated on the car)
+- [x] Td5 — SecurityAccess seed→key, session, ~20 live signals incl. **MAF** and
+      immobiliser status, faults, output + injector tests (validated on the car)
 - [x] SLABS — faults, live data, actuator tests + ABS bleed. Connects on the first
       attempt since the fast-init pulse was corrected (2026-08-19): our TiniH was
       ~32 ms instead of the 25 ms ISO 14230-2 specifies, because the UART stop bit
@@ -153,9 +180,12 @@ read-first and conservative:
       (Lucas) tolerated it for months; the Wabco module did not.
 - [~] Airbag/SRS — read-only fault read (experimental, addressed framing at 0x5B)
 - [~] ACE / auto gearbox (EAT) / BCU — partially reverse-engineered
-- [x] Web dashboard, signal store, sniff decoder, active differential mapping
+- [x] Web dashboard (mobile v2 + `/admin` mapping console), signal store, sniff
+      decoder, active differential mapping, raw-log analyser
+- [x] Raspberry-Pi deployment (systemd autostart) + Linux fast-init fix (`send_break`)
+- [x] Public **[knowledge base](docs/README.md)** — confidence-tagged protocol reference
 
-220 unit tests, all passing, run without hardware.
+237 unit tests, all passing, run without hardware.
 
 ## Contributing
 
