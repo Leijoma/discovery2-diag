@@ -764,6 +764,7 @@ class DiagServer(ThreadingHTTPServer):
             snap["logging"] = self._csv.status() if self._csv is not None else {"recording": False}
             snap["public"] = self._public  # the UI is simplified in public mode
             snap["fault_watch"] = self._fault_watch  # fast fault-polling on/off
+            snap["allow_shutdown"] = self._allow_shutdown  # Settings "Shut down Pi" button
             self._remember_engine(snap)      # save engine context for the SLABS log
             self._log_conn_transition(snap)  # log connected/error transitions
             self.latest = snap
