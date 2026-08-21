@@ -421,10 +421,13 @@ def test_admin_gate_requires_password_when_set():
         with pytest.raises(urllib.error.HTTPError) as ei:
             urllib.request.urlopen(base + "/admin", timeout=2)
         assert ei.value.code == 401
-        # /admin med rätt lösen → v1-konsolen
+        # /admin med rätt lösen → samma v2-app (admin-läge avslöjar mappnings-flikar)
         cred = base64.b64encode(b"x:hemligt").decode()
         req = urllib.request.Request(base + "/admin", headers={"Authorization": f"Basic {cred}"})
-        assert "Discovery 2" in urllib.request.urlopen(req, timeout=2).read().decode()
+        assert "D2 Diag" in urllib.request.urlopen(req, timeout=2).read().decode()
+        # /v1 med rätt lösen → gamla konsolen (kvar som referens)
+        req1 = urllib.request.Request(base + "/v1", headers={"Authorization": f"Basic {cred}"})
+        assert "Discovery 2" in urllib.request.urlopen(req1, timeout=2).read().decode()
         # gated mappnings-POST utan lösen → 401
         with pytest.raises(urllib.error.HTTPError) as ei2:
             urllib.request.urlopen(
@@ -460,8 +463,8 @@ def test_admin_ungated_without_password():
                      poll_interval=0.05, stream_interval=0.05)  # inget lösen satt
     base = f"http://127.0.0.1:{_serve(srv)}"
     try:
-        # utan lösen är /admin öppen (lokal dev / bakåtkompatibelt)
-        assert "Discovery 2" in urllib.request.urlopen(base + "/admin", timeout=2).read().decode()
+        # utan lösen är /admin öppen (lokal dev / bakåtkompatibelt) — serverar v2
+        assert "D2 Diag" in urllib.request.urlopen(base + "/admin", timeout=2).read().decode()
     finally:
         srv.shutdown()
         srv.server_close()

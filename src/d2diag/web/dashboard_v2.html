@@ -144,14 +144,25 @@ function toast(msg, bad){
   clearTimeout(_toastT); _toastT=setTimeout(()=>el.className="",3200);
 }
 window.toast=toast;
-const TABS = [
-  {id:"connect", label:"Connect"},
-  {id:"faults",  label:"Faults"},
-  {id:"inputs",  label:"Inputs"},
-  {id:"outputs", label:"Outputs"},
-  {id:"utils",   label:"Utilities"},
-];
-let TAB = "inputs";
+// ---- admin-läge: EN app, EN routing. /admin serverar samma sida och avslöjar
+// mappnings-flikarna. Basic Auth (inskriven vid /admin) följer med till de
+// gated endpoints:en automatiskt. ----
+const ADMIN = /^\/admin\/?$/.test(location.pathname);
+
+// ---- skärm-register: ETT mönster för alla flikar. En post = {label, render
+// (→HTML), mount (valfri event-koppling efter injektion), admin (bara på /admin)}.
+// Lägg till en flik = en rad här. render()/renderNav() rörs aldrig igen. ----
+const SCREENS = {
+  connect: {label:"Connect",   render:renderConnect,   mount:mountConnect},
+  faults:  {label:"Faults",     render:renderFaults,    mount:mountFaults},
+  inputs:  {label:"Inputs",     render:renderInputs,    mount:mountInputs},
+  outputs: {label:"Outputs",    render:renderOutputs},
+  utils:   {label:"Utilities",  render:renderUtilities},
+  map:     {label:"Map",        render:renderMap,       mount:mountMap,   admin:true},
+};
+const TAB_ORDER = ["connect","faults","inputs","outputs","utils","map"];
+function tabList(){ return TAB_ORDER.filter(id => SCREENS[id] && (ADMIN || !SCREENS[id].admin)); }
+let TAB = ADMIN ? "map" : "inputs";
 
 // ---- preferenser (localStorage) + community-state ----
 const PREFS = Object.assign({trust:"trusted", consentDone:false, share:null, theme:"dark"},
@@ -501,19 +512,13 @@ function render(){
   // Första start: consent-overlay blockerar tills den besvarats
   if(!PREFS.consentDone){ renderConsent(); return; }
   document.getElementById("consent-ov")?.remove();
-  let html;
-  if(TAB==="inputs") html = renderInputs();
-  else if(TAB==="connect") html = renderConnect();
-  else if(TAB==="faults") html = renderFaults();
-  else if(TAB==="outputs") html = renderOutputs();
-  else if(TAB==="utils") html = renderUtilities();
-  else html = renderStub(TAB);
-  $("#view").innerHTML = html;
-  wireView();
+  const s = SCREENS[TAB] || {render:()=>renderStub(TAB)};
+  $("#view").innerHTML = s.render();
+  if(s.mount) s.mount();
 }
 
-function wireView(){
-  if(TAB==="connect"){
+function mountConnect(){
+  {
     document.querySelectorAll("[data-mod]").forEach(b=>b.onclick=async()=>{
       const m=b.dataset.mod;
       if(m===MODULE) return;
@@ -524,7 +529,8 @@ function wireView(){
     });
     const rt=$("#retry"); if(rt) rt.onclick=()=>fetch("/snapshot").then(r=>r.json()).then(onSnap);
   }
-  if(TAB==="faults"){
+}
+function mountFaults(){
     const rd=$("#freads"); if(rd) rd.onclick=()=>fetch("/snapshot").then(r=>r.json()).then(onSnap);
     const wf=$("#fwrite"); if(wf) wf.onclick=()=>writeFaultsFile();
     const cl=$("#fclear"); if(cl) cl.onclick=async()=>{
@@ -533,8 +539,8 @@ function wireView(){
       await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({action:"clear_faults"})}).catch(()=>{});
     };
-  }
-  if(TAB==="inputs"){
+}
+function mountInputs(){
     document.querySelectorAll("[data-chan]").forEach(b=>b.onclick=()=>{
       const n=b.dataset.chan; PLOT.has(n)?PLOT.delete(n):(PLOT.size<3&&PLOT.add(n)); render();
     });
@@ -552,6 +558,48 @@ function wireView(){
         else toast(r.error||"error",true);
       }catch(_){ toast("network error",true); }
     };
+  }
+// ---- Map (admin): reference tool-täckning per modul ur /map ----
+let MAP=null, MAP_MOD=null;   // /map-svar + vilken modul det gäller
+const MAP_ST = {ok:["var(--ic-green)","mapped"], maybe:["var(--ic-yellow)","unverified"]};
+function mapDot(col){ return `<span class="pdot" style="background:${col}"></span>`; }
+function renderMap(){
+  const name = MODULE_NAME[MODULE]||MODULE;
+  const head = `<div class="row"><h2>Map</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${name}</span></div>`;
+  if(!MAP || MAP_MOD!==MODULE)
+    return head + `<div class="empty"><div class="pretty">Loading coverage…</div></div>`;
+  const groups = MAP.map || [];
+  let ok=0, maybe=0, todo=0;
+  groups.forEach(g=>(g.items||[]).forEach(it=>{
+    if(it.status==="ok") ok++; else if(it.status==="maybe") maybe++; else todo++; }));
+  const tot = ok+maybe+todo || 1, pct = n => (n/tot*100).toFixed(1)+"%";
+  const summary = `<div class="card">
+    <div class="row" style="gap:16px;flex-wrap:wrap;margin-bottom:10px">
+      <span class="row" style="gap:6px">${mapDot("var(--ic-green)")}<span style="font-size:12px">Mapped · ${ok}</span></span>
+      <span class="row" style="gap:6px">${mapDot("var(--ic-yellow)")}<span style="font-size:12px">Unverified · ${maybe}</span></span>
+      <span class="row" style="gap:6px">${mapDot("var(--fg-dis)")}<span style="font-size:12px">Not mapped · ${todo}</span></span></div>
+    <div style="display:flex;height:8px;border-radius:6px;overflow:hidden;background:var(--bg-surface)">
+      <span style="width:${pct(ok)};background:var(--ic-green)"></span>
+      <span style="width:${pct(maybe)};background:var(--ic-yellow)"></span>
+      <span style="width:${pct(todo)};background:var(--fg-dis)"></span></div>
+    <div style="font-size:12px;color:var(--fg2);margin-top:8px">${ok} of ${ok+maybe+todo} reference tool items mapped on ${name}.</div></div>`;
+  const cats = groups.map(g=>{
+    const rows = (g.items||[]).map(it=>{
+      const col = it.status==="ok"?"var(--ic-green)":it.status==="maybe"?"var(--ic-yellow)":"var(--fg-dis)";
+      const lid = it.lid?`<span style="font-size:12px;color:var(--fg2);font-family:ui-monospace,Menlo,monospace;white-space:nowrap">21 ${String(it.lid).toUpperCase()}</span>`:"";
+      return `<div class="ro" style="border-left:4px solid ${col}"><div class="ro-top">
+        <div style="flex:1;min-width:0"><div style="font-weight:600;text-wrap:pretty">${it.name||""}</div>
+          ${it.ref?`<div style="font-size:12px;color:var(--fg-dis);text-wrap:pretty">${it.ref}</div>`:""}</div>${lid}</div></div>`;
+    }).join("");
+    return `<div><div class="kicker" style="margin:12px 2px 6px">${g.cat||""}</div><div class="grid">${rows}</div></div>`;
+  }).join("");
+  return head + summary + cats;
+}
+function mountMap(){
+  if(!MAP || MAP_MOD!==MODULE){
+    fetch(`/map?module=${encodeURIComponent(MODULE)}`).then(r=>r.ok?r.json():null).then(d=>{
+      if(!d) return; MAP=d; MAP_MOD=MODULE; if(TAB==="map") render();
+    }).catch(()=>{});
   }
 }
 function parseFault(str){
@@ -703,7 +751,7 @@ function openSettings(){
           <button class="btn ${PREFS.theme==='dark'?'accent':''}" style="flex:1" onclick="setTheme('dark')">Dark</button></div></div>
       <div><div class="kicker" style="margin-bottom:8px">Advanced</div>
         <a class="btn" href="/admin" style="display:block;text-align:center;text-decoration:none">Mapping console (admin)</a>
-        <div style="font-size:12px;color:var(--fg2);text-wrap:pretty;margin-top:6px">Signal mapping, capture and docs. Password protected.</div></div>
+        <div style="font-size:12px;color:var(--fg2);text-wrap:pretty;margin-top:6px">Same app, admin mode — adds the Map tab (coverage). Capture, docs and signal editing come next. Password protected.</div></div>
       <button class="btn accent" onclick="closeSheet()">Done</button></div>`;
   document.querySelector(".app").appendChild(el);
 }
@@ -804,8 +852,8 @@ function renderUtilities(){
 }
 
 function renderNav(){
-  $("#nav").innerHTML = TABS.map(t=>
-    `<button class="${t.id===TAB?'on':''}" data-tab="${t.id}"><span class="nd"></span>${t.label}</button>`).join("");
+  $("#nav").innerHTML = tabList().map(id=>
+    `<button class="${id===TAB?'on':''}" data-tab="${id}"><span class="nd"></span>${SCREENS[id].label}</button>`).join("");
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{ TAB=b.dataset.tab; renderNav(); render(); });
 }
 $("#setbtn").onclick=openSettings;

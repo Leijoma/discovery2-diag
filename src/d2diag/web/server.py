@@ -130,8 +130,14 @@ class _Handler(BaseHTTPRequestHandler):
         # ligger på "/admin" bakom lösenord (den har Karta/Fångst/Dok-flikarna).
         if self.path in ("/", "/index.html", "/v2", "/v2.html"):
             self._send(_DASHBOARD_V2.read_bytes(), "text/html; charset=utf-8")
-        elif self.path in ("/admin", "/admin.html", "/v1", "/v1.html"):
+        elif self.path in ("/admin", "/admin.html"):
+            # Samma app som "/", men admin-läge: sidan känner av /admin och visar
+            # mappnings-flikarna. En app, en routing, ett UI.
             if not self._require_admin():
+                return
+            self._send(_DASHBOARD_V2.read_bytes(), "text/html; charset=utf-8")
+        elif self.path in ("/v1", "/v1.html"):
+            if not self._require_admin():  # gamla dashboarden — kvar som referens
                 return
             self._html()
         elif self.path == "/events":
