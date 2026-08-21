@@ -62,12 +62,29 @@ def test_logging_transport_is_a_transport():
     assert isinstance(LoggingTransport(SerialTransport(url="loop://")), Transport)
 
 
-def test_serial_fast_init_low_restores_baud_and_flushes_echo():
-    # Baud-drop-pulsen: sänk baud, skicka 0x00, återställ baud, töm ekot.
+def test_serial_fast_init_low_restores_baud_and_flushes_echo(monkeypatch):
+    # Baud-drop-pulsen (macOS-vägen): sänk baud, skicka 0x00, återställ baud, töm ekot.
+    # Tvinga icke-Linux så baud-tricket testas oavsett värdplattform.
+    import d2diag.transport.serial_transport as st
+    monkeypatch.setattr(st.sys, "platform", "darwin")
     with SerialTransport(url="loop://", baudrate=10400, timeout=0.3) as t:
         t.fast_init_low(0.025)
         assert t.baudrate == 10400          # baud återställd efteråt
         assert t.receive(1, timeout=0.05) == b""  # ekot av puls-byten tömt
+
+
+def test_serial_fast_init_low_uses_break_on_linux(monkeypatch):
+    # På Linux (Raspberry Pi/FTDI) klarar inte hårdvaran 360 baud → låg-pulsen
+    # måste komma från en OS-timad break i stället. Belagt i bilen 2026-08-21.
+    import d2diag.transport.serial_transport as st
+    monkeypatch.setattr(st.sys, "platform", "linux")
+    calls = {}
+    with SerialTransport(url="loop://", baudrate=10400, timeout=0.3) as t:
+        monkeypatch.setattr(t, "send_break", lambda d=0.025: calls.__setitem__("dur", d))
+        already_high = t.fast_init_low(0.025)
+    assert calls.get("dur") == 0.025    # låg-pulsen kom via break
+    assert already_high == 0.0          # ingen stoppbit att kompensera för
+    assert t.baudrate == 10400          # baud orörd
 
 
 def test_logging_transport_delegates_serial_hooks():

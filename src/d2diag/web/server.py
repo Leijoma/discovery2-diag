@@ -6,6 +6,8 @@ kommandon (ej implementerad än).
 """
 from __future__ import annotations
 
+import base64
+import hmac
 import json
 import os
 import queue
@@ -123,15 +125,22 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path in ("/", "/index.html"):
-            self._html()
-        elif self.path in ("/v2", "/v2.html"):
+        # v2 är numera den normala UI:n på "/". "/v2" behålls som alias för gamla
+        # bokmärken. Den gamla v1-dashboarden är mappnings-/admin-konsolen och
+        # ligger på "/admin" bakom lösenord (den har Karta/Fångst/Dok-flikarna).
+        if self.path in ("/", "/index.html", "/v2", "/v2.html"):
             self._send(_DASHBOARD_V2.read_bytes(), "text/html; charset=utf-8")
+        elif self.path in ("/admin", "/admin.html", "/v1", "/v1.html"):
+            if not self._require_admin():
+                return
+            self._html()
         elif self.path == "/events":
             self._sse()
         elif self.path == "/snapshot":
             self._json(self.server.latest)
         elif self.path.split("?")[0] == "/map":
+            if not self._require_admin():
+                return
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(self.path).query)
             mod = (q.get("module", [None])[0]) or self.server._active
@@ -145,6 +154,8 @@ class _Handler(BaseHTTPRequestHandler):
                 "coverage": self.server.coverage(),
             })
         elif self.path.split("?")[0] == "/sniff":
+            if not self._require_admin():
+                return
             if self.server.sniffer is None:
                 self._json({"module": None, "modules": [], "lids": []})
             else:
@@ -152,6 +163,8 @@ class _Handler(BaseHTTPRequestHandler):
                 q = parse_qs(urlparse(self.path).query)
                 self._json(self.server.sniffer.snapshot(q.get("module", [None])[0]))
         elif self.path.split("?")[0] == "/signals":
+            if not self._require_admin():
+                return
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(self.path).query)
             self._json(_signals_list((q.get("module", ["td5"])[0]) or "td5"))
@@ -163,8 +176,12 @@ class _Handler(BaseHTTPRequestHandler):
             c = self.server.community
             self._json(c.state() if c is not None else {"consent": None, "endpoint": None})
         elif self.path == "/docs":
+            if not self._require_admin():
+                return
             self._json({"docs": self.server.docs.index()})
         elif self.path.split("?")[0] == "/doc":
+            if not self._require_admin():
+                return
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(self.path).query)
             frag = self.server.docs.html((q.get("id", [""])[0]))
@@ -189,6 +206,8 @@ class _Handler(BaseHTTPRequestHandler):
             result = self.server.enqueue_command(cmd, timeout=timeout)
             self._json(result, code=200 if result.get("ok") else 400)
         elif self.path == "/calib":
+            if not self._require_admin():
+                return
             length = int(self.headers.get("Content-Length", 0) or 0)
             raw = self.rfile.read(length) if length else b"{}"
             try:
@@ -197,6 +216,8 @@ class _Handler(BaseHTTPRequestHandler):
                 req = {}
             self._json(_calibrate(req))
         elif self.path == "/automap":
+            if not self._require_admin():
+                return
             length = int(self.headers.get("Content-Length", 0) or 0)
             raw = self.rfile.read(length) if length else b"{}"
             try:
@@ -205,8 +226,12 @@ class _Handler(BaseHTTPRequestHandler):
                 req = {}
             self._json(_automap(req))
         elif self.path == "/capture":
+            if not self._require_admin():
+                return
             self._json(_append_capture(self.server.captures_path, self._body()))
         elif self.path == "/signal":
+            if not self._require_admin():
+                return
             res = _signal_upsert(self._body())
             self._json(res, code=200 if res.get("ok") else 400)
         elif self.path == "/community/consent":
@@ -232,6 +257,36 @@ class _Handler(BaseHTTPRequestHandler):
             return json.loads(raw or b"{}")
         except (ValueError, TypeError):
             return {}
+
+    # ---- admin-gate (HTTP Basic Auth) --------------------------------- #
+    # Skyddar mappnings-/dev-ytan (/admin + automap/capture/signal/calib/…).
+    # Är inget lösen satt är admin OGATED (lokal dev, bakåtkompatibelt) — Pi:n
+    # kör med --admin-password. Basic Auth över HTTP utan TLS är "håll nyfikna
+    # borta på LAN", inte stark krypto; ingen känslig data ligger bakom det.
+    def _admin_ok(self) -> bool:
+        pw = getattr(self.server, "_admin_password", None)
+        if not pw:
+            return True
+        hdr = self.headers.get("Authorization", "")
+        if hdr.startswith("Basic "):
+            try:
+                decoded = base64.b64decode(hdr[6:]).decode("utf-8", "replace")
+            except Exception:  # noqa: BLE001
+                decoded = ""
+            supplied = decoded.partition(":")[2]  # valfritt användarnamn, bara lösen räknas
+            if hmac.compare_digest(supplied, pw):
+                return True
+        return False
+
+    def _require_admin(self) -> bool:
+        """True om anropet får fortsätta; annars skickas 401 och False returneras."""
+        if self._admin_ok():
+            return True
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="d2diag admin"')
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+        return False
 
     # ---- svar ---------------------------------------------------------- #
     def _send(self, body: bytes, content_type: str, code: int = 200) -> None:
@@ -304,8 +359,12 @@ class DiagServer(ThreadingHTTPServer):
         community=None,
         public: bool = False,
         fault_watch: bool = False,
+        admin_password: "str | None" = None,
     ) -> None:
         super().__init__((host, port), _Handler)
+        # None/"" = admin ogated (lokal dev). Satt = /admin + mappnings-endpoints
+        # bakom HTTP Basic Auth. Se _Handler._admin_ok.
+        self._admin_password = admin_password or None
         self._fault_watch = fault_watch  # True = polla felkoder varje cykel (snabbt)
         self._scan_port = scan_port  # port för "läs alla felkoder" (basic mode)
         self._csv_dir = csv_dir  # var CSV-live-loggar hamnar (start/stop i UI:t)

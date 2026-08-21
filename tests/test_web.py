@@ -390,6 +390,59 @@ def test_server_serves_snapshot_and_html():
         assert "rpm" in snap["signals"]
         html = urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2).read().decode()
         assert "<title>" in html and "EventSource" in html
+        assert "D2 Diag" in html  # "/" serverar numera v2, inte v1
+    finally:
+        srv.shutdown()
+        srv.server_close()
+        srv.stop()
+
+
+def _serve(srv):
+    port = srv.server_address[1]
+    srv.start_polling()
+    th = threading.Thread(target=srv.serve_forever, daemon=True)
+    th.start()
+    time.sleep(0.1)
+    return port
+
+
+def test_admin_gate_requires_password_when_set():
+    import base64
+    import urllib.error
+
+    srv = DiagServer(MockDataSource(), host="127.0.0.1", port=0,
+                     poll_interval=0.05, stream_interval=0.05,
+                     admin_password="hemligt")
+    base = f"http://127.0.0.1:{_serve(srv)}"
+    try:
+        # "/" (v2) är öppet, ingen auth
+        assert "D2 Diag" in urllib.request.urlopen(base + "/", timeout=2).read().decode()
+        # /admin utan lösen → 401
+        with pytest.raises(urllib.error.HTTPError) as ei:
+            urllib.request.urlopen(base + "/admin", timeout=2)
+        assert ei.value.code == 401
+        # /admin med rätt lösen → v1-konsolen
+        cred = base64.b64encode(b"x:hemligt").decode()
+        req = urllib.request.Request(base + "/admin", headers={"Authorization": f"Basic {cred}"})
+        assert "Discovery 2" in urllib.request.urlopen(req, timeout=2).read().decode()
+        # gated mappnings-POST utan lösen → 401
+        with pytest.raises(urllib.error.HTTPError) as ei2:
+            urllib.request.urlopen(
+                urllib.request.Request(base + "/signal", data=b"{}", method="POST"), timeout=2)
+        assert ei2.value.code == 401
+    finally:
+        srv.shutdown()
+        srv.server_close()
+        srv.stop()
+
+
+def test_admin_ungated_without_password():
+    srv = DiagServer(MockDataSource(), host="127.0.0.1", port=0,
+                     poll_interval=0.05, stream_interval=0.05)  # inget lösen satt
+    base = f"http://127.0.0.1:{_serve(srv)}"
+    try:
+        # utan lösen är /admin öppen (lokal dev / bakåtkompatibelt)
+        assert "Discovery 2" in urllib.request.urlopen(base + "/admin", timeout=2).read().decode()
     finally:
         srv.shutdown()
         srv.server_close()

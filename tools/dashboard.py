@@ -44,6 +44,10 @@ def main() -> int:
                          "(hide Map/Capture/Docs + actuators)")
     ap.add_argument("--fault-watch", action="store_true",
                     help="poll fault codes every cycle (~0.5s) to catch intermittent faults")
+    ap.add_argument("--admin-password", default=os.environ.get("D2DIAG_ADMIN_PW"),
+                    help="password for the /admin mapping console (Basic Auth). "
+                         "Also read from D2DIAG_ADMIN_PW. Unset → admin is ungated "
+                         "(fine on localhost, NOT on a public bind).")
     ap.add_argument("--dict", dest="dict_path",
                     help="path to the fault-code dictionary (default: sibling repo 'Discovery 2/')")
     ap.add_argument("--docs", action="append", default=[],
@@ -123,7 +127,12 @@ def main() -> int:
         active=active, menus=MENUS, docs=docs, sniffer=sniffer, captures_path=captures_path,
         variants=variants, mode=mode, scan_port=port, csv_dir=csv_dir, community=community,
         public=args.public, fault_watch=args.fault_watch,
+        admin_password=args.admin_password,
     )
+    if args.admin_password:
+        print("Admin: /admin (mapping console) — password protected")
+    elif args.host not in ("127.0.0.1", "localhost"):
+        print("Admin: /admin OPEN (no --admin-password) — set one for a public bind")
     print(f"Docs: {len(docs.index())} in the Docs tab")
     print(f"Captures → {captures_path}")
     print(f"Dashboard: http://localhost:{args.port}   (modules: {', '.join(variants)} · active: {active} · mode: {mode})")

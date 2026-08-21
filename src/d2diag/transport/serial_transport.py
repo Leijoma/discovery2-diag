@@ -10,6 +10,7 @@ test-url:er, så samma kod testas och körs.
 """
 from __future__ import annotations
 
+import sys
 import time
 
 import serial  # pyserial
@@ -110,6 +111,18 @@ class SerialTransport(Transport):
         """
         ser = self._require_open()
         baud = max(1, round(9 / low_seconds))
+
+        # ⚠️ FTDI på LINUX (Raspberry Pi) klarar inte en så låg baudrate som 360.
+        # Kärnan/ftdi_sio klampar den, så 0x00-byten skickas på ~4500 baud och
+        # låg-pulsen blir bara ~2 ms i stället för 25 → ECU:n vaknar aldrig.
+        # Mätt i bilen 2026-08-21: baud-tricket gav low_ms 1.9–2.8 och ALDRIG C1;
+        # den OS-timade breaken gav low_ms 26 ms och C1 på första försöket.
+        # macOS klarar 360 baud fint, så där behåller vi den deterministiska
+        # baud-pulsen (mindre schemaläggar-jitter). loop:// (test) klarar båda.
+        if sys.platform.startswith("linux"):
+            self.send_break(low_seconds)
+            return 0.0  # ingen stoppbit att kompensera för — breaken är ren låg tid
+
         original = ser.baudrate
         try:
             ser.baudrate = baud
