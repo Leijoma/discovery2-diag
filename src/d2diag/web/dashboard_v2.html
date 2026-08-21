@@ -371,6 +371,7 @@ function renderInputs(){
       <div class="chanwrap" style="margin-top:8px">${chan||'<span style="color:var(--fg-dis)">waiting for live values…</span>'}</div></div>` : "";
   const gate = statusGate();
   if(gate) return `<div class="row"><h2>Inputs</h2><span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${MODULE_NAME[MODULE]||MODULE}</span></div>${gate}`;
+  const slabsHint = MODULE==="slabs" ? `<div class="card" style="border-color:var(--bd-yellow);background:var(--bg-yellow);padding:8px 14px"><span style="font-size:12px;color:var(--ic-yellow)">SLABS only communicates while stationary — to log a drive (rpm, boost, temps), switch to TD5.</span></div>` : "";
   return `
     <div class="row"><h2>Inputs</h2>
       <span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${MODULE_NAME[MODULE]||MODULE}</span>
@@ -379,6 +380,7 @@ function renderInputs(){
         <button class="iconbtn ${recording?'rec':''}" id="reclog"><span class="d"></span>${recording?'Stop':'Log CSV'}</button>
       </div>
     </div>
+    ${slabsHint}
     ${names.length? groups : `<div class="empty"><div style="font-size:18px;font-weight:700">No live inputs yet</div><div class="pretty">Connect ${MODULE_NAME[MODULE]||MODULE} on the Connect tab. The K-line carries one session at a time.</div></div>`}
     ${trend}
   `;
@@ -508,6 +510,8 @@ function wireView(){
   if(TAB==="connect"){
     document.querySelectorAll("[data-mod]").forEach(b=>b.onclick=async()=>{
       const m=b.dataset.mod;
+      if(m===MODULE) return;
+      if(recording && !confirm(`Recording is on.\nSwitching to ${MODULE_NAME[m]||m} rotates the log to a new file — the current module's data pauses while ${MODULE_NAME[m]||m} is active (the K-line carries one session at a time).\n\nSwitch anyway?`)) return;
       await fetch("/command",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({action:"select_module",params:{module:m}})}).catch(()=>{});
       TAB="faults"; renderNav(); render();   // landa på Faults efter uppkoppling
@@ -530,6 +534,8 @@ function wireView(){
     });
     const rl=$("#reclog"); if(rl) rl.onclick=async()=>{
       const starting=!recording;
+      if(starting && MODULE==="slabs" &&
+         !confirm("SLABS only communicates while stationary — comms drop above ~8–20 km/h.\nThis log will NOT capture a drive. To log a drive (rpm, speed, boost, temps), switch to TD5 first.\n\nStart the SLABS log anyway?")) return;
       recording=starting;                                  // optimistiskt: uppdatera direkt
       rl.className="iconbtn"+(starting?" rec":""); rl.innerHTML=`<span class="d"></span>${starting?'Stop':'Log CSV'}`;
       toast(starting?"recording…":"stopping…");
