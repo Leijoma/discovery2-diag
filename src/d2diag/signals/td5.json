@@ -83,8 +83,11 @@
     "bias": -273.2,
     "unit": "°C",
     "confidence": "kandidat",
-    "limits": null,
-    "source": "21 1A@8; extern temp-givare. Operatören bekräftar att givaren INTE finns (labeled_captures 1a: 'ext_temp osäker finns inte motsvarande') → fältet är en spökavläsning (konstant 0x1088=150 °C). Behåll kandidat: värdet betyder inget."
+    "limits": [
+      -40,
+      50
+    ],
+    "source": "21 1A@8; extern temp-givare. Givaren finns INTE pa Td5-ECU:n (RDL016) → konstant 0x1088 = 150.0 °C, en spokavlasning. Bekraftat i bilen 2026-08-21: verklig utetemp ~17 °C (bilens egen kluster-givare via BCU), var 150 = falskt. Granser [-40,50] satta sa 150 flaggas suspect/overstruken. Vardet betyder inget."
   },
   {
     "name": "fuel_temp",
@@ -307,5 +310,20 @@
       12
     ],
     "source": "21 40@8 s16; cylinderbalans 5. BELAGT (labeled_captures 40='korrekt'); värden −6…+2 över captures."
+  },
+  {
+    "name": "maf",
+    "lid": "1D",
+    "offset": 5,
+    "kind": "u8",
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "kg/hr",
+    "confidence": "belagt",
+    "limits": [
+      0,
+      650
+    ],
+    "source": "21 1D byte5 u8 kg/hr — MAF (luftmassa). HITTAD via lid_sweep 2026-08-21: tomgang 69, 2000 rpm 184, foljer belastning (2.7x). Matchar publicerade Td5 reference tool-intervall (tomgang 55-65, 2000 rpm 185-200; overboost-cut ~618-650). OBS: matchat mot forum-intervall, ej reference tool-avlast pa RDL016 sjalv. Givaren FRISK (resistans pin1-2=17k OK, 12V pa pin3, live foljer rpm)."
   }
 ]
