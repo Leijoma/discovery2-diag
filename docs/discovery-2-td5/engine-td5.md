@@ -55,6 +55,7 @@ Offsets are into the data field returned after the echoed identifier. Scale/bias
 | manifold_press (MAP/boost) | 21 1C@0 | u16 ×0.0001 | bar | 🟢 | 0.8–2.6 |
 | maf_raw | 21 1C@4 | u16 ×1.0 | — | 🟡 | status field, **not** airflow |
 | **maf (mass air flow)** | **21 1D@5** | **u8 ×1.0** | **kg/hr** | 🟢 | **55–65 idle → 185–200 @2000** |
+| injection_qty | 21 1D@6 | u16 ×0.01 | mg/stroke | 🟡 | ~12 idle, ~23 load, ~3.6 overrun (fuel cut) |
 | rpm_error | 21 21@0 | s16 ×1.0 | rpm | 🟢 | −300–300 (idle only) |
 | ambient_press_1 | 21 23@0 | u16 ×0.0001 | bar | 🟢 | 0.8–1.1 |
 | ambient_press_2 | 21 23@2 | u16 ×0.0001 | bar | 🟢 | 0.8–1.1 |
@@ -126,8 +127,8 @@ an ordinary drive log with `tools/raw_analyze.py`.
 
 | Item | What we know | Needed |
 |---|---|---|
-| **Injection quantity → fuel consumption** | Ekaitza: `21 1D` = "fuel-usage params". `1D` byte1 (27→65) and byte11 (50→127) rise with rpm. | A **loaded** drive to isolate the field that tracks *load* (mg/stroke), then compute L/h and L/100 km. |
-| EGR / wastegate position | `21 37 / 21 38` candidates (SimonRafferty). Now raw-logged. | Confirm they respond and track EGR/wastegate behaviour on the car. |
+| Injection quantity **(candidate found 🟡)** | `21 1D@6` u16 ÷100 → mg/stroke — fuel-cut-on-overrun signature confirmed on a loaded drive (2026-08-21). Drives a live **fuel computer**: fuel_rate (L/h), momentary/trip/lifetime economy (L/100 km); validated ~8 L/100 km. | One clean overrun drive or a factory-tool cross-read to promote the scale to 🟢. |
+| ~~EGR / wastegate position 37/38~~ **(resolved 🔴)** | `21 37 / 21 38` do **not** respond on RDL 016 — SimonRafferty's LIDs don't apply here. `21 20` is a constant too (not injection, contra SimonRafferty). | — |
 | Digital inputs / switches | `21 1E` (and `21 36`) are bitfields: brake, clutch, cruise, A/C. Ekaitza gives a pin map. | Decode the bitfield against physical switch states. |
 | VIN / ECU identity | `1A 87` VIN, `1A 9A` ECU type (from Ekaitza). | Add the read; confirm the format. |
 | Other `1D` / `1E` / `1F` / `20` bytes | Respond and some move with rpm. | Map against known values. |
