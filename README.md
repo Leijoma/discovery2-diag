@@ -14,6 +14,14 @@ dashboard on top so it's usable in the driveway from a phone.
 > community documentation. It reads a lot reliably, but it is not a finished
 > product like a commercial tool. Use at your own risk; see the safety notes.
 
+## 📚 Knowledge base
+
+The reverse-engineering itself — every module, signal, and service, tagged
+**🟢 proven / 🟡 assumed / 🔴 unknown** with its evidence — lives in **[`docs/`](docs/README.md)**.
+It's written to be a public reference the community can compile and correct, and to
+extend to the Rover V8 platforms over time. Start at
+[docs/discovery-2-td5/](docs/discovery-2-td5/README.md).
+
 ## What it can do today
 
 - **Read & clear fault codes** — TD5 and SLABS (ABS + self-levelling air
@@ -23,7 +31,9 @@ dashboard on top so it's usable in the driveway from a phone.
   manifold (boost) pressure, battery, accelerator tracks, injector balance, …
 - **SLABS actuator tests** — ABS pump, per-wheel valve tests and the **ABS
   bleed procedure**, ride-height raise/lower, compressor, exhaust valve, buzzer.
-- **BCU** — read the EKA (emergency key access) code and other settings.
+- **BCU** — connect (5-baud slow init) and read immobiliser status. The EKA
+  (emergency key access) code turned out to be **gated behind SecurityAccess**
+  (Valeo seed→key unknown), so it can't be read — see the [BCU knowledge-base page](docs/discovery-2-td5/bcu.md).
 - **Web dashboard** — a mock mode to explore without a car, and a live mode that
   talks to the vehicle; switchable at runtime. Plus a "Faults" tab that reads
   the fault memory from every module in one click.
