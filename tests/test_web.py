@@ -436,6 +436,25 @@ def test_admin_gate_requires_password_when_set():
         srv.stop()
 
 
+def test_raw_log_wraps_transport(tmp_path):
+    from d2diag.transport import LoggingTransport, SerialTransport
+    from d2diag.web.sources import (SlabsDataSource, Td5DataSource, _raw_log_path,
+                                    _transport)
+
+    # av som standard
+    assert _raw_log_path("td5", None) is None
+    assert Td5DataSource("auto")._raw_log_path is None
+    # på när en dir ges
+    p = _raw_log_path("td5", str(tmp_path))
+    assert p and p.endswith(".log") and "raw-td5-" in p
+    # _transport lindar in i LoggingTransport bara när en path är satt
+    assert isinstance(_transport("loop://", None), SerialTransport)
+    assert isinstance(_transport("loop://", str(tmp_path / "r.log")), LoggingTransport)
+    # båda live-källorna plockar upp raw_log_dir
+    assert Td5DataSource("auto", raw_log_dir=str(tmp_path))._raw_log_path
+    assert SlabsDataSource("auto", raw_log_dir=str(tmp_path))._raw_log_path
+
+
 def test_admin_ungated_without_password():
     srv = DiagServer(MockDataSource(), host="127.0.0.1", port=0,
                      poll_interval=0.05, stream_interval=0.05)  # inget lösen satt

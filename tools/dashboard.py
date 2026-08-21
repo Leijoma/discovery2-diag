@@ -56,7 +56,16 @@ def main() -> int:
                     help="ESP32 sniff port for the Map tab (passive RX-only; reference tool polls)")
     ap.add_argument("--replay", metavar="FIL",
                     help="replay a sniff log in the Map tab (for testing without a vehicle)")
+    ap.add_argument("--raw-log", action="store_true",
+                    help="log ALL raw TX/RX to logs/raw-<module>-<time>.log (for mapping). "
+                         "Appends across reconnects; one file per module per run.")
     args = ap.parse_args()
+
+    # Rå busslogg (TX/RX) för mappning — av som standard, på med --raw-log.
+    raw_log_dir = None
+    if args.raw_log:
+        raw_log_dir = os.path.join(
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "logs")
 
     # Både mock- och live-varianter byggs för varje modul; läget (mock/live) väljs
     # i UI:t och kan bytas i drift. Live-källor autodetekterar porten (``auto``) om
@@ -64,8 +73,8 @@ def main() -> int:
     # STARTläget. Multi-modul: bara EN modul aktiv åt gången (K-line = delad buss).
     port = args.serial or "auto"
     variants = {
-        "motor": {"mock": MockDataSource(), "live": Td5DataSource(port)},
-        "slabs": {"mock": MockSlabsDataSource(), "live": SlabsDataSource(port)},
+        "motor": {"mock": MockDataSource(), "live": Td5DataSource(port, raw_log_dir=raw_log_dir)},
+        "slabs": {"mock": MockSlabsDataSource(), "live": SlabsDataSource(port, raw_log_dir=raw_log_dir)},
     }
     # Public build is LIVE-only (a real user plugs in the cable). --mock forces mock
     # (dev/preview). Otherwise --serial or --public → live, else mock.
@@ -129,6 +138,8 @@ def main() -> int:
         public=args.public, fault_watch=args.fault_watch,
         admin_password=args.admin_password,
     )
+    if raw_log_dir:
+        print(f"Raw TX/RX log → {raw_log_dir}/raw-<module>-<time>.log")
     if args.admin_password:
         print("Admin: /admin (mapping console) — password protected")
     elif args.host not in ("127.0.0.1", "localhost"):

@@ -7,13 +7,41 @@ UI-utveckling utan hårdvara. ``Td5DataSource`` läser den riktiga Td5-ECU:n.
 from __future__ import annotations
 
 import abc
+import datetime as _dt
 import glob
 import math
+import os
 import random
 import time
 
 from ..signals import load_signals
 from ..td5.identifiers import BY_NAME, signal_status
+
+
+def _raw_log_path(module: str, raw_log_dir: "str | None") -> "str | None":
+    """Sökväg för en rå TX/RX-logg, eller None om råloggning är av.
+
+    En fil per modul och dashboard-start (``raw-<modul>-<tid>.log``).
+    LoggingTransport öppnar i append-läge, så återanslutningar (modulbyte,
+    fel-retry) fortsätter i SAMMA fil — en obruten busslogg för mappning."""
+    if not raw_log_dir:
+        return None
+    os.makedirs(raw_log_dir, exist_ok=True)
+    stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    return os.path.join(raw_log_dir, f"raw-{module}-{stamp}.log")
+
+
+def _transport(port: str, raw_log_path: "str | None"):
+    """SerialTransport, ev. inlindad i LoggingTransport för rå TX/RX-logg.
+
+    Lazy import så Mock-källorna kan köras utan pyserial. Är råloggning på ligger
+    LoggingTransport transparent under KLine och fångar varje byte åt bägge håll."""
+    from ..transport import SerialTransport
+    inner = SerialTransport(port, timeout=1.0)
+    if raw_log_path:
+        from ..transport import LoggingTransport
+        return LoggingTransport(inner, logfile=raw_log_path)
+    return inner
 
 # Chip-ledtrådar för att känna igen en KKL/OBD-kabel bland flera USB-seriella enheter.
 _KKL_HINTS = ("ft232", "ftdi", "ch340", "cp210", "usb-serial", "usb_uart", "obd", "kkl")
@@ -212,9 +240,11 @@ class Td5DataSource(DataSource):
 
     name = "td5"
 
-    def __init__(self, port: str, read_faults: bool = True) -> None:
+    def __init__(self, port: str, read_faults: bool = True,
+                 raw_log_dir: "str | None" = None) -> None:
         self._port = port
         self._read_faults = read_faults
+        self._raw_log_path = _raw_log_path("td5", raw_log_dir)
         self._td5 = None
         self._faults: "list[str]" = []
         self._fault_tick = 0
@@ -228,12 +258,11 @@ class Td5DataSource(DataSource):
         from ..kline import KLine
         from ..kwp2000 import KWP2000
         from ..td5 import Td5
-        from ..transport import SerialTransport
 
         if self.on_progress:
             self.on_progress("opening the cable")
         port = resolve_serial_port(self._port)  # autodetektera vid varje försök
-        td5 = Td5(KWP2000(KLine(SerialTransport(port, timeout=1.0)), tolerant=True))
+        td5 = Td5(KWP2000(KLine(_transport(port, self._raw_log_path)), tolerant=True))
         td5.open()
         td5.establish(progress=self.on_progress, **_sleep_kw(self.on_sleep))
         return td5
@@ -461,9 +490,11 @@ class SlabsDataSource(DataSource):
 
     name = "slabs"
 
-    def __init__(self, port: str, read_faults: bool = True) -> None:
+    def __init__(self, port: str, read_faults: bool = True,
+                 raw_log_dir: "str | None" = None) -> None:
         self._port = port
         self._read_faults = read_faults
+        self._raw_log_path = _raw_log_path("slabs", raw_log_dir)
         self._slabs = None
         self._faults: "list[str]" = []
         self._tick = 0
@@ -484,12 +515,11 @@ class SlabsDataSource(DataSource):
         from ..kline import KLine
         from ..kwp2000 import KWP2000
         from ..slabs import SLABS_ADDRESS, Slabs
-        from ..transport import SerialTransport
 
         if self.on_progress:
             self.on_progress("opening the cable")
         port = resolve_serial_port(self._port)
-        slabs = Slabs(KWP2000(KLine(SerialTransport(port, timeout=1.0), target=SLABS_ADDRESS),
+        slabs = Slabs(KWP2000(KLine(_transport(port, self._raw_log_path), target=SLABS_ADDRESS),
                               tolerant=True))
         slabs.open()
         slabs.establish(progress=self.on_progress, **_sleep_kw(self.on_sleep))
