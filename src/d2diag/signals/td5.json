@@ -354,22 +354,7 @@
       0,
       100
     ],
-    "source": "21 1D byte15 u8 x(100/255) = EGR Modulator % (duty). FOUND 2026-08-22 from the night drive raw log: high at true idle (raw ~158 = ~62%), lower at cruise (~24), 0 under load/boost = textbook EGR (open light-load, closes under load). Field ORDER matches the Nanocom/reference-tool fuelling page (Ambient, Manifold, EGR Modulator, EGR Inlet, Wastegate -> 1D@... ,15,16,17). Scale (100/255) is a candidate byte->% mapping, not cross-checked against a factory tool on RDL016. EGR was modulating this drive (not stuck) - relevant to the 001-07 EGR fault (likely intermittent)."
-  },
-  {
-    "name": "egr_inlet",
-    "lid": "1D",
-    "offset": 16,
-    "kind": "u8",
-    "scale": 0.39215686274509803,
-    "bias": 0.0,
-    "unit": "%",
-    "confidence": "kandidat",
-    "limits": [
-      0,
-      100
-    ],
-    "source": "21 1D byte16 u8 x(100/255) = EGR Inlet % (intake throttle for EGR). Position inferred from the Nanocom fuelling-page order (EGR Modulator, EGR Inlet, Wastegate = consecutive 1D@15,16,17). Read constant 0 across the whole 2026-08-22 drive (inlet throttle not commanded) - so identity is by ORDER, behaviour unverified. Candidate scaling."
+    "source": "21 1D byte15 u8 x(100/255) = EGR Modulator % (duty). Confirmed across FOUR drives 2026-08-21/22: high at light load, falls to 0 under load/boost = textbook EGR (open light-load, closes under load). Idle duty varies by conditions (~13-62%). Identified via the Nanocom fuelling-page field order. NOTE: the adjacent 1D@16 (which the page order would put as 'EGR Inlet') reads a CONSTANT 0 across all four drives = a dead/reserved byte, so EGR Inlet is NOT @16 and is not yet located. Scale 100/255 is a candidate byte->% mapping, not cross-checked vs a factory tool. EGR was modulating (not stuck) - relevant to the intermittent 001-07."
   },
   {
     "name": "wastegate_modulator",
@@ -384,6 +369,6 @@
       0,
       100
     ],
-    "source": "21 1D byte17 u8 x(100/255) = Wastegate Modulator % (boost-control duty). FOUND 2026-08-22: follows boost (r=0.85 vs MAP) but is NOT MAP itself (1D@4 is MAP, r=0.995), and caps low - scaled ~6% at idle -> ~32% under boost, matching the published reference band (0% idle, 20-40% under boost, max ~40%). Position matches the Nanocom fuelling-page order. Candidate scaling (100/255)."
+    "source": "21 1D byte17 u8 x(100/255) = Wastegate Modulator % (boost-control duty). Confirmed across four drives 2026-08-21/22: rises with boost (r=0.85 vs MAP) but is NOT MAP itself (1D@4 is MAP, r=0.995). Baseline ~15 raw (~6%), tops 25-82 raw (~10-32%) scaling with drive intensity - matches the published band (0% idle, 20-40% boost, max ~40%). Position matches the Nanocom fuelling-page order. Candidate scaling (100/255)."
   }
 ]

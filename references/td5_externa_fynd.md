@@ -24,12 +24,14 @@ and muki01. Purpose: find what we do NOT already have. We turned out to be in go
   byte11 50→127 moved with rpm; load distinguishes injection from pure rpm fields).
   - **1D fuelling-block decode (2026-08-22, candidate).** From the night drive + the
     Nanocom fuelling-page field ORDER (Ambient, Manifold, EGR Modulator, EGR Inlet,
-    Wastegate — three modulators consecutive): **1D@15 = EGR modulator %**, **1D@16 = EGR
-    inlet %**, **1D@17 = wastegate modulator %** (all `u8 × 100/255`), plus **1D@4 = a 2nd
-    MAP reading** (r=0.995 vs manifold). @15 high-idle→0-load (textbook EGR); @17 follows
-    boost (r=0.85) but is not MAP, scaled ~6%→32% = the published band (0 idle / 20-40
-    boost). @16 read 0 all drive (EGR inlet inactive → identity by order only). Scaling
-    100/255 not yet cross-checked vs a factory tool. Written to the store as `kandidat`.
+    Wastegate): **1D@15 = EGR modulator %** and **1D@17 = wastegate modulator %** (`u8 ×
+    100/255`), plus **1D@4 = a 2nd MAP reading** (r=0.995 vs manifold). Confirmed across
+    FOUR drives 2026-08-21/22: @15 high-light-load→0-load (textbook EGR); @17 follows boost
+    (r=0.85) but is not MAP, scaled ~6%→32% = the published band (0 idle / 20-40 boost).
+    **`1D@16` is a constant-0 dead/reserved byte across all four drives** — NOT EGR inlet (a
+    first mis-map by page order; removed). **EGR Inlet % not yet located** (1D@14 varies but
+    unidentified). Scaling 100/255 not cross-checked vs a factory tool. In the store as
+    `kandidat`.
   - **Injector classification codes** (Injector 1-5, five-char each, a Settings-block read):
     the dashboard never polls the identifier/Settings blocks, so these are in NO raw log —
     needs a targeted read on the car.
