@@ -29,6 +29,9 @@ _SPEC = [
     ("maf_raw", 0x1C, 4, "u16", 1.0, 0.0, ""),
     ("maf", 0x1D, 5, "u8", 1.0, 0.0, "kg/hr"),
     ("injection_qty", 0x1D, 6, "u16", 0.01, 0.0, "mg/stroke"),
+    ("egr_modulator", 0x1D, 15, "u8", 100 / 255, 0.0, "%"),
+    ("egr_inlet", 0x1D, 16, "u8", 100 / 255, 0.0, "%"),
+    ("wastegate_modulator", 0x1D, 17, "u8", 100 / 255, 0.0, "%"),
     ("rpm_error", 0x21, 0, "s16", 1.0, 0.0, "rpm"),
     ("ambient_press_1", 0x23, 0, "u16", 0.0001, 0.0, "bar"),
     ("ambient_press_2", 0x23, 2, "u16", 0.0001, 0.0, "bar"),
@@ -45,6 +48,8 @@ _SPEC_LIMITS = {
     "ext_temp": (-40, 50),        # ghost: 150°C → suspect (sensor not fitted)
     "maf": (0, 650),              # kg/hr; overboost-cut ~618-650
     "injection_qty": (0, 90),     # mg/stroke (candidate)
+    "egr_modulator": (0, 100), "egr_inlet": (0, 100),  # % duty (candidate, 1D@15/16)
+    "wastegate_modulator": (0, 100),  # % duty (candidate, 1D@17)
     "manifold_press": (0.8, 2.6), "ambient_press_1": (0.8, 1.1),
     "ambient_press_2": (0.8, 1.1), "rpm_error": (-300, 300),
     "accel_way1": (0.0, 5.1), "accel_way2": (0.0, 5.1), "accel_way3": (0.0, 5.1),

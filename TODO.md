@@ -37,6 +37,23 @@ trouble. 220 tests green.
       EAT ReadFaults is confirmed: `72 05 04 00 73` → `72 09 60 01 00 00 00 00 1B`
       (the response's meaning unknown — don't interpret as a fault counter yet).
 - [ ] **Airbag** is read-only and experimental; unverified live.
+- [ ] **Distinguish comms glitches from real sensor faults** (found 2026-08-21
+      analysing two Td5 drive logs). Signals that share a LID are read in ONE
+      request, so a bad read corrupts them together; a single bad signal whose
+      LID-mates are valid is a real per-channel (sensor/wiring) fault. Concretely
+      `air_temp`, `coolant_temp`, `fuel_temp` all live in **LID 0x1A**:
+      - **whole-LID corrupt** (all its signals out-of-range / read failed) = a
+        **comms** glitch — our tolerant K-line read occasionally drops a whole LID
+        (~1 % baseline). Should be flagged/filtered, not counted as a sensor fault.
+      - **one signal out-of-range while LID-mates are valid** = a real **sensor/
+        circuit** fault — corroborate with the ECU's own DTC (e.g. `inlet air temp
+        circuit (Current)`). On the motorway log 130/131 air_temp dropouts were of
+        this kind + 126 ECU DTC rows = genuine intermittent IAT fault; on the
+        evening log 6/6 were whole-LID = pure comms, 0 DTC.
+      - **Action:** tag snapshots/CSV rows with a `comms_glitch` marker when a whole
+        LID reads bad, and have the analysis classify junk as comms vs sensor (and
+        cross-check the DTC). Stops us mistaking tool noise for a car fault. Belongs
+        to the car register only as the *conclusion*, not the mechanism.
 - [ ] **PyInstaller distribution** (.app/.exe) for non-technical users.
 - [ ] **Torque proxy:** find the TD5's fuel quantity/demand LID (mg/stroke = the
       ECU's torque command, in the same session as rpm/temp/throttle).

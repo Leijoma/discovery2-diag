@@ -22,6 +22,17 @@ and muki01. Purpose: find what we do NOT already have. We turned out to be in go
   fuel/injection data live in the 1D block. **The route to fuel consumption** goes via
   injection quantity (mg/stroke) in 1D — hunt the field from a LOADED drive (byte1 27→65,
   byte11 50→127 moved with rpm; load distinguishes injection from pure rpm fields).
+  - **1D fuelling-block decode (2026-08-22, candidate).** From the night drive + the
+    Nanocom fuelling-page field ORDER (Ambient, Manifold, EGR Modulator, EGR Inlet,
+    Wastegate — three modulators consecutive): **1D@15 = EGR modulator %**, **1D@16 = EGR
+    inlet %**, **1D@17 = wastegate modulator %** (all `u8 × 100/255`), plus **1D@4 = a 2nd
+    MAP reading** (r=0.995 vs manifold). @15 high-idle→0-load (textbook EGR); @17 follows
+    boost (r=0.85) but is not MAP, scaled ~6%→32% = the published band (0 idle / 20-40
+    boost). @16 read 0 all drive (EGR inlet inactive → identity by order only). Scaling
+    100/255 not yet cross-checked vs a factory tool. Written to the store as `kandidat`.
+  - **Injector classification codes** (Injector 1-5, five-char each, a Settings-block read):
+    the dashboard never polls the identifier/Settings blocks, so these are in NO raw log —
+    needs a targeted read on the car.
 - **ECU identification `1A xx`**: `1A 87` VIN · `1A 9A` ECU type · `1A 9B/9C` more IDs.
   (Read-only, easy to add — we don't read VIN today.)
 - **Digital inputs / switches `21 1E` and `21 36`** (bitfields): brake, clutch,
