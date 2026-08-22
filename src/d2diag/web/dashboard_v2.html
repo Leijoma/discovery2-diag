@@ -64,13 +64,19 @@ h2{font-size:20px;line-height:28px;font-weight:700;margin:0}
 .ro.sus .ro-val{color:var(--fg-dis);text-decoration:line-through}
 .ro{border:1px solid var(--border);border-radius:10px;background:var(--bg-card);overflow:hidden}
 .ro.dim{opacity:.5}
-.ro-top{display:flex;align-items:center;gap:10px;padding:8px 14px}
-.ro-lbl{font-size:12px;font-weight:600;color:var(--fg2);flex:1;min-width:0}
-.ro-val{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
-.ro-u{font-size:12px;color:var(--fg2);font-weight:600}
-.ro-meta{padding:0 14px 10px;font-size:12px;color:var(--fg-dis);text-wrap:pretty;display:none}
+.ro-top{display:flex;align-items:center;gap:10px;padding:12px 14px}
+.ro-lbl{font-size:17px;font-weight:600;color:var(--fg2);flex:1;min-width:0}
+.ro-val{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums}
+.ro-u{font-size:15px;color:var(--fg2);font-weight:600}
+.ro-meta{padding:0 14px 10px;font-size:13px;color:var(--fg-dis);text-wrap:pretty;display:none}
 .ro.open .ro-meta{display:block}
-.ro-top .ro-val{font-size:18px}
+.ro-top .ro-val{font-size:32px}
+/* In-car use is on a phone — make the readouts big and legible. Extra bump on narrow screens. */
+@media (max-width:600px){
+  .ro-lbl{font-size:19px}
+  .ro-val,.ro-top .ro-val{font-size:40px;line-height:1.05}
+  .ro-u{font-size:18px}
+}
 .infobtn{border:0;background:transparent;color:var(--fg-dis);font-size:13px;cursor:pointer;padding:2px 4px;line-height:1}
 .ro.open .infobtn{color:var(--ic-blue)}
 .iconbtn{border:1px solid var(--border-emph);background:var(--bg-surface);color:var(--fg2);border-radius:9999px;height:32px;padding:0 12px;display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
