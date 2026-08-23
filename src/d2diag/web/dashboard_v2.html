@@ -85,12 +85,24 @@ h2{font-size:20px;line-height:28px;font-weight:700;margin:0}
 /* Driver's Dashboard — curated tiles that fill the screen height so it never
    scrolls in phone portrait. grid-auto-rows:1fr splits the height evenly.
    Values are right-aligned (unit fixed) via the shared .cv-* component. */
+/* Spanning widget grid: digital fields = 1 cell (2-per-row bar), analog gauge =
+   span 2×2 (full width, square-ish). grid-auto-rows:1fr fills the height → no scroll. */
 .drive{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:10px}
 .dtile{border:1px solid var(--border);border-radius:14px;background:var(--bg-card);display:flex;
-  flex-direction:column;justify-content:center;gap:4px;padding:10px 14px;min-height:0;overflow:hidden}
+  flex-direction:column;justify-content:flex-start;align-items:flex-start;gap:6px;padding:12px 14px;min-height:0;overflow:hidden}
 .dtile.warn{border-color:var(--bd-red);background:var(--bg-red)}
-.dlabel{font-size:17px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--fg2)}
-.dval{font-size:clamp(32px,11vw,56px);font-weight:800;line-height:1;display:flex;align-items:baseline;justify-content:flex-end}
+/* Card composition: small label top-left, big value below-left (not centered, not split). */
+.dlabel{font-size:16px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--fg2)}
+.dval{font-size:clamp(30px,10vw,54px);font-weight:800;line-height:1;display:flex;align-items:baseline;justify-content:flex-start}
+.dval .cv-num{min-width:3ch}   /* reserve width so the unit never jumps (89 -> 100) */
+/* Analog gauge tile (2×2) — a 270° arc that fills the value from gmin..gmax. */
+.dtile.gauge{align-items:stretch;justify-content:flex-start}
+.gwrap{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
+.gsvg{height:100%;max-height:100%;max-width:100%;width:auto;aspect-ratio:1/1}
+.gtrack{fill:none;stroke:var(--border);stroke-width:9;stroke-linecap:round}
+.gval{fill:none;stroke:var(--ic-blue);stroke-width:9;stroke-linecap:round;transition:stroke-dasharray .3s ease}
+.gnum{fill:var(--fg);font-size:24px;font-weight:800;text-anchor:middle;font-variant-numeric:tabular-nums}
+.gunit{fill:var(--fg2);font-size:10px;font-weight:600;text-anchor:middle;letter-spacing:.5px}
 .iconbtn{border:1px solid var(--border-emph);background:var(--bg-surface);color:var(--fg2);border-radius:9999px;height:32px;padding:0 12px;display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
 .iconbtn.rec{border-color:var(--bd-red);color:var(--ic-red)}
 .iconbtn .d{width:8px;height:8px;border-radius:9999px;background:currentColor}
@@ -330,8 +342,26 @@ function renderValue(value, unit, opts={}){
 }
 // Current time HH:MM, 24h, no seconds — the car has no lit clock. Uses the phone's clock.
 function clockHHMM(){ const d=new Date(); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
-// The single data card. variant "tile" (Drive) or "row" (Inputs, adds flag/info/meta).
+// Analog gauge: a 270° arc filled from gmin..gmax (gap at the bottom). The circle
+// path starts at 3 o'clock; rotate(135) opens the gap downward.
+function gaugeSvg(value, min, max, unit, dec){
+  const r=40, C=2*Math.PI*r, sweep=0.75, arc=C*sweep;
+  const frac = (typeof value==="number") ? Math.max(0, Math.min(1,(value-min)/(max-min))) : 0;
+  const num = (typeof value==="number") ? (dec!=null?value.toFixed(dec):fmt(value)) : "–";
+  return `<svg viewBox="0 0 100 100" class="gsvg">
+    <circle cx="50" cy="50" r="${r}" class="gtrack" stroke-dasharray="${arc.toFixed(1)} ${C.toFixed(1)}" transform="rotate(135 50 50)"/>
+    <circle cx="50" cy="50" r="${r}" class="gval" stroke-dasharray="${(arc*frac).toFixed(1)} ${C.toFixed(1)}" transform="rotate(135 50 50)"/>
+    <text x="50" y="54" class="gnum">${num}</text>
+    <text x="50" y="69" class="gunit">${unit||""}</text>
+  </svg>`;
+}
+// The single data card. variant "tile" (Drive digital), "gauge" (Drive 2×2 analog),
+// or "row" (Inputs, adds flag/info/meta).
 function dataCard(spec){
+  if(spec.variant==="gauge")
+    return `<div class="dtile gauge" style="grid-column:span 2;grid-row:span 2">
+      <div class="dlabel">${spec.label}</div>
+      <div class="gwrap">${gaugeSvg(spec.value, spec.gmin, spec.gmax, spec.unit, spec.dec)}</div></div>`;
   const val = renderValue(spec.value, spec.unit, {dec:spec.dec, dim:spec.dim});
   if(spec.variant==="tile")
     return `<div class="dtile${spec.warn?' warn':''}"><div class="dlabel">${spec.label}</div><div class="dval">${val}</div></div>`;
@@ -424,13 +454,16 @@ function statusGate(){
 // Curated for driving — what matters on the move and is NOT already on the dash
 // cluster (so no Speed/RPM). conv/unit/dec = per-tile transform: fuel in L/mil
 // (Swedish litres-per-10km, one decimal) from the backend's L/100km, so ÷10.
+// Order = grid flow (2-col): Time,Coolant [row1] · Boost gauge 2×2 [rows2-3] ·
+// Battery,Fuel [row4] · Trip,Intake [row5]. Fills 5 rows evenly, no scroll.
 const DRIVE_TILES = [
   {clock:true,         label:"Time"},
   {n:"coolant_temp",   label:"Coolant"},
+  {n:"manifold_press", label:"Boost", gauge:true, gmin:1.0, gmax:2.5, dec:1},
   {n:"battery",        label:"Battery"},
-  {n:"manifold_press", label:"Boost"},
   {n:"economy",        label:"Fuel", conv:v=>v/10, unit:"L/mil", dec:1},  // live, only while moving
   {n:"trip_economy",   label:"Trip", conv:v=>v/10, unit:"L/mil", dec:1},  // since start
+  {n:"air_temp",       label:"Intake"},
 ];
 function renderDrive(){
   const sig = (SNAP&&SNAP.signals)||{}, fmap = FIELDS[MODULE]||{};
@@ -452,6 +485,7 @@ function renderDrive(){
     let v = (s && typeof s.v==="number") ? s.v : null;
     if(v!==null && t.conv) v = t.conv(v);
     const unit = t.unit || (s&&s.u) || (f&&f.u) || "";
+    if(t.gauge) return dataCard({variant:"gauge", label:t.label, value:v, unit, dec:t.dec, gmin:t.gmin, gmax:t.gmax});
     const fl = flagFor(t.n, s, f);
     return dataCard({variant:"tile", label:t.label, value:v, unit, dec:t.dec,
       warn:(fl.cls==="lo" || fl.cls==="hi")});
