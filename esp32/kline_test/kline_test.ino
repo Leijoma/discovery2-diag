@@ -58,9 +58,18 @@ static void klineFastInit() {
   Serial2.begin(KLINE_BAUD, SERIAL_8N1, PIN_KRX, PIN_KTX, KLINE_INVERT);
 }
 
-// Send StartCommunication, read echo + response.
-static bool startCommunication() {
-  uint8_t req[5] = { (uint8_t)(0x80 | 1), ECU_ADDR, TESTER_ADDR, 0x81, 0 };
+// StopCommunication (unaddressed 01 82 83) — best-effort clear of any open link
+// before an init attempt, mirroring EcuSession._establish in the Python stack.
+static void stopComm() {
+  uint8_t s[3] = { 0x01, 0x82, 0x83 };
+  Serial2.write(s, 3); Serial2.flush();
+  delay(30);
+  while (Serial2.available()) Serial2.read();
+}
+
+// Send StartCommunication to `addr`, read echo + response.
+static bool startCommunication(uint8_t addr) {
+  uint8_t req[5] = { 0x81, addr, TESTER_ADDR, 0x81, 0 };
   req[4] = checksum(req, 4);
 
   while (Serial2.available()) Serial2.read();  // drain junk
@@ -128,8 +137,15 @@ void setup() {
 void loop() {
   if (Serial.available()) {
     while (Serial.available()) Serial.read();
-    Serial.println("\n-- fast init + StartCommunication --");
-    klineFastInit();
-    startCommunication();
+    Serial.println("\n-- fast init + StartCommunication (TD5 + SLABS) --");
+    struct { uint8_t addr; const char *name; } mods[] = { {0x13, "TD5"}, {0x29, "SLABS"} };
+    for (auto &m : mods) {
+      stopComm();               // clear any link left open by the previous module
+      klineFastInit();
+      Serial.print("== "); Serial.print(m.name);
+      Serial.print(" (0x"); Serial.print(m.addr, HEX); Serial.println(") ==");
+      startCommunication(m.addr);
+      delay(300);
+    }
   }
 }
