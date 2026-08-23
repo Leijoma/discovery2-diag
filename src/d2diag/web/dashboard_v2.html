@@ -98,7 +98,7 @@ h2{font-size:20px;line-height:28px;font-weight:700;margin:0}
 /* Analog gauge tile (2×2) — a 270° arc that fills the value from gmin..gmax. */
 .dtile.gauge{align-items:stretch;justify-content:flex-start}
 .gwrap{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
-.gsvg{height:100%;max-height:100%;max-width:100%;width:auto;aspect-ratio:1/1}
+.gsvg{width:100%;height:100%;display:block}  /* viewBox + default preserveAspectRatio centres + scales to fit */
 .gtrack{fill:none;stroke:var(--border);stroke-width:9;stroke-linecap:round}
 .gval{fill:none;stroke:var(--ic-blue);stroke-width:9;stroke-linecap:round;transition:stroke-dasharray .3s ease}
 .gnum{fill:var(--fg);font-size:24px;font-weight:800;text-anchor:middle;font-variant-numeric:tabular-nums}
@@ -347,19 +347,21 @@ function clockHHMM(){ const d=new Date(); return String(d.getHours()).padStart(2
 function gaugeSvg(value, min, max, unit, dec){
   const r=40, C=2*Math.PI*r, sweep=0.75, arc=C*sweep;
   const frac = (typeof value==="number") ? Math.max(0, Math.min(1,(value-min)/(max-min))) : 0;
-  const num = (typeof value==="number") ? (dec!=null?value.toFixed(dec):fmt(value)) : "–";
+  let dv=value, du=unit||"";                       // convert the shown number to the user's unit
+  if(typeof value==="number"){ const c=convUnit(value,du); dv=c.v; du=c.unit; }
+  const num = (typeof dv==="number") ? (dec!=null?dv.toFixed(dec):fmt(dv)) : "–";
   return `<svg viewBox="0 0 100 100" class="gsvg">
     <circle cx="50" cy="50" r="${r}" class="gtrack" stroke-dasharray="${arc.toFixed(1)} ${C.toFixed(1)}" transform="rotate(135 50 50)"/>
     <circle cx="50" cy="50" r="${r}" class="gval" stroke-dasharray="${(arc*frac).toFixed(1)} ${C.toFixed(1)}" transform="rotate(135 50 50)"/>
     <text x="50" y="54" class="gnum">${num}</text>
-    <text x="50" y="69" class="gunit">${unit||""}</text>
+    <text x="50" y="69" class="gunit">${du}</text>
   </svg>`;
 }
-// The single data card. variant "tile" (Drive digital), "gauge" (Drive 2×2 analog),
-// or "row" (Inputs, adds flag/info/meta).
+// The single data card. variant "tile" (Drive digital), "gauge" (Drive analog,
+// 1 col wide × 2 rows tall — two fit side by side), or "row" (Inputs).
 function dataCard(spec){
   if(spec.variant==="gauge")
-    return `<div class="dtile gauge" style="grid-column:span 2;grid-row:span 2">
+    return `<div class="dtile gauge" style="grid-column:span 1;grid-row:span 2">
       <div class="dlabel">${spec.label}</div>
       <div class="gwrap">${gaugeSvg(spec.value, spec.gmin, spec.gmax, spec.unit, spec.dec)}</div></div>`;
   const val = renderValue(spec.value, spec.unit, {dec:spec.dec, dim:spec.dim});
@@ -454,16 +456,15 @@ function statusGate(){
 // Curated for driving — what matters on the move and is NOT already on the dash
 // cluster (so no Speed/RPM). conv/unit/dec = per-tile transform: fuel in L/mil
 // (Swedish litres-per-10km, one decimal) from the backend's L/100km, so ÷10.
-// Order = grid flow (2-col): Time,Coolant [row1] · Boost gauge 2×2 [rows2-3] ·
-// Battery,Fuel [row4] · Trip,Intake [row5]. Fills 5 rows evenly, no scroll.
+// Order = grid flow (2-col): Time,Battery [row1] · Boost + Coolant gauges (1×2)
+// side by side [rows2-3] · Fuel,Trip [row4]. 4 rows, no scroll.
 const DRIVE_TILES = [
   {clock:true,         label:"Time"},
-  {n:"coolant_temp",   label:"Coolant"},
-  {n:"manifold_press", label:"Boost", gauge:true, gmin:1.0, gmax:2.5, dec:1},
   {n:"battery",        label:"Battery"},
+  {n:"manifold_press", label:"Boost",   gauge:true, gmin:1.0, gmax:2.5, dec:1},
+  {n:"coolant_temp",   label:"Coolant", gauge:true, gmin:40,  gmax:120, dec:0},
   {n:"economy",        label:"Fuel", conv:v=>v/10, unit:"L/mil", dec:1},  // live, only while moving
   {n:"trip_economy",   label:"Trip", conv:v=>v/10, unit:"L/mil", dec:1},  // since start
-  {n:"air_temp",       label:"Intake"},
 ];
 function renderDrive(){
   const sig = (SNAP&&SNAP.signals)||{}, fmap = FIELDS[MODULE]||{};
