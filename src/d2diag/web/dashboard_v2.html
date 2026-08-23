@@ -85,10 +85,13 @@ h2{font-size:20px;line-height:28px;font-weight:700;margin:0}
 /* Driver's Dashboard — curated tiles that fill the screen height so it never
    scrolls in phone portrait. grid-auto-rows:1fr splits the height evenly.
    Values are right-aligned (unit fixed) via the shared .cv-* component. */
-/* Spanning widget grid: digital fields = 1 cell (2-per-row bar), analog gauge =
-   span 2×2 (full width, square-ish). grid-auto-rows:1fr fills the height → no scroll. */
-.drive{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:10px}
-.dtile{border:1px solid var(--border);border-radius:14px;background:var(--bg-card);display:flex;
+/* Spanning widget grid on a 4-column base for good aspect control: digital field
+   = span 2×1 (a 2:1 bar), analog gauge = span 2×2 (a SQUARE, so the round gauge
+   looks right). The grid is kept square (aspect-ratio 1/1 over its 4 rows) so the
+   cells are square, and centred vertically — no scroll in portrait. */
+.drive{width:100%;max-height:100%;margin:auto 0;aspect-ratio:1/1;min-height:0;
+  display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:1fr;gap:10px}
+.dtile{grid-column:span 2;border:1px solid var(--border);border-radius:14px;background:var(--bg-card);display:flex;
   flex-direction:column;justify-content:flex-start;align-items:flex-start;gap:6px;padding:12px 14px;min-height:0;overflow:hidden}
 .dtile.warn{border-color:var(--bd-red);background:var(--bg-red)}
 /* Card composition: small label top-left, big value below-left (not centered, not split). */
@@ -357,11 +360,11 @@ function gaugeSvg(value, min, max, unit, dec){
     <text x="50" y="69" class="gunit">${du}</text>
   </svg>`;
 }
-// The single data card. variant "tile" (Drive digital), "gauge" (Drive analog,
-// 1 col wide × 2 rows tall — two fit side by side), or "row" (Inputs).
+// The single data card. variant "tile" (Drive digital, 2×1 bar), "gauge" (Drive
+// analog, 2×2 square — two fit per row on the 4-col grid), or "row" (Inputs).
 function dataCard(spec){
   if(spec.variant==="gauge")
-    return `<div class="dtile gauge" style="grid-column:span 1;grid-row:span 2">
+    return `<div class="dtile gauge" style="grid-column:span 2;grid-row:span 2">
       <div class="dlabel">${spec.label}</div>
       <div class="gwrap">${gaugeSvg(spec.value, spec.gmin, spec.gmax, spec.unit, spec.dec)}</div></div>`;
   const val = renderValue(spec.value, spec.unit, {dec:spec.dec, dim:spec.dim});
