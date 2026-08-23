@@ -20,3 +20,6 @@ captures/
 
 # Fuel trip-computer lifetime state (local)
 fuel_totals.json
+
+# ESP32 WiFi/OTA credentials — never publish (copy secrets.example.h → secrets.h)
+secrets.h
