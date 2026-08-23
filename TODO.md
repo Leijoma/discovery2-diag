@@ -74,6 +74,27 @@ trouble. 220 tests green.
       and a more stable alternative to USB-KKL.
 - [ ] OBD splitter with pin 7 wired through for continued sniffing.
 
+## Roadmap — data-hub direction (discussion 2026-08-23, not scheduled)
+
+The architecture is already hub-shaped (`DataSource` + the signal store as a
+normalized name/unit/confidence model + SSE). North star: evolve it toward a
+SignalK-inspired vehicle data hub — kept in mind while we work, built one
+reversible step at a time. Not a commitment; the lean live tool stays the product.
+
+- [ ] **Phone GPS** as a second source (zero hardware — the phone already reaches
+      the Pi). Proves the "remote source → hub → normalized signal → UI/log" chain.
+      Gives location/altitude/real distance (true L/mil, hill-vs-load). Do this first.
+- [ ] **MQTT source-bus** (mosquitto on the Pi — light) as the internal spine; SSE
+      stays for the browser. A "network `DataSource`" type receives pushed data.
+- [ ] **K-line as its own ESP32 node** (sketches exist in `esp32/`) — isolates the
+      one-session-at-a-time bus so it never blocks the hub; it just publishes signals.
+- [ ] **Engine-bay ESP32** for analog data (EGT, oil, real boost, voltages).
+- [ ] **InfluxDB on the Pi** (or a lighter TSDB — Influx is RAM-heavy on a 3B) as a
+      queryable history/knowledge store, fed from the raw/CSV/JSONL logs, so we query
+      trends instead of digging through log files.
+
+Discipline: borrow SignalK's ideas, don't rebuild it; each node must earn its place.
+
 ## Method lessons (cost a whole day 2026-08-19)
 
 - **Never lock an experiment to one variant before the question is settled.** A run
