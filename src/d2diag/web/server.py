@@ -774,7 +774,10 @@ class DiagServer(ThreadingHTTPServer):
                 except Exception:  # noqa: BLE001 — a log error must never fell the poll loop
                     pass
             csv_log = self._csv  # local ref: stop_csv may null it mid-logging
-            if csv_log is not None:
+            # Only record real rows: with CSV auto-started (--csv), this keeps
+            # connecting/error rows (no cable / between reconnects) out of the file,
+            # so an auto-logged CSV holds only the actual drive.
+            if csv_log is not None and self.latest.get("status") == "connected":
                 try:
                     csv_log.log(self.latest)
                 except Exception:  # noqa: BLE001 — a CSV error must never fell the poll loop

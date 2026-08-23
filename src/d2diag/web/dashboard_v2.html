@@ -79,6 +79,15 @@ h2{font-size:20px;line-height:28px;font-weight:700;margin:0}
 }
 .infobtn{border:0;background:transparent;color:var(--fg-dis);font-size:13px;cursor:pointer;padding:2px 4px;line-height:1}
 .ro.open .infobtn{color:var(--ic-blue)}
+/* Driver's Dashboard — curated tiles that fill the screen height so it never
+   scrolls in phone portrait. grid-auto-rows:1fr splits the height evenly. */
+.drive{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:10px}
+.dtile{border:1px solid var(--border);border-radius:14px;background:var(--bg-card);display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px;min-height:0;overflow:hidden}
+.dtile.warn{border-color:var(--bd-red);background:var(--bg-red)}
+.dlabel{font-size:14px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--fg2)}
+.dval{font-size:clamp(30px,10vw,52px);font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.dunit{font-size:.42em;color:var(--fg2);font-weight:600;margin-left:4px}
 .iconbtn{border:1px solid var(--border-emph);background:var(--bg-surface);color:var(--fg2);border-radius:9999px;height:32px;padding:0 12px;display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
 .iconbtn.rec{border-color:var(--bd-red);color:var(--ic-red)}
 .iconbtn .d{width:8px;height:8px;border-radius:9999px;background:currentColor}
@@ -159,6 +168,7 @@ const ADMIN = /^\/admin\/?$/.test(location.pathname);
 // (→HTML), mount (optional event wiring after injection), admin (only on /admin)}.
 // Add a tab = one row here. render()/renderNav() are never touched again. ----
 const SCREENS = {
+  drive:   {label:"Drive",      render:renderDrive},
   connect: {label:"Connect",   render:renderConnect,   mount:mountConnect},
   faults:  {label:"Faults",     render:renderFaults,    mount:mountFaults},
   inputs:  {label:"Inputs",     render:renderInputs,    mount:mountInputs},
@@ -167,9 +177,9 @@ const SCREENS = {
   map:     {label:"Map",        render:renderMap,       mount:mountMap,     admin:true},
   capture: {label:"Capture",    render:renderCapture,   mount:mountCapture, admin:true},
 };
-const TAB_ORDER = ["connect","faults","inputs","outputs","utils","map","capture"];
+const TAB_ORDER = ["drive","connect","faults","inputs","outputs","utils","map","capture"];
 function tabList(){ return TAB_ORDER.filter(id => SCREENS[id] && (ADMIN || !SCREENS[id].admin)); }
-let TAB = ADMIN ? "map" : "inputs";
+let TAB = ADMIN ? "map" : "drive";
 
 // ---- preferences (localStorage) + community state ----
 const PREFS = Object.assign({trust:"trusted", consentDone:false, share:null, theme:"dark"},
@@ -372,6 +382,40 @@ function statusGate(){
     <div style="font-size:12px;color:var(--fg-dis)">${last}</div></div></div></div>`;
 }
 
+// Driver's Dashboard — a curated, glanceable set for while driving. All values stay
+// in the Inputs tab; here we show only what matters on the move, big enough to read.
+const DRIVE_TILES = [
+  {n:"coolant_temp", label:"Coolant"},
+  {n:"battery",      label:"Battery"},
+  {n:"fuel_rate",    label:"Fuel/h"},
+  {n:"trip_economy", label:"Trip"},
+  {n:"speed",        label:"Speed"},
+  {n:"rpm",          label:"RPM"},
+  {n:"manifold_press", label:"Boost"},
+  {n:"air_temp",     label:"Intake"},
+];
+function renderDrive(){
+  const sig = (SNAP&&SNAP.signals)||{}, fmap = FIELDS[MODULE]||{};
+  const rec = !!(SNAP&&SNAP.logging&&SNAP.logging.recording);
+  const head = `<div class="row"><h2>Drive</h2>
+    <span style="font-size:12px;color:var(--fg2);margin-left:2px">· ${MODULE_NAME[MODULE]||MODULE}</span>
+    ${rec?`<span class="flag hi" style="margin-left:auto">● REC</span>`:``}</div>`;
+  const gate = statusGate();
+  if(gate) return `${head}${gate}`;
+  const faults = (SNAP&&SNAP.faults)||[];
+  const alert = faults.length ? `<div class="card" onclick="TAB='faults';renderNav();render()" style="border-color:var(--bd-red);background:var(--bg-red);padding:10px 14px;cursor:pointer">
+      <span style="font-weight:700;color:var(--ic-red)">⚠ ${faults.length} fault${faults.length>1?'s':''} stored</span>
+      <span style="font-size:13px;color:var(--fg2);margin-left:8px">tap for the Faults tab</span></div>` : "";
+  const tiles = DRIVE_TILES.map(t=>{
+    const s = sig[t.n], f = fmap[t.n];
+    const u = (s&&s.u) || (f&&f.u) || "";
+    const fl = flagFor(t.n, s, f);
+    const warn = (fl.cls==="lo" || fl.cls==="hi") ? " warn" : "";
+    return `<div class="dtile${warn}"><div class="dlabel">${t.label}</div>
+      <div class="dval">${fmt(s&&s.v)}${u?`<span class="dunit">${u}</span>`:``}</div></div>`;
+  }).join("");
+  return `${head}${alert}<div class="drive">${tiles}</div>`;
+}
 function renderInputs(){
   const sig = (SNAP&&SNAP.signals)||{}, fmap = FIELDS[MODULE]||{};
   const names = [...new Set([...Object.keys(fmap), ...Object.keys(sig)])].filter(n=>!n.endsWith("_mm"));
