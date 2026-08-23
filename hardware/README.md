@@ -78,13 +78,22 @@ Follows the muki01 `L9637D.png` reference. Pinout (SO-8):
 | 7 | VS | **12 V** via a series diode (1N4148/1N4007) + 100 nF decoupling |
 | 8 | LI | L-line in — **not used** (tie per datasheet / leave) |
 
+- ⚠️ **VS is pin 7, LI is pin 8** (confirmed against the ST datasheet + the muki01
+  schematic). Some secondary/third-party sheets mis-number these — during bring-up a
+  paper claimed VS on pin 8; wiring 12 V there leaves the real VS (pin 7) unpowered
+  and the K driver dead (symptom: RX stuck high, no echo). Go by pin 1 = the dot/notch.
 - **510 Ω K-line pull-up** to 12 V (use **0.5 W** — it dissipates ~0.28 W when the
   line is pulled low). Add a small **series R (~100 Ω) + a TVS/zener clamp** on the
   K node for extra surge margin (belt and suspenders; the L9637D is already ~40 V
   tolerant).
-- The L9637D is **non-inverting** → firmware `KLINE_INVERT` should be **false**
-  (the current `true` in `kline_test.ino` is for the 2-transistor bench tap).
-  **Confirm empirically with `klineLineDiag()` before trusting fast init.**
+- ⚠️ **Pull-up value is critical for bit timing.** It sets the K rise time (τ = R·C).
+  At 10400 baud a bit is only **96 µs**, so R must be small: **510 Ω–1 kΩ**. A
+  too-high value garbles the transmitted bytes *even though the DC line-diag passes* —
+  bring-up 2026-08-23 accidentally used **470 kΩ**: line-diag OK, but the echo was
+  corrupt at 10400 and only clean at 2400 baud. Swapping to **1 kΩ** fixed it instantly.
+  (On the car the ECU's own pull-up helps, but include your own 510 Ω–1 kΩ.)
+- The L9637D is **non-inverting** → `KLINE_INVERT` is **false** (now the default in
+  `kline_test.ino`); `klineLineDiag()` confirms it ("loop closes, non-inverted").
 - **L-line not needed** for the Td5 (both fast init and 5-baud slow init run on K).
 
 > ⚠️ **VCC = 3.3 V note.** The L9637D is spec'd around 5 V logic but commonly works
@@ -163,9 +172,11 @@ Follows the muki01 `L9637D.png` reference. Pinout (SO-8):
    / 100 nF, fed from a **current-limited bench 12 V (~200 mA)**.
    Verify: 3.3 V rail stable · ESP32 boots · `klineLineDiag` healthy (correct
    inversion) · `0xA5` self-test echoes (with 12 V + pull-up).
-2. **Against the car.** OBD pigtail → `kline_test.ino` fast init → expect `C1 57 8F`,
-   then a `21 xx` read. **Compare against the known-good USB-KKL + d2diag** (same
-   answer = pass). Also try SLABS fast init at 0x29 → `C1 57 8F`.
+2. **Against the car.** ✅ **VERIFIED 2026-08-23** (breadboard: ESP32-DevKitC + L9637D
+   on SO-8→DIP, VCC 3.3 V, 12 V + **1 kΩ** pull-up, in the car): fast init returned
+   **`03 C1 57 8F AA`** from the Td5 (KW 57 8F, checksum OK) — matches the car sniffs.
+   Self-test echoed clean and line-diag showed "loop closes, non-inverted".
+   Next: a `21 xx` read, cross-check vs USB-KKL + d2diag; SLABS fast init at 0x29.
 3. **Perfboard in an enclosure** with an OBD pigtail; run in the car; verify stability
    and no resets on starter crank (brown-out).
 4. **PCB (KiCad → JLCPCB):** protection + CAN footprint DNP, OBD-plug format. Ties into
