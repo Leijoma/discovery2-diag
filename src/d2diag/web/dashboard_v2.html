@@ -89,23 +89,23 @@ h2{font-size:20px;line-height:28px;font-weight:700;margin:0}
    = span 2×1 (a 2:1 bar), analog gauge = span 2×2 (a SQUARE, so the round gauge
    looks right). The grid is kept square (aspect-ratio 1/1 over its 4 rows) so the
    cells are square, and centred vertically — no scroll in portrait. */
-.drive{width:100%;max-height:100%;margin:auto 0;aspect-ratio:1/1;min-height:0;
-  display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:1fr;gap:10px}
+.drive{width:100%;max-height:100%;margin:auto 0;min-height:0;
+  display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:1fr;gap:6px}
 .dtile{grid-column:span 2;border:1px solid var(--border);border-radius:14px;background:var(--bg-card);display:flex;
-  flex-direction:column;justify-content:flex-start;align-items:flex-start;gap:6px;padding:12px 14px;min-height:0;overflow:hidden}
+  flex-direction:column;justify-content:flex-start;align-items:flex-start;gap:1px;padding:9px 12px;min-height:0;overflow:hidden}
 .dtile.warn{border-color:var(--bd-red);background:var(--bg-red)}
-/* Card composition: small label top-left, big value below-left (not centered, not split). */
-.dlabel{font-size:16px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--fg2)}
-.dval{font-size:clamp(30px,10vw,54px);font-weight:800;line-height:1;display:flex;align-items:baseline;justify-content:flex-start}
+/* Card composition: small label top-left, big value directly below (top-aligned, tight). */
+.dlabel{font-size:15px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--fg2)}
+.dval{font-size:clamp(34px,12vw,64px);font-weight:800;line-height:1.02;display:flex;align-items:baseline;justify-content:flex-start}
 .dval .cv-num{min-width:3ch}   /* reserve width so the unit never jumps (89 -> 100) */
-/* Analog gauge tile (2×2) — a 270° arc that fills the value from gmin..gmax. */
-.dtile.gauge{align-items:stretch;justify-content:flex-start}
+/* Analog gauge tile (2×2 square) — bigger arc, minimal margin. */
+.dtile.gauge{align-items:stretch;justify-content:flex-start;gap:0;padding:6px 6px 4px}
 .gwrap{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
 .gsvg{width:100%;height:100%;display:block}  /* viewBox + default preserveAspectRatio centres + scales to fit */
-.gtrack{fill:none;stroke:var(--border);stroke-width:9;stroke-linecap:round}
-.gval{fill:none;stroke:var(--ic-blue);stroke-width:9;stroke-linecap:round;transition:stroke-dasharray .3s ease}
-.gnum{fill:var(--fg);font-size:24px;font-weight:800;text-anchor:middle;font-variant-numeric:tabular-nums}
-.gunit{fill:var(--fg2);font-size:10px;font-weight:600;text-anchor:middle;letter-spacing:.5px}
+.gtrack{fill:none;stroke:var(--border);stroke-width:11;stroke-linecap:round}
+.gval{fill:none;stroke:var(--ic-blue);stroke-width:11;stroke-linecap:round;transition:stroke-dasharray .3s ease}
+.gnum{fill:var(--fg);font-size:30px;font-weight:800;text-anchor:middle;font-variant-numeric:tabular-nums}
+.gunit{fill:var(--fg2);font-size:11px;font-weight:600;text-anchor:middle;letter-spacing:.5px}
 .iconbtn{border:1px solid var(--border-emph);background:var(--bg-surface);color:var(--fg2);border-radius:9999px;height:32px;padding:0 12px;display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
 .iconbtn.rec{border-color:var(--bd-red);color:var(--ic-red)}
 .iconbtn .d{width:8px;height:8px;border-radius:9999px;background:currentColor}
@@ -459,15 +459,17 @@ function statusGate(){
 // Curated for driving — what matters on the move and is NOT already on the dash
 // cluster (so no Speed/RPM). conv/unit/dec = per-tile transform: fuel in L/mil
 // (Swedish litres-per-10km, one decimal) from the backend's L/100km, so ÷10.
-// Order = grid flow (2-col): Time,Battery [row1] · Boost + Coolant gauges (1×2)
-// side by side [rows2-3] · Fuel,Trip [row4]. 4 rows, no scroll.
+// Order = grid flow (4-col, cards span 2): Time,Battery · Boost+Coolant gauges
+// (2×2) · Fuel,Trip · Intake,Lifetime. Keep gauges paired so rows stay clean.
 const DRIVE_TILES = [
-  {clock:true,         label:"Time"},
-  {n:"battery",        label:"Battery"},
-  {n:"manifold_press", label:"Boost",   gauge:true, gmin:1.0, gmax:2.5, dec:1},
-  {n:"coolant_temp",   label:"Coolant", gauge:true, gmin:40,  gmax:120, dec:0},
-  {n:"economy",        label:"Fuel", conv:v=>v/10, unit:"L/mil", dec:1},  // live, only while moving
-  {n:"trip_economy",   label:"Trip", conv:v=>v/10, unit:"L/mil", dec:1},  // since start
+  {clock:true,           label:"Time"},
+  {n:"battery",          label:"Battery"},
+  {n:"manifold_press",   label:"Boost",    gauge:true, gmin:1.0, gmax:2.5, dec:1},
+  {n:"coolant_temp",     label:"Coolant",  gauge:true, gmin:40,  gmax:120, dec:0},
+  {n:"economy",          label:"Fuel", conv:v=>v/10, unit:"L/mil", dec:1},  // live, only while moving
+  {n:"trip_economy",     label:"Trip", conv:v=>v/10, unit:"L/mil", dec:1},  // since start
+  {n:"air_temp",         label:"Intake"},
+  {n:"lifetime_economy", label:"Lifetime", conv:v=>v/10, unit:"L/mil", dec:1},
 ];
 function renderDrive(){
   const sig = (SNAP&&SNAP.signals)||{}, fmap = FIELDS[MODULE]||{};
@@ -494,7 +496,9 @@ function renderDrive(){
     return dataCard({variant:"tile", label:t.label, value:v, unit, dec:t.dec,
       warn:(fl.cls==="lo" || fl.cls==="hi")});
   }).join("");
-  return `${head}${alert}<div class="drive">${tiles}</div>`;
+  // Keep cells square: 4 cols, rows = per pair (a pair with a gauge is 2 rows tall).
+  let rows=0; for(let i=0;i<DRIVE_TILES.length;i+=2) rows += DRIVE_TILES.slice(i,i+2).some(t=>t.gauge)?2:1;
+  return `${head}${alert}<div class="drive" style="aspect-ratio:4/${rows}">${tiles}</div>`;
 }
 function renderInputs(){
   const sig = (SNAP&&SNAP.signals)||{}, fmap = FIELDS[MODULE]||{};

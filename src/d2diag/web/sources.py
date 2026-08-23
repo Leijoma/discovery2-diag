@@ -293,6 +293,7 @@ class MockDataSource(DataSource):
             # come from the real fuel computer in Td5DataSource.
             "economy": 8.2 + random.uniform(-0.4, 0.4),
             "trip_economy": 7.9 + random.uniform(-0.1, 0.1),
+            "lifetime_economy": 8.5 + random.uniform(-0.05, 0.05),
             "rpm_error": random.uniform(-8, 8),
             "balance_1": random.uniform(-4, 4),
             "balance_2": random.uniform(-4, 4),
