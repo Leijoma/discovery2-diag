@@ -289,6 +289,10 @@ class MockDataSource(DataSource):
             "fuel_temp": self._coolant - 6 + random.uniform(-1, 1),
             "manifold_press": manifold,
             "ambient_press_1": 1.01,
+            # Fuel economy (L/100km) so the Drive tab preview shows L/mil; live values
+            # come from the real fuel computer in Td5DataSource.
+            "economy": 8.2 + random.uniform(-0.4, 0.4),
+            "trip_economy": 7.9 + random.uniform(-0.1, 0.1),
             "rpm_error": random.uniform(-8, 8),
             "balance_1": random.uniform(-4, 4),
             "balance_2": random.uniform(-4, 4),

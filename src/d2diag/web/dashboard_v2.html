@@ -283,7 +283,8 @@ function onSnap(d){
   if(d.logging) recording = !!d.logging.recording;
   if(!FIELDS[mod]) loadFields(mod);
   renderHeader();
-  if(TAB==="inputs") render();
+  if(TAB==="drive" || TAB==="inputs") render();   // live-value tabs refresh each poll
+  if(d.status==="connected") maybeShowFaults();     // startup + new-fault modal
 }
 const es = new EventSource("/events");
 es.onmessage = e => { try{ onSnap(JSON.parse(e.data)); }catch(_){} };
@@ -384,11 +385,13 @@ function statusGate(){
 
 // Driver's Dashboard — a curated, glanceable set for while driving. All values stay
 // in the Inputs tab; here we show only what matters on the move, big enough to read.
+// conv/unit/dec = optional per-tile transform. Fuel is shown in L/mil (Swedish:
+// litres per 10 km), one decimal — the backend derives L/100km, so ÷10 here.
 const DRIVE_TILES = [
   {n:"coolant_temp", label:"Coolant"},
   {n:"battery",      label:"Battery"},
-  {n:"fuel_rate",    label:"Fuel/h"},
-  {n:"trip_economy", label:"Trip"},
+  {n:"economy",      label:"Fuel", conv:v=>v/10, unit:"L/mil", dec:1},   // live, only while moving
+  {n:"trip_economy", label:"Trip", conv:v=>v/10, unit:"L/mil", dec:1},   // since start
   {n:"speed",        label:"Speed"},
   {n:"rpm",          label:"RPM"},
   {n:"manifold_press", label:"Boost"},
@@ -402,17 +405,22 @@ function renderDrive(){
     ${rec?`<span class="flag hi" style="margin-left:auto">● REC</span>`:``}</div>`;
   const gate = statusGate();
   if(gate) return `${head}${gate}`;
-  const faults = (SNAP&&SNAP.faults)||[];
-  const alert = faults.length ? `<div class="card" onclick="TAB='faults';renderNav();render()" style="border-color:var(--bd-red);background:var(--bg-red);padding:10px 14px;cursor:pointer">
-      <span style="font-weight:700;color:var(--ic-red)">⚠ ${faults.length} fault${faults.length>1?'s':''} stored</span>
-      <span style="font-size:13px;color:var(--fg2);margin-left:8px">tap for the Faults tab</span></div>` : "";
+  // Only NEW (unacknowledged) faults nag here — known faults were shown at startup
+  // and dismissed, so they don't clutter the drive.
+  const nu = faultUnacked();
+  const alert = nu.length ? `<div class="card" onclick="showFaultSheet(faultUnacked())" style="border-color:var(--bd-red);background:var(--bg-red);padding:10px 14px;cursor:pointer">
+      <span style="font-weight:700;color:var(--ic-red)">⚠ ${nu.length} new fault${nu.length>1?'s':''}</span>
+      <span style="font-size:13px;color:var(--fg2);margin-left:8px">tap to view</span></div>` : "";
   const tiles = DRIVE_TILES.map(t=>{
     const s = sig[t.n], f = fmap[t.n];
-    const u = (s&&s.u) || (f&&f.u) || "";
+    let v = (s && typeof s.v==="number") ? s.v : null;
+    if(v!==null && t.conv) v = t.conv(v);
+    const u = t.unit || (s&&s.u) || (f&&f.u) || "";
+    const val = v===null ? "–" : (t.dec!=null ? v.toFixed(t.dec) : fmt(v));
     const fl = flagFor(t.n, s, f);
     const warn = (fl.cls==="lo" || fl.cls==="hi") ? " warn" : "";
     return `<div class="dtile${warn}"><div class="dlabel">${t.label}</div>
-      <div class="dval">${fmt(s&&s.v)}${u?`<span class="dunit">${u}</span>`:``}</div></div>`;
+      <div class="dval">${val}${u&&v!==null?`<span class="dunit">${u}</span>`:``}</div></div>`;
   }).join("");
   return `${head}${alert}<div class="drive">${tiles}</div>`;
 }
@@ -735,6 +743,36 @@ function parseFault(str){
   if(mcode){ raw = mcode[1]; text = text.replace(/^\d{3}:\s*/, ""); }
   return {text, tag, raw, current:/current/i.test(tag)};
 }
+
+// ---- Fault alerting: show current faults once at startup (a modal you dismiss),
+// then only nag about NEW faults during the drive. `ackedFaults` = the fault
+// strings already shown+dismissed (per session). ----
+const ackedFaults = new Set();
+function faultUnacked(){ return ((SNAP&&SNAP.faults)||[]).filter(f=>!ackedFaults.has(f)); }
+function maybeShowFaults(){
+  if(document.getElementById("faultsheet")) return;   // already open
+  const un = faultUnacked();
+  if(un.length) showFaultSheet(un);
+}
+function showFaultSheet(faults){
+  closeFaultSheet();
+  const list = faults.map(f=>{ const p=parseFault(f);
+    return `<div class="ro" style="border-left:4px solid ${p.current?'var(--ic-red)':'var(--ic-yellow)'}">
+      <div class="ro-top"><div class="ro-lbl" style="flex:1;font-size:14px">${p.raw?`<b>${p.raw}</b> · `:''}${p.text}</div>
+      ${p.tag?`<span class="flag ${p.current?'hi':'sus'}">${p.tag}</span>`:''}</div></div>`; }).join("");
+  const el=document.createElement("div"); el.className="sheet"; el.id="faultsheet"; el._faults=faults.slice();
+  el.innerHTML=`<div style="flex:1" onclick="dismissFaults()"></div>
+    <div class="sheet-body" onclick="event.stopPropagation()">
+      <div class="grip"></div>
+      <div style="font-size:20px;font-weight:700;color:var(--ic-red)">⚠ ${faults.length} fault${faults.length>1?'s':''}</div>
+      <div style="font-size:13px;color:var(--fg2);text-wrap:pretty">Stored/active on ${MODULE_NAME[MODULE]||MODULE}. Dismiss to keep driving — after this you're only alerted about NEW faults.</div>
+      <div style="display:flex;flex-direction:column;gap:8px">${list}</div>
+      <button class="btn accent" onclick="dismissFaults()">Dismiss</button></div>`;
+  document.querySelector(".app").appendChild(el);
+}
+function dismissFaults(){ const el=document.getElementById("faultsheet"); if(el){ (el._faults||[]).forEach(f=>ackedFaults.add(f)); el.remove(); } render(); }
+function closeFaultSheet(){ document.getElementById("faultsheet")?.remove(); }
+window.showFaultSheet=showFaultSheet; window.dismissFaults=dismissFaults; window.faultUnacked=faultUnacked;
 function renderFaults(){
   const faults = (SNAP&&SNAP.faults)||[];
   const parsed = faults.map(parseFault);
