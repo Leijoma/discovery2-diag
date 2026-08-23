@@ -13,7 +13,7 @@
 static const int      PIN_KRX      = 16;   // Q2 collector -> GPIO16
 static const int      PIN_KTX      = 17;   // GPIO17 -> 4.7k -> Q1 base
 static const uint32_t KLINE_BAUD   = 10400;
-static const bool     KLINE_INVERT = true;    // the 2-transistor circuit inverts both legs
+static const bool     KLINE_INVERT = false;   // L9637D is non-inverting (set true only for a 2-transistor inverting tap)
 
 // Td5 addresses
 static const uint8_t ECU_ADDR    = 0x13;
