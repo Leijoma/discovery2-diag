@@ -18,10 +18,32 @@
 #include <WebServer.h>
 #include <ArduinoOTA.h>
 #include <ESPmDNS.h>
+#include <WireGuard-ESP32.h>
+#include <WiFiUdp.h>
+#include <time.h>
 #include "secrets.h"
 
 static WebServer server(80);
+static WireGuard wg;
+static bool wgUp = false;
+static WiFiUDP kaUdp;
 static uint32_t bootMs = 0;
+
+// Bring up the WireGuard tunnel so the node has a fixed WG IP reachable via the
+// same tunnel the phone/Pi use. The handshake needs valid wall-clock time → NTP first.
+// Skipped if WG_PRIVATE_KEY is still the placeholder.
+static void wgStart() {
+  if (strlen(WG_PRIVATE_KEY) < 40) { Serial.println("WG: no key set — skipping"); return; }
+  Serial.println("WG: syncing time (NTP) ...");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  uint32_t t0 = millis();
+  while (time(nullptr) < 1700000000 && millis() - t0 < 8000) delay(200);
+  if (time(nullptr) < 1700000000) { Serial.println("WG: NTP failed — skipping"); return; }
+  IPAddress ip; ip.fromString(WG_LOCAL_IP);
+  Serial.printf("WG: connecting, local %s ...\n", WG_LOCAL_IP);
+  wgUp = wg.begin(ip, WG_PRIVATE_KEY, WG_ENDPOINT, WG_PEER_PUBKEY, (uint16_t)WG_PORT);
+  Serial.printf("WG: %s\n", wgUp ? "tunnel up" : "begin() failed");
+}
 
 // ---------------- K-line ----------------
 static const int      PIN_KRX      = 16;      // L9637D pin 1 (RX) -> GPIO16
@@ -115,7 +137,8 @@ static void handleRoot() {
     "<li>WiFi: <code>" + (ssid.length()?ssid:String("(disconnected)")) + "</code></li>"
     "<li>IP: <code>" + WiFi.localIP().toString() + "</code></li>"
     "<li>RSSI: <code>" + String(WiFi.RSSI()) + " dBm</code></li>"
-    "<li>Uptime: <code>" + uptimeStr() + "</code></li></ul>"
+    "<li>Uptime: <code>" + uptimeStr() + "</code></li>"
+    "<li>WG: <code>" + (wgUp ? String(WG_LOCAL_IP) + " (up)" : String("off")) + "</code></li></ul>"
     "<a class=btn href='/scan'>Test car (TD5 + SLABS)</a>"
     "<p style='color:#888;font-size:13px'>Ignition on, node wired to OBD (K/12V/GND + 1k pull-up).</p>";
   server.send(200, "text/html", html);
@@ -135,6 +158,7 @@ void setup() {
   Serial.println("\n== K-line node: WiFi + OTA + web + K-line ==");
   WiFi.mode(WIFI_STA); WiFi.setHostname(OTA_HOSTNAME); WiFi.setAutoReconnect(true);
   wifiConnect();
+  wgStart();                                 // fixed WG IP, reachable via the tunnel
 
   ArduinoOTA.setHostname(OTA_HOSTNAME);
   ArduinoOTA.setPassword(OTA_PASSWORD);
@@ -150,6 +174,7 @@ void setup() {
 }
 
 static uint32_t lastWifiCheck = 0;
+static uint32_t lastKeepalive = 0;
 void loop() {
   ArduinoOTA.handle();
   server.handleClient();
@@ -157,5 +182,14 @@ void loop() {
     lastWifiCheck = millis();
     Serial.println("WiFi: link down, reconnecting ...");
     wifiConnect();
+  }
+  // WG persistent keepalive: the lib has none, and the node sits behind the hotspot's
+  // NAT — send a tiny packet into the tunnel every 20 s so the mapping stays open and
+  // the server can reach us at 10.9.0.9 even when idle.
+  if (wgUp && millis() - lastKeepalive > 20000) {
+    lastKeepalive = millis();
+    kaUdp.beginPacket(IPAddress(10, 9, 0, 1), 51820);  // any WG-net IP → routes via wg → NAT refresh
+    kaUdp.write((uint8_t)0);
+    kaUdp.endPacket();
   }
 }

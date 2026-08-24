@@ -12,3 +12,12 @@
 
 #define OTA_HOSTNAME "kline-node"    // shows up as a network port for OTA flashing
 #define OTA_PASSWORD "set-an-ota-password"
+
+// WireGuard client (optional) — gives the node a FIXED tunnel IP reachable from the
+// phone via WG, so you never chase its hotspot DHCP address. Leave WG_PRIVATE_KEY as
+// the placeholder to disable WG. Generate a keypair with: wg genkey | wg pubkey
+#define WG_LOCAL_IP    "10.9.0.9"                 // this node's WG address
+#define WG_PRIVATE_KEY "esp-private-key-here"     // from wg genkey (keep secret)
+#define WG_PEER_PUBKEY "wg-server-public-key"     // your WG server's public key
+#define WG_ENDPOINT    "your.wg.server"           // WG server host/IP
+#define WG_PORT        51820
