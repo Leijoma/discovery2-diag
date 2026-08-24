@@ -17,6 +17,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ArduinoOTA.h>
+#include <ESPmDNS.h>
 #include "secrets.h"
 
 static WebServer server(80);
@@ -137,7 +138,8 @@ void setup() {
 
   ArduinoOTA.setHostname(OTA_HOSTNAME);
   ArduinoOTA.setPassword(OTA_PASSWORD);
-  ArduinoOTA.begin();
+  ArduinoOTA.begin();                       // also starts mDNS as OTA_HOSTNAME
+  MDNS.addService("http", "tcp", 80);       // advertise the web server (shows up in Fing/Bonjour)
 
   server.on("/", handleRoot);
   server.on("/status", handleStatus);
