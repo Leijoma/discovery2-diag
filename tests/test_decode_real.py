@@ -31,7 +31,9 @@ def test_off_battery_10():
 def test_off_manifold_and_maf_1c():
     v = decode_lid(0x1C, _d("27 07 27 1c 00 32 00 5b"))
     assert round(v["manifold_press"], 2) == 1.00
-    assert v["maf_raw"] == 50  # raw field (no MAF sensor), not air mass
+    # 1C@4 is no longer mapped: it is NOT air mass (reads 0 while running). The real MAF
+    # lives in 1D u16@4 (proven vs rpm*MAP); see test on LID 0x1D.
+    assert "maf_raw" not in v
 
 
 # --------------------------------------------------------------------------- #

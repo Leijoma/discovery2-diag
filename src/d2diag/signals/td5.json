@@ -180,18 +180,6 @@
     "source": "21 1C@0 u16/10000 bar = TURBO/boost pressure (reference tool 'Turbo Pressure'). Idle ~1.0 bar (atmospheric); full load 2.0–2.2 bar absolute; the ECU's overboost cut > 2.42 bar. CONFIRMED 2026-08-03 (1.0→1.2 bar)."
   },
   {
-    "name": "maf_raw",
-    "lid": "1C",
-    "offset": 4,
-    "kind": "u16",
-    "scale": 1.0,
-    "bias": 0.0,
-    "unit": "",
-    "confidence": "kandidat",
-    "limits": null,
-    "source": "21 1C@4. NOT air mass — car test 2026-08-20: reads 57 at ignition-on and 0 the whole time the engine is RUNNING (opposite of MAF). My earlier 'Air Flow' reclassification was WRONG. Unknown status field. The real MAF LID is STILL UNMAPPED — requires a raw sweep of LIDs while blipping the throttle (differential)."
-  },
-  {
     "name": "rpm_error",
     "lid": "21",
     "offset": 0,
@@ -312,21 +300,6 @@
     "source": "21 40@8 s16; cylinder balance 5. PROVEN (labeled_captures 40='correct'); values −6…+2 across captures."
   },
   {
-    "name": "maf",
-    "lid": "1D",
-    "offset": 5,
-    "kind": "u8",
-    "scale": 1.0,
-    "bias": 0.0,
-    "unit": "kg/hr",
-    "confidence": "belagt",
-    "limits": [
-      0,
-      650
-    ],
-    "source": "21 1D byte5 u8 kg/hr — MAF (air mass). FOUND via lid_sweep 2026-08-21: idle 69, 2000 rpm 184, follows load (2.7x). Matches published Td5 reference tool ranges (idle 55-65, 2000 rpm 185-200; overboost-cut ~618-650). NOTE: matched against forum ranges, not read off a reference tool on RDL016 itself. The sensor is HEALTHY (resistance pin1-2=17k OK, 12V on pin3, live follows rpm)."
-  },
-  {
     "name": "injection_qty",
     "lid": "1D",
     "offset": 6,
@@ -370,5 +343,20 @@
       100
     ],
     "source": "21 1D byte17 u8 x(100/255) = Wastegate Modulator % (boost-control duty). Confirmed across four drives 2026-08-21/22: rises with boost (r=0.85 vs MAP) but is NOT MAP itself (1D@4 is MAP, r=0.995). Baseline ~15 raw (~6%), tops 25-82 raw (~10-32%) scaling with drive intensity - matches the published band (0% idle, 20-40% boost, max ~40%). Position matches the Nanocom fuelling-page order. Candidate scaling (100/255)."
+  },
+  {
+    "name": "maf",
+    "lid": "1D",
+    "offset": 4,
+    "kind": "u16",
+    "scale": 0.1,
+    "bias": -515.0,
+    "unit": "kg/hr",
+    "confidence": "kandidat",
+    "limits": [
+      0,
+      700
+    ],
+    "source": "21 1D u16@4 (big-endian). FIELD proven: r=+0.95 vs rpm*MAP over a full WOT pull (0-4304 rpm, 0.98-2.11 bar; raw log 2026-08-21 221649) = speed-density air mass. Supersedes the earlier byte5(u8) mapping, which read only the LSB and wrapped (the '255 jump'). scale/bias = provisional 2-point calibration of u16@4 vs published Td5 ref ranges (idle ~60, 2000 rpm ~190 kg/h); PENDING a factory-tool MAF reading on RDL016. Raw u16@4: idle ~5750, 2000 rpm ~7045, WOT peak ~11821."
   }
 ]

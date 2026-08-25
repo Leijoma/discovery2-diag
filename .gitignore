@@ -23,3 +23,7 @@ fuel_totals.json
 
 # ESP32 WiFi/OTA credentials — never publish (copy secrets.example.h → secrets.h)
 secrets.h
+
+# Private protocol-inventory source docs (contain EKA/VIN/ECU IDs, Swedish, tool names).
+# The public knowledge base lives in docs/**/*.md; these .docx sources must never publish.
+docs/*.docx

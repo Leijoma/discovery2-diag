@@ -767,12 +767,13 @@ def test_init_lines_carry_the_last_known_engine_context(tmp_path):
 
 def test_conf_of_reads_store():
     # The confidence filter (Verified/Experimental) reads the store. After rpm_error
-    # and the balance fields were promoted 2026-08-19, maf_raw is a remaining TD5 candidate.
+    # and the balance fields were promoted 2026-08-19, maf (1D u16@4) is a remaining
+    # TD5 candidate — field proven but the kg/hr scale awaits a factory reference.
     from d2diag.web.sources import _conf_map, _conf_of
     conf = _conf_map("td5")
     assert _conf_of("td5", "rpm_error", conf) == "belagt"
     assert _conf_of("td5", "balance_3", conf) == "belagt"
-    assert _conf_of("td5", "maf_raw", conf) == "kandidat"
+    assert _conf_of("td5", "maf", conf) == "kandidat"
 
 
 def test_fuel_computer_rate_trip_economy():
