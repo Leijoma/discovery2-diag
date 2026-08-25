@@ -5,6 +5,11 @@ Captured 2026-08-07 via a passive ESP32 tap (RX-only, GPIO16) on pin 7, while a 
 `logs/session.log` (decoded with `tools/decode_session.py`). This is **proven from
 real traffic**, not guessed.
 
+> The raw capture files (`slabs_session_20260807` etc.) are kept **local-only** —
+> gitignored under the `captures/` / `*.log` policy, since a full session may carry
+> VIN/EKA. This document is the distilled, redacted evidence; the protocol facts below
+> are what the captures showed.
+
 ## Basics
 - **Address `0x29`, FAST init:** `81 29 F7 81 22` → response `C1 57 8F` (KWP2000, KW2=8F).
   ✅ **Init works since 2026-08-19** — see "The init pulse" below. That it previously
