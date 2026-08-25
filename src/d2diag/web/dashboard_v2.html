@@ -229,7 +229,7 @@ const META = {
   manifold_press:{g:"Pressures",d:"Turbo / boost pressure. Idle ~1.0 bar; full load 2.0–2.2; overboost-cut >2.42."},
   ambient_press_1:{g:"Pressures",d:"Atmospheric pressure — ~1.0 bar at sea level."},
   ambient_press_2:{g:"Pressures",d:"Atmospheric pressure (second reading)."},
-  maf:{g:"Engine",d:"Mass air flow (1D u16@4). Field proven vs rpm×boost; kg/hr scale is a candidate pending a reference reading."},
+  maf:{g:"Engine",d:"Air mass (1D u16@4) — likely a MODELLED value, not the sensor. RDL016's physical MAF (1C@4) reads 0 (air-flow-circuit fault), so this is the ECU's speed-density estimate. Candidate scale; see test T-01."},
   injection_qty:{g:"Fuelling",d:"Injection quantity (mg/stroke). Idle ~6–10; rises with load."},
   egr_modulator:{g:"Engine",d:"EGR modulator duty % (1D@15, candidate)."},
   wastegate_modulator:{g:"Engine",d:"Wastegate modulator duty % (1D@17, candidate)."},

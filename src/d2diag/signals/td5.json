@@ -357,6 +357,6 @@
       0,
       700
     ],
-    "source": "21 1D u16@4 (big-endian). FIELD proven: r=+0.95 vs rpm*MAP over a full WOT pull (0-4304 rpm, 0.98-2.11 bar; raw log 2026-08-21 221649) = speed-density air mass. Supersedes the earlier byte5(u8) mapping, which read only the LSB and wrapped (the '255 jump'). scale/bias = provisional 2-point calibration of u16@4 vs published Td5 ref ranges (idle ~60, 2000 rpm ~190 kg/h); PENDING a factory-tool MAF reading on RDL016. Raw u16@4: idle ~5750, 2000 rpm ~7045, WOT peak ~11821."
+    "source": "21 1D u16@4 (big-endian) = the ECU's air-mass value. FIELD proven (r=+0.95 vs rpm*MAP over a full WOT pull, raw log 2026-08-21). BUT this is almost certainly a MODELLED (speed-density) air mass, NOT the physical MAF sensor: RDL016 has 'air flow circuit (Current)' as a live fault and the MEASURED MAF (1C@4) reads 0 = dead sensor. The high rpm*MAP correlation is exactly what a modelled substitute looks like. So a plausible value here (idle ~53 kg/h) is NOT evidence the sensor is healthy - the dashboard shows a modelled value under a 'maf' name. scale/bias = provisional 2-point fit (idle ~60, 2000 rpm ~190 kg/h), never solid. T-01 in references/test_plan.md confirms 1C@4=measured on a healthy MAF and will then rename this field to a modelled air mass."
   }
 ]
