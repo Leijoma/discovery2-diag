@@ -15,12 +15,12 @@ def test_mock_report_has_all_modules_and_baseline():
 
 def test_live_no_cable_marks_modules_error(monkeypatch):
     # resolve_serial_port raises FileNotFoundError → all three marked error, not a crash.
-    import d2diag.web.sources as sources
+    import d2diag.ports as ports
 
     def _boom(_spec):
         raise FileNotFoundError("no cable")
 
-    monkeypatch.setattr(sources, "resolve_serial_port", _boom)
+    monkeypatch.setattr(ports, "resolve_serial_port", _boom)
     rows = fs.read_all("live", "auto", sleep=lambda *_: None)
     readable = {r["module"]: r for r in rows if r["status"] != "unimplemented"}
     assert set(readable) == {"TD5", "SLABS", "Airbag"}
@@ -30,7 +30,7 @@ def test_live_no_cable_marks_modules_error(monkeypatch):
 def test_live_reads_modules_over_fake(monkeypatch):
     # Simulate the car: TD5 with no faults, SLABS with baseline faults, airbag with 004/022.
     import d2diag.transport as transport_pkg
-    import d2diag.web.sources as sources
+    import d2diag.ports as ports
     from d2diag.kline import encode
     from tests import fakes
 
@@ -69,7 +69,7 @@ def test_live_reads_modules_over_fake(monkeypatch):
         return fakes.FakeKLineEcu(responses)                 # fresh instance per module
 
     monkeypatch.setattr(transport_pkg, "SerialTransport", _fake_transport)
-    monkeypatch.setattr(sources, "resolve_serial_port", lambda spec: "FAKE")
+    monkeypatch.setattr(ports, "resolve_serial_port", lambda spec: "FAKE")
 
     rows = fs.read_all("live", "auto", sleep=lambda *_: None)
     by = {r["module"]: r for r in rows}
@@ -84,7 +84,7 @@ def test_live_stops_td5_session_before_next_module_inits(monkeypatch):
     # Shared bus: the TD5 session must be ended (20 → 60) BEFORE SLABS opens its
     # transport and inits, otherwise StartCommunication answers 7F 81 10.
     import d2diag.transport as transport_pkg
-    import d2diag.web.sources as sources
+    import d2diag.ports as ports
     from d2diag.kline import encode
     from d2diag.session import EcuSession
     from tests import fakes
@@ -136,7 +136,7 @@ def test_live_stops_td5_session_before_next_module_inits(monkeypatch):
         return _Recording(responses)
 
     monkeypatch.setattr(transport_pkg, "SerialTransport", _fake_transport)
-    monkeypatch.setattr(sources, "resolve_serial_port", lambda spec: "FAKE")
+    monkeypatch.setattr(ports, "resolve_serial_port", lambda spec: "FAKE")
 
     fs.read_all("live", "auto", sleep=lambda *_: None)
     # order: TD5 transport → … → td5-stop → SLABS transport

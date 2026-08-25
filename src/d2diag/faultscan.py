@@ -53,8 +53,8 @@ def _mock_report() -> "list[dict]":
 def _live_report(port: str, sleep: "Callable[[float], None]") -> "list[dict]":
     from .kline import KLine
     from .kwp2000 import KWP2000
+    from .ports import resolve_serial_port
     from .transport import SerialTransport
-    from .web.sources import resolve_serial_port
 
     try:
         real_port = resolve_serial_port(port)
