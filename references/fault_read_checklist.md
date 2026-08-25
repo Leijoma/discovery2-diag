@@ -1,5 +1,8 @@
 # Fault reading — cross-off list (before the reference tool is returned)
 
+> **Appendix.** The living backlog of what to test next is `references/test_plan.md`;
+> this file holds the step-by-step detail it points at.
+
 Goal: read **Read Faults** on as many modules as possible. You do **not** need the
 sniff tool for this — read off the reference tool's screen and note it down. For each code:
 **code + text + current/logged/intermittent (+ occurrence if shown).**

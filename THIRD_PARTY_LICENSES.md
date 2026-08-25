@@ -47,6 +47,15 @@ community-spread list of Td5 fault codes** — same names on the same offset/bit
 which also yielded the more precise status distinction Logged Low / Logged High /
 Current. Only factual data (offset/bit → fault text) has been used.
 
+## BinOwl_Td5Gauge — protocol reference (GPL-3.0, no code used)
+
+[k0sci3j/BinOwl_Td5Gauge](https://github.com/k0sci3j/BinOwl_Td5Gauge) — an ESP32 Td5
+gauge, **GPL-3.0**. Reviewed 2026-08-25 as a **reference for protocol facts only**
+(LID -> field offsets and scalings, frame lengths, init/keepalive sequence); see
+`references/td5_externa_fynd.md`. GPL-3.0 is incompatible with this project, so
+**no source code from there may be copied or ported** — only non-protectable facts
+about the ECU protocol, each of which is verified against our own captures before use.
+
 ## muki01/OBD2_K-line_Reader — K-line reference (MIT)
 
 [muki01/OBD2_K-line_Reader](https://registry.platformio.org/libraries/muki01/OBD2%20K-Line)

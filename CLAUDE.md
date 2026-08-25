@@ -129,3 +129,11 @@ Violating these produces bugs that only show up against the real car:
 - Comments explain *why* — especially which sniff/log a protocol fact came from.
   When you learn something from the car or a capture, record it in the relevant
   `references/*.md` alongside the code change.
+- **`references/test_plan.md` is the living test backlog** — the single reference for
+  what to test next in the car or with a borrowed diagnostic tool. Every open question
+  that needs hardware belongs there, with its procedure and a **decision rule written
+  before the test**. When a result comes in: route it to its permanent home (signal
+  store / `references/` / the sister project for the car's own faults), then move the
+  item to **Resolved** in that file with the date and outcome — including inconclusive
+  ones. Keep it current in the same commit as the finding; `TODO.md` is code and
+  infrastructure only.

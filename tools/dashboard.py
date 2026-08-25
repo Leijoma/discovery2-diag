@@ -111,8 +111,11 @@ def main() -> int:
     dict_path = args.dict_path or os.path.join(
         os.path.dirname(repo_root), "Discovery 2", "discovery2_reference tool_fault_dictionary.md")
     docs = DocLibrary()
+    # The test backlog first: it is what you read on the phone while sitting in the car.
+    docs.add_file(os.path.join(repo_root, "references", "test_plan.md"), group="Test plan")
     docs.add_file(dict_path, title="reference tool fault-code dictionary (answer key)", group="Answer key")
-    docs.add_dir(os.path.join(repo_root, "references"), group="Reference")
+    docs.add_dir(os.path.join(repo_root, "references"), group="Reference",
+                 exclude={"test_plan.md"})
     for extra in args.docs:
         docs.add_dir(extra, group="Extra")
 

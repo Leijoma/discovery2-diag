@@ -1,5 +1,8 @@
 # Car test — SLABS signals/bleeding + BCU/EKA (plan)
 
+> **Appendix.** The living backlog of what to test next is `references/test_plan.md`;
+> this file holds the step-by-step detail it points at.
+
 Written 2026-08-19. Verifies the protocol changes since the last car test.
 Run **stationary, handbrake on**. K-line is shared → one session at a time; the tools
 release the session cleanly (`82`) themselves. Tick off in the log.

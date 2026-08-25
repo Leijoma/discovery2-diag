@@ -1,5 +1,8 @@
 # BCU sniff — checklist (while the reference tool is available)
 
+> **Appendix.** The living backlog of what to test next is `references/test_plan.md`;
+> this file holds the step-by-step detail it points at.
+
 Goal: capture **Valeo BCU** traffic passively with the ESP32 tap while the reference
 tool runs. **Main prize: the EKA code** (Read-set EKA). Same rig as the SLABS sniff.
 

@@ -1,5 +1,8 @@
 # reference tool weekend — sniff test plan & function TODO (Discovery 2)
 
+> **Appendix.** The living backlog of what to test next is `references/test_plan.md`;
+> this file holds the step-by-step detail it points at.
+
 Goal: while the (borrowed) reference tool talks to the car's modules **we passively sniff pin 7**
 and capture what we couldn't guess: **exact init, address, keybytes, header format,
 service bytes, fault structure, any seed/key** — per module. Then we can build our own

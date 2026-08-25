@@ -37,6 +37,12 @@ ZF4HP22/24. Sniff = passive ESP32 (RX-only) on K-line pin 7, while the reference
 - **OPEN:** switch inputs = `21 1E` + `21 36` **bit fields** (1E toggled `00 CA`↔`00 EA` = bit `0x20`;
   36 constant `00 0D`). Settings fetched in **bulk** (`21 3D 20 0E 32 24`, one-off). Needs
   differential (change a switch/setting → see the bit).
+- **OPEN (BinOwl leads, 2026-08-25):** `21 1C` is an **8-byte** block — @2 = MAP raw,
+  **@4 = MAF (u16/10 kg/h)**, @6 = constant 0x009C. RDL 016 reads @4 = 0 with
+  `air flow circuit (Current)` live, i.e. plausibly a dead sensor, not a wrong offset —
+  which would make our `1D`@4 `maf` a *modelled* air mass instead. Also unread:
+  **`21 38` = wastegate modulator (u16/1000 %)**, `21 1D`@0 = driver fuel demand,
+  `21 1D`@14 = idle fuel demand. Details + test plan in `references/td5_externa_fynd.md`.
 
 ## SLABS (Wabco) — KWP2000, base protocol solved
 - **Fast init addr `0x29`** → `C1 57 8F`. Faults: `21 11`=logged / `21 47`=current (bit block),

@@ -58,11 +58,21 @@ class DocLibrary:
         return self
 
     def add_dir(
-        self, path: "str | Path", group: str = "Reference", pattern: str = "*.md"
+        self,
+        path: "str | Path",
+        group: str = "Reference",
+        pattern: str = "*.md",
+        exclude: "set[str] | None" = None,
     ) -> "DocLibrary":
+        """Add every matching file in ``path``. ``exclude`` holds file *names*
+        already registered explicitly (e.g. the test plan, pinned to its own group)
+        so they are not listed twice."""
         d = Path(path).expanduser()
+        skip = exclude or set()
         if d.is_dir():
             for f in sorted(d.glob(pattern)):
+                if f.name in skip:
+                    continue
                 self.add_file(f, group=group)
         return self
 

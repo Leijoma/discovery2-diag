@@ -78,3 +78,18 @@ def test_doclibrary_title_from_h1_and_unique_ids(tmp_path: pathlib.Path):
     lib = DocLibrary().add_dir(tmp_path)
     ids = [x["id"] for x in lib.index()]
     assert len(ids) == len(set(ids))  # collisions get suffixed
+
+
+def test_doclibrary_add_dir_exclude_keeps_pinned_file_once(tmp_path: pathlib.Path):
+    """The test plan is pinned to its own group first, then the rest of references/ is
+    swept in — the pinned file must not appear twice."""
+    (tmp_path / "test_plan.md").write_text("# Test backlog\n", encoding="utf-8")
+    (tmp_path / "slabs_protocol.md").write_text("# SLABS\n", encoding="utf-8")
+    lib = (
+        DocLibrary()
+        .add_file(tmp_path / "test_plan.md", group="Test plan")
+        .add_dir(tmp_path, group="Reference", exclude={"test_plan.md"})
+    )
+    idx = lib.index()
+    assert [x["title"] for x in idx] == ["Test backlog", "SLABS"]  # pinned first
+    assert idx[0]["group"] == "Test plan"

@@ -1,5 +1,8 @@
 # Short reference tool session — capture exactly this (prioritized)
 
+> **Appendix.** The living backlog of what to test next is `references/test_plan.md`;
+> this file holds the step-by-step detail it points at.
+
 We already have the **raw bytes** for most of it (from `session.log`) — what we're missing
 is the reference tool's **plain-text values** to correlate against. So the most valuable
 items are the **"read off the screen"** ones and don't even need a working sniff.

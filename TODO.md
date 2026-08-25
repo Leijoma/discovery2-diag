@@ -1,6 +1,6 @@
 # TODO — discovery2-diag
 
-Updated 2026-08-19. Check off when done.
+Updated 2026-08-25. Check off when done.
 
 > **Scope:** this repo is the tool. The car's actual faults and maintenance
 > work are handled in the sister project `../Discovery 2/` — fault codes we
@@ -15,21 +15,10 @@ trouble. 220 tests green.
 
 ## Next time in the car
 
-- [ ] **Verify SLABS across several occasions.** The fix has been tested over a
-      single afternoon. Run `tools/slabs_probe.py --quiet 5 --hold 30 --no-td5` on
-      cold start, after longer standstill and in the cold. The hit rate should stay
-      around 50 %+ per attempt, and the dashboard should connect on the first attempt.
-- [ ] **Lower `retry_sleep`.** SLABS `establish` waits 28 s between attempts — a
-      legacy from when init failed for timing reasons. Try 3–5 s and measure; probably
-      unnecessary now and makes reconnect needlessly sluggish.
-- [ ] **Decide W5 and P4.** Both are implemented but disabled and unproven:
-      `--init-idle 1000` and `--write-gaps 0,5` respectively. The P4 measurement was
-      also made before the wait became exact, so it measured the wrong value.
-- [ ] **Read more SLABS LIDs now that the session is reliable.** Open per
-      `slabs_protocol.md`: analog scaling for `21 53/55` (supplies), `44/49/57`
-      (valves/voltages), `50` (ABS-sensor V), and the settings LIDs where
-      LID→function is unsolved (requires differential: change ONE setting, see which
-      raw byte moves).
+**See `references/test_plan.md`** — that is the living backlog of what to test in the
+car (or with a borrowed diagnostic tool), with procedure and decision rule per item, and
+a Resolved log. Car-test items live there and nowhere else; this file covers code and
+infrastructure only.
 
 ## Code / offline
 
