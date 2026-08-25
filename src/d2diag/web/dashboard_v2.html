@@ -229,7 +229,10 @@ const META = {
   manifold_press:{g:"Pressures",d:"Turbo / boost pressure. Idle ~1.0 bar; full load 2.0–2.2; overboost-cut >2.42."},
   ambient_press_1:{g:"Pressures",d:"Atmospheric pressure — ~1.0 bar at sea level."},
   ambient_press_2:{g:"Pressures",d:"Atmospheric pressure (second reading)."},
-  maf_raw:{g:"Engine",d:"Raw field at 1C@4. NOT the MAF — reads 57 key-on, 0 while running. Real air-flow LID still unmapped."},
+  maf:{g:"Engine",d:"Mass air flow (1D u16@4). Field proven vs rpm×boost; kg/hr scale is a candidate pending a reference reading."},
+  injection_qty:{g:"Fuelling",d:"Injection quantity (mg/stroke). Idle ~6–10; rises with load."},
+  egr_modulator:{g:"Engine",d:"EGR modulator duty % (1D@15, candidate)."},
+  wastegate_modulator:{g:"Engine",d:"Wastegate modulator duty % (1D@17, candidate)."},
   accel_way1:{g:"Accelerator",d:"Pedal track 1: ~0.3 V idle → ~4.7 V full."},
   accel_way2:{g:"Accelerator",d:"Pedal track 2: mirror of track 1 — ~4.7 V idle → ~0.3 V full."},
   accel_way3:{g:"Accelerator",d:"Pedal track 3 — Euro 3 only; reads 0 on Euro 2."},
@@ -252,7 +255,8 @@ const META = {
 };
 const LABELS = {
   rpm:"RPM",speed:"Speed",battery:"Battery",coolant_temp:"Coolant",air_temp:"Intake air",
-  fuel_temp:"Fuel",ext_temp:"External temp",manifold_press:"Turbo pressure",maf_raw:"1C@4 (unknown)",
+  fuel_temp:"Fuel",ext_temp:"External temp",manifold_press:"Turbo pressure",maf:"Air flow",
+  injection_qty:"Injection",egr_modulator:"EGR",wastegate_modulator:"Wastegate",
   ambient_press_1:"Ambient pressure",ambient_press_2:"Ambient pressure 2",rpm_error:"RPM error",
   balance_1:"Injector 1",balance_2:"Injector 2",balance_3:"Injector 3",balance_4:"Injector 4",balance_5:"Injector 5",
   accel_way1:"Pedal track 1",accel_way2:"Pedal track 2",accel_way3:"Pedal track 3",accel_supply:"Pedal supply",

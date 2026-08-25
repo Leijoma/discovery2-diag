@@ -190,10 +190,11 @@ knowledge) was created.
   on the other. Requires the splitter to pass through **pin 7** (K-line).
 - **Listener:** ESP32 + L9637D in pure RX (best), or KKL in RX only. **RX only — never
   transmit**, otherwise you collide with the tool.
-- **Tool:** `tools/sniff.py` (RX-only, timestamps, frames on silence gaps, annotates
-  services). Core in `d2diag/sniff.py` (`frame_by_gaps`, `describe`).
-- The 5-baud address is not visible in the UART stream (200 ms/bit) — get it with `probe_slow`
-  or by sampling the line level; but the services/fault structure (the hard part) come from the sniff.
+- **Tool:** `tools/esp32_read.py` (RX-only ESP32 tap, timestamps) + `tools/decode_session.py`
+  (frame split on silence gaps + KWP2000 decode). Core in the `d2diag.sniff` package
+  (`capture`, `decoder`).
+- The 5-baud address is not visible in the UART stream (200 ms/bit) — get it by sampling the
+  line level; but the services/fault structure (the hard part) come from the sniff.
 
 ## Next steps to reach a new module (pattern)
 1. **Try fast init first** (the D2 mostly uses fast init): targeted StartCommunication
