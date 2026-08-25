@@ -76,6 +76,11 @@ static uint32_t lastBeat     = 0;
 static int      lastPost     = 0;      // last engine POST HTTP code (0 = none yet)
 static uint32_t pointsSent   = 0;
 static uint32_t estabFails   = 0;
+// On-node fuel computer (derive at the source). Trip = since boot (= since the car/node
+// powered on for this drive). Same math + constants as Python _FuelComputer.
+static double   tripFuel     = 0.0;    // litres, this trip
+static double   tripDist     = 0.0;    // km, this trip
+static uint32_t lastFuelMs   = 0;      // last integration tick (0 = not started)
 // Stale-link recovery: a link left open (e.g. a reflash mid-session) makes the module
 // answer 7F 81 10 to every StartCommunication until it times out. The ONLY thing that
 // clears it is bus SILENCE — sending 82/init during the wait resets the module's timer
@@ -126,6 +131,14 @@ static void rawFlush() {
   http.end();
   if (lastRawCode == 204 || lastRawCode == 200) rawBuf = "";
 }
+// Append `key=value` to an Influx line-protocol field set (comma-separated).
+static void appendField(String &line, bool &first, const char *key, float v) {
+  char b[24]; snprintf(b, sizeof b, "%.3f", v);
+  if (!first) line += ",";
+  first = false;
+  line += key; line += "="; line += b;
+}
+
 // Read the curated LIDs, decode, and POST one `engine` line. Returns false if the
 // session looks dead (rpm LID unreadable) so the caller re-establishes.
 static bool logCycle() {
@@ -159,17 +172,40 @@ static bool logCycle() {
 
   String line = String("engine,vehicle=") + LOG_VEHICLE + " ";
   bool first = true;
+  float injMg = NAN, speedKmh = NAN;
   for (const Field &f : FIELDS) {
     int li = -1;
     for (size_t i = 0; i < NLIDS; i++) if (LIDS[i] == f.lid) { li = (int)i; break; }
     if (li < 0 || len[li] < 0) continue;
     float v = decodeField(f, buf[li], len[li]);
     if (isnan(v)) continue;
-    char b[24]; snprintf(b, sizeof b, "%.3f", v);
-    if (!first) line += ",";
-    first = false;
-    line += f.key; line += "="; line += b;
+    if (!strcmp(f.key, "inj_mg")) injMg = v;
+    else if (!strcmp(f.key, "speed")) speedKmh = v;
+    appendField(line, first, f.key, v);
   }
+
+  // Fuel computer — derived at the source. L/h = inj[mg] * INJ_PER_REV * rpm * 60 / 1e6 /
+  // (density g/mL); economy L/100km = rate/speed*100 when moving; trip integrates over time.
+  // Same math + generated constants as Python _FuelComputer (signals_td5.h).
+  float rate = NAN;
+  if (!isnan(injMg) && rpm > 0)
+    rate = injMg * INJ_PER_REV * (float)rpm * 60.0f / 1e6f / (DIESEL_G_PER_L / 1000.0f);
+  uint32_t nowMs = millis();
+  if (lastFuelMs != 0 && !isnan(rate)) {
+    uint32_t dtms = nowMs - lastFuelMs;
+    if (dtms > 3000) dtms = 3000;               // cap 3 s → no spike after a pause/reconnect
+    float dt_h = dtms / 3600000.0f;
+    tripFuel += (double)rate * dt_h;
+    if (!isnan(speedKmh) && speedKmh > 0) tripDist += (double)speedKmh * dt_h;
+  }
+  lastFuelMs = nowMs;
+  if (!isnan(rate)) {
+    appendField(line, first, "fuel_rate", rate);                        // L/h
+    if (!isnan(speedKmh) && speedKmh > 5.0f)
+      appendField(line, first, "economy", rate / speedKmh * 100.0f);    // L/100km (moving)
+  }
+  if (tripDist > 0.1) appendField(line, first, "trip_economy", (float)(tripFuel / tripDist * 100.0));
+
   if (first) return true;                       // reads ok but nothing decoded — keep session
   long ts = epochNow();
   if (ts) { line += " "; line += String(ts); }
@@ -212,6 +248,7 @@ static void logTick() {
     stopComm();                                    // tear it down once, then go quiet before retry
     sessionUp = false;
     quietUntil = millis() + ESTAB_QUIET_MS;
+    lastFuelMs = 0;                                // pause fuel integration across the gap
   }
 }
 

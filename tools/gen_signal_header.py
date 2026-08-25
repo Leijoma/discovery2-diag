@@ -62,6 +62,9 @@ def _fmt_float(v: float) -> str:
 
 
 def build_header() -> str:
+    # Fuel-computer constants live with the Python _FuelComputer; emit them so the ESP's
+    # on-node fuel calc can't drift from it (the header-match test guards this).
+    from d2diag.web.sources import _INJ_PER_REV, _DIESEL_G_PER_L
     by_name = {s.name: s for s in load_signals("td5")}
     rows = []
     lids: "list[int]" = []
@@ -92,6 +95,10 @@ def build_header() -> str:
         "// Unique LIDs to read each cycle (derived from FIELDS above).\n"
         f"static const uint8_t LIDS[] = {{ {lid_list} }};\n"
         "static const size_t  NLIDS  = sizeof LIDS / sizeof LIDS[0];\n"
+        "\n"
+        "// Fuel-computer constants — kept in sync with _FuelComputer (src/d2diag/web/sources.py).\n"
+        f"#define INJ_PER_REV    {_fmt_float(_INJ_PER_REV)}   // injections per crank rev (5-cyl 4-stroke)\n"
+        f"#define DIESEL_G_PER_L {_fmt_float(_DIESEL_G_PER_L)}   // diesel density\n"
     )
 
 

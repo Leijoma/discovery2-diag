@@ -29,3 +29,7 @@ static const size_t NFIELDS = sizeof FIELDS / sizeof FIELDS[0];
 // Unique LIDs to read each cycle (derived from FIELDS above).
 static const uint8_t LIDS[] = { 0x09, 0x0D, 0x10, 0x1A, 0x1B, 0x1C, 0x1D, 0x21, 0x23, 0x40 };
 static const size_t  NLIDS  = sizeof LIDS / sizeof LIDS[0];
+
+// Fuel-computer constants — kept in sync with _FuelComputer (src/d2diag/web/sources.py).
+#define INJ_PER_REV    2.5f   // injections per crank rev (5-cyl 4-stroke)
+#define DIESEL_G_PER_L 832.0f   // diesel density
