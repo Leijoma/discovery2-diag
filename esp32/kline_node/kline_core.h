@@ -162,8 +162,11 @@ static uint16_t td5KeyFromSeed(uint16_t seed) {
 }
 
 // Full Td5 bring-up to an unlocked, readable session. Returns true on success.
+// NOTE: no stopComm() at the top. Clearing a stale link is the CALLER's job — send 82
+// ONCE, then keep the bus SILENT so the module's own timeout drops the link. Sending
+// anything (even 82) each attempt resets that timer and the link never dies (the lesson
+// baked into the KKL stack's _establish). We only send 82 below when WE opened a link.
 static bool td5Establish() {
-  stopComm();
   klineFastInit();
   // StartCommunication (addressed 81 13 F7 81) → expect C1 in the burst.
   uint8_t req[5] = { 0x81, TD5_ADDR, TESTER_ADDR, 0x81, 0 };
@@ -181,7 +184,10 @@ static bool td5Establish() {
   // a half-opened link left behind is exactly what makes the NEXT StartCommunication get
   // 7F 81 10 (generalReject), which then never self-clears.
   int ci = findSeq(burst, got, 0xC1, 0x57);
-  if (ci < 0 || ci + 2 >= (int)got || burst[ci + 2] != 0x8F) { stopComm(); return false; }
+  // No C1 (silent or 7F 81 10 generalReject): we did NOT open a link this attempt, so do
+  // NOT send 82 — that would reset the stale link's timeout. Just fail; the caller stays
+  // quiet and the module drops its old link on its own.
+  if (ci < 0 || ci + 2 >= (int)got || burst[ci + 2] != 0x8F) return false;
 
   uint8_t out[64];
   // StartDiagnosticSession 0xA0 → positive 0x50.

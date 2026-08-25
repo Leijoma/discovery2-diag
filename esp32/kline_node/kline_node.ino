@@ -72,13 +72,19 @@ static void rawCapture(const char *dir, const uint8_t *d, size_t n) {
 // ---------------- InfluxDB logging ----------------
 static bool     sessionUp    = false;
 static uint32_t lastCycle    = 0;
-static uint32_t lastEstab    = 0;
 static uint32_t lastBeat     = 0;
 static int      lastPost     = 0;      // last engine POST HTTP code (0 = none yet)
 static uint32_t pointsSent   = 0;
 static uint32_t estabFails   = 0;
+// Stale-link recovery: a link left open (e.g. a reflash mid-session) makes the module
+// answer 7F 81 10 to every StartCommunication until it times out. The ONLY thing that
+// clears it is bus SILENCE — sending 82/init during the wait resets the module's timer
+// (proven on the KKL stack). So: send 82 ONCE (linkMaybeOpen), then stay off the bus
+// until quietUntil, then init clean.
+static bool     linkMaybeOpen = true;  // assume a leftover link at boot
+static uint32_t quietUntil    = 0;     // don't touch K-line before this (ms)
 static const uint32_t LOG_INTERVAL_MS   = 1000;
-static const uint32_t ESTAB_BACKOFF_MS  = 5000;   // retry a dead session at most this often
+static const uint32_t ESTAB_QUIET_MS    = 6000;   // bus-silent window that lets a stale link die
 static const uint32_t BEAT_INTERVAL_MS  = 15000;  // node heartbeat cadence
 
 static bool influxConfigured() {
@@ -191,15 +197,22 @@ static void logTick() {
   if (now - lastCycle < LOG_INTERVAL_MS) return;
   lastCycle = now;
   if (!sessionUp) {
-    if (now - lastEstab < ESTAB_BACKOFF_MS) return;
-    lastEstab = now;
-    sessionUp = td5Establish();                 // ~0.5 s; brief web/OTA pause is fine
-    if (!sessionUp) estabFails++;
+    if (now < quietUntil) return;                 // stay OFF the bus — silence clears a stale link
+    if (linkMaybeOpen) {                           // tear a leftover link down ONCE, then wait
+      stopComm();
+      linkMaybeOpen = false;
+      quietUntil = now + ESTAB_QUIET_MS;           // ...and now SILENCE so the module times it out
+      return;
+    }
+    sessionUp = td5Establish();                    // clean init after the quiet window (sends no 82)
+    if (!sessionUp) { estabFails++; quietUntil = millis() + ESTAB_QUIET_MS; }  // quiet, then retry
     return;
   }
-  if (!logCycle()) { stopComm(); sessionUp = false; }  // lost session (engine off?) →
-                                                       // close our link so the next
-                                                       // establish isn't generalReject'd
+  if (!logCycle()) {                               // lost session (engine off?) — WE had a link:
+    stopComm();                                    // tear it down once, then go quiet before retry
+    sessionUp = false;
+    quietUntil = millis() + ESTAB_QUIET_MS;
+  }
 }
 
 // Bring up the WireGuard tunnel so the node has a fixed WG IP. The handshake needs
@@ -290,13 +303,15 @@ static void handleScan() {
   bool was = logEnabled; logEnabled = false; sessionUp = false;
   String out = kwpStartComm(0x13, "TD5") + "\n" + kwpStartComm(0x29, "SLABS") + "\n";
   logEnabled = was;
+  // /scan hit the bus (its own inits); make the logger re-clear + settle before it reconnects.
+  linkMaybeOpen = true; quietUntil = millis() + ESTAB_QUIET_MS;
   server.send(200, "text/plain", out);
 }
 static void handleLog() {
   if (server.hasArg("on")) {
     logEnabled = server.arg("on") != "0";
     if (!logEnabled) sessionUp = false;
-    lastEstab = 0;                              // allow an immediate (re)establish
+    quietUntil = 0; linkMaybeOpen = true;       // re-clear + establish promptly when turned on
   }
   server.send(200, "application/json",
     "{\"logging\":" + String(logEnabled ? 1 : 0) + "}");
