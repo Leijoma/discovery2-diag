@@ -190,7 +190,27 @@ def _sleep_kw(hook) -> "dict":
 
 
 class DataSource(abc.ABC):
-    """Contract: ``poll()`` returns a fresh snapshot dict."""
+    """The snapshot API — the defined boundary between interpretation and consumers.
+
+    This is the contract every consumer (the dashboard/SSE, file logging, Influx, the
+    ESP's POST payload) is built on; see SCOPE.md. A source produces a normalized
+    snapshot from the core (comms + interpretation); consumers never reach below it into
+    the protocol stack.
+
+    ``poll()`` returns the snapshot::
+
+        {
+          "status": "connected" | "no-cable" | "connecting" | "error" | …,
+          "source": <module name>,
+          "signals": { <name>: {"v": value, "u": unit, "s": status, "c": confidence} },
+          "faults":  [ <fault description>, … ],
+          "error":   <message>,          # optional, only on failure
+        }
+
+    Per signal: ``v`` value, ``u`` unit, ``s`` status ("ok"/"low"/"high"/"suspect"/None),
+    ``c`` confidence ("belagt"/"kandidat"). ``menu_map()`` and ``command()`` are the
+    coverage-map and write-command halves of the same boundary.
+    """
 
     name: str = "source"
     on_progress = None  # callback(str): live status during blocking establishment (base: none)
@@ -204,7 +224,8 @@ class DataSource(abc.ABC):
 
     @abc.abstractmethod
     def poll(self) -> "dict":
-        """Return {status, signals, faults, error?}."""
+        """Return one fresh snapshot — see the class docstring for the exact shape
+        ({status, source, signals:{name:{v,u,s,c}}, faults, error?})."""
 
     def disconnect(self) -> None:
         """Release any K-line session/port (on module switch). Base: nothing to do."""

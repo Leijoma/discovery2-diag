@@ -17,7 +17,7 @@ INTERPRETATION  — turn raw bytes into named, scaled, confidence-tagged signals
   signals/*.json = the SINGLE SOURCE OF TRUTH (offset / scale / unit / confidence)
   the module decoders (td5/ slabs/ airbag/ bcu/ ace/ autobox/) read it
   Python decodes it at runtime; the ESP consumes a header generated from the same JSON
-        │  normalized snapshot: {status, signals:[{name,value,unit,confidence,status}], faults:[]}
+        │  normalized snapshot: {status, signals:{name:{v,u,s,c}}, faults:[…]}  (see DataSource.poll)
         ▼ ───────────────── the defined API (the contract) ─────────────────
 CONSUMERS  — storage & presentation (optional, swappable)
   web/ dashboard + SSE · file logging · InfluxDB/Grafana · raw-log collector · community upload
