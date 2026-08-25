@@ -44,35 +44,13 @@ static String   rawBuf;                // pending raw lines, flushed to the coll
 static uint32_t lastRawFlush = 0;
 static int      lastRawCode = 0;       // last raw POST HTTP code
 
-// ---------------- LID decode table (mirrors src/d2diag/signals/td5.json) ----------
-// Defined up here (before any function) so Arduino's auto-generated prototypes see it.
+// ---------------- LID decode table ----------------
+// Defined up here (before any function) so Arduino's auto-generated prototypes see them.
 enum Kind { U8, U16, S16 };
 struct Field { const char *key; uint8_t lid; uint8_t off; uint8_t kind; float scale; float bias; };
-// Curated set worth logging. TD5 tolerates block reads (unlike SLABS), so ~1 Hz over
-// all of these is fine. Scalings are the `belagt`/`kandidat` values from the store.
-static const Field FIELDS[] = {
-  { "rpm",           0x09,  0, U16, 1.0f,        0.0f    },
-  { "speed",         0x0D,  0, U8,  1.0f,        0.0f    },
-  { "battery",       0x10,  0, U16, 0.001f,      0.0f    },
-  { "coolant_c",     0x1A,  0, U16, 0.1f,     -273.2f    },
-  { "air_c",         0x1A,  4, U16, 0.1f,     -273.2f    },
-  { "fuel_c",        0x1A, 12, U16, 0.1f,     -273.2f    },
-  { "throttle_v",    0x1B,  0, U16, 0.001f,      0.0f    },
-  { "map_bar",       0x1C,  0, U16, 0.0001f,     0.0f    },
-  { "maf",           0x1D,  4, U16, 0.1f,     -515.0f    },  // u16@4 (byte5 was the LSB → wrapped)
-  { "inj_mg",        0x1D,  6, U16, 0.01f,       0.0f    },
-  { "egr_pct",       0x1D, 15, U8,  0.39215686f, 0.0f    },
-  { "wastegate_pct", 0x1D, 17, U8,  0.39215686f, 0.0f    },
-  { "rpm_error",     0x21,  0, S16, 1.0f,        0.0f    },
-  { "ambient_bar",   0x23,  0, U16, 0.0001f,     0.0f    },
-  { "balance_1",     0x40,  0, S16, 1.0f,        0.0f    },
-  { "balance_2",     0x40,  2, S16, 1.0f,        0.0f    },
-  { "balance_3",     0x40,  4, S16, 1.0f,        0.0f    },
-  { "balance_4",     0x40,  6, S16, 1.0f,        0.0f    },
-  { "balance_5",     0x40,  8, S16, 1.0f,        0.0f    },
-};
-static const uint8_t LIDS[] = { 0x09, 0x0D, 0x10, 0x1A, 0x1B, 0x1C, 0x1D, 0x21, 0x23, 0x40 };
-static const size_t  NLIDS  = sizeof LIDS / sizeof LIDS[0];
+// FIELDS[]/LIDS[]/NLIDS are GENERATED from src/d2diag/signals/td5.json — one source of
+// truth for both platforms. Regenerate with: python3 tools/gen_signal_header.py
+#include "signals_td5.h"
 // Coverage sweep: unmapped LIDs the reference tool polls (fuelling/switch blocks). Read
 // ONE per cycle, round-robin — raw-captured for RE, not decoded. Mirrors _TD5_COVERAGE_EXTRA.
 static const uint8_t SWEEP[] = { 0x1E, 0x1F, 0x20, 0x36 };
