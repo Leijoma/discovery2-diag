@@ -188,5 +188,24 @@ Follows the muki01 `L9637D.png` reference. Pinout (SO-8):
 - **Inversion** — L9637D is non-inverting → flip `KLINE_INVERT` to `false`; confirm
   with line-diag before trusting fast init.
 - **L9637D VCC at 3.3 V** — verify RX idle level; level-shift if you run VCC at 5 V.
-- **Battery drain** — unswitched OBD 12 V needs a switch / deep-sleep.
 - **Firmware architecture** — WiFi bridge vs standalone C; decide once hardware is proven.
+
+## Power / in-car mounting (decided 2026-08-26: KL15)
+
+For a permanent install, feed the node — ESP + L9637D VS + the K-line pull-up — from an
+**ignition-switched 12 V (KL15)** fuse, not constant OBD 12 V (pin 16):
+
+- **Dead when the key is out** → zero parasitic drain (the node draws roughly the whole car's
+  sleep current, so on constant 12 V it would about halve standby time).
+- **Alive the whole key-on position** → works at **key-on / engine-off (KOEO)** — exactly when
+  you read/test SLABS, fault codes, etc., not only when the engine runs.
+- **No sensing hardware needed.** power-on == ignition-on, so the firmware's `BOOT_QUIET_MS`
+  (~5 s) skips the crank / BCU↔ECM immobiliser window as a timed floor — **no voltage divider,
+  no KL15 sense wire**. (You can't detect "safe to poll" via the bus, since polling is the very
+  thing you're trying to gate — detection would need out-of-band sensing.)
+- **Engine-off during a drive** is handled from the ECU's own battery voltage (LID 10, read
+  over K-line) once connected — no extra hardware.
+
+A voltage divider / wake-on-voltage is only needed for the alternative **constant-12 V +
+deep-sleep** design; KL15 avoids it. Tap KL15 + ground at the fusebox (same spot as the
+under-dash K-line harness tap).

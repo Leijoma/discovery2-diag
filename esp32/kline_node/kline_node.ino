@@ -95,6 +95,11 @@ static bool     linkMaybeOpen = true;  // assume a leftover link at boot
 static uint32_t quietUntil    = 0;     // don't touch K-line before this (ms)
 static const uint32_t LOG_INTERVAL_MS   = 1000;
 static const uint32_t ESTAB_QUIET_MS    = 6000;   // bus-silent window that lets a stale link die
+// KL15 power = power-on IS ignition-on, so hold off K-line for the first few seconds to clear
+// the crank / BCU<->ECM immobiliser handshake window. Hardware-free (a timed floor, not a
+// measurement); harmless on USB/constant-12V too. WiFi/WG bring-up usually covers this already,
+// but this guarantees it even if no network was found and setup returned fast.
+static const uint32_t BOOT_QUIET_MS     = 5000;   // don't touch the bus in the first 5 s after boot
 static const uint32_t BEAT_INTERVAL_MS  = 15000;  // node heartbeat cadence
 
 static bool influxConfigured() {
@@ -242,6 +247,7 @@ static void logTick() {
   if (now - lastCycle < LOG_INTERVAL_MS) return;
   lastCycle = now;
   if (!sessionUp) {
+    if (now < BOOT_QUIET_MS) return;              // skip the crank/immobiliser window at ignition-on
     if (now < quietUntil) return;                 // stay OFF the bus — silence clears a stale link
     if (linkMaybeOpen) {                           // tear a leftover link down ONCE, then wait
       stopComm();
