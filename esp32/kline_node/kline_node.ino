@@ -81,6 +81,11 @@ static uint32_t estabFails   = 0;
 static double   tripFuel     = 0.0;    // litres, this trip
 static double   tripDist     = 0.0;    // km, this trip
 static uint32_t lastFuelMs   = 0;      // last integration tick (0 = not started)
+// Latest decoded snapshot as JSON — drives the local /live page (and later an on-device
+// screen). Updated each cycle in logCycle; read by the web handlers. All on the loop, so
+// no locking needed.
+static String   latestJson;            // {"rpm":763,...}
+static uint32_t latestMs = 0;          // millis() of the last snapshot
 // Stale-link recovery: a link left open (e.g. a reflash mid-session) makes the module
 // answer 7F 81 10 to every StartCommunication until it times out. The ONLY thing that
 // clears it is bus SILENCE — sending 82/init during the wait resets the module's timer
@@ -132,11 +137,13 @@ static void rawFlush() {
   if (lastRawCode == 204 || lastRawCode == 200) rawBuf = "";
 }
 // Append `key=value` to an Influx line-protocol field set (comma-separated).
-static void appendField(String &line, bool &first, const char *key, float v) {
+// Append `key=value` to the Influx line AND `"key":value` to the JSON snapshot at once.
+static void appendField(String &line, String &js, bool &first, const char *key, float v) {
   char b[24]; snprintf(b, sizeof b, "%.3f", v);
-  if (!first) line += ",";
+  if (!first) { line += ","; js += ","; }
   first = false;
   line += key; line += "="; line += b;
+  js += "\""; js += key; js += "\":"; js += b;
 }
 
 // Read the curated LIDs, decode, and POST one `engine` line. Returns false if the
@@ -171,6 +178,7 @@ static bool logCycle() {
   }
 
   String line = String("engine,vehicle=") + LOG_VEHICLE + " ";
+  String js = "{";
   bool first = true;
   float injMg = NAN, speedKmh = NAN;
   for (const Field &f : FIELDS) {
@@ -181,7 +189,7 @@ static bool logCycle() {
     if (isnan(v)) continue;
     if (!strcmp(f.key, "inj_mg")) injMg = v;
     else if (!strcmp(f.key, "speed")) speedKmh = v;
-    appendField(line, first, f.key, v);
+    appendField(line, js, first, f.key, v);
   }
 
   // Fuel computer — derived at the source. L/h = inj[mg] * INJ_PER_REV * rpm * 60 / 1e6 /
@@ -200,13 +208,14 @@ static bool logCycle() {
   }
   lastFuelMs = nowMs;
   if (!isnan(rate)) {
-    appendField(line, first, "fuel_rate", rate);                        // L/h
+    appendField(line, js, first, "fuel_rate", rate);                        // L/h
     if (!isnan(speedKmh) && speedKmh > 5.0f)
-      appendField(line, first, "economy", rate / speedKmh * 100.0f);    // L/100km (moving)
+      appendField(line, js, first, "economy", rate / speedKmh * 100.0f);    // L/100km (moving)
   }
-  if (tripDist > 0.1) appendField(line, first, "trip_economy", (float)(tripFuel / tripDist * 100.0));
+  if (tripDist > 0.1) appendField(line, js, first, "trip_economy", (float)(tripFuel / tripDist * 100.0));
 
   if (first) return true;                       // reads ok but nothing decoded — keep session
+  js += "}"; latestJson = js; latestMs = millis();   // publish the snapshot for /live + a screen
   long ts = epochNow();
   if (ts) { line += " "; line += String(ts); }
   lastPost = influxPost(line);
@@ -313,6 +322,7 @@ static void handleRoot() {
       "</code> · session <code>" + (sessionUp ? "up" : "down") +
       "</code> · points <code>" + String(pointsSent) +
       "</code> · last POST <code>" + String(lastPost) + "</code></li></ul>"
+    "<a class=btn href='/live'>Live data</a>"
     "<a class=btn href='/scan'>Test car (TD5 + SLABS)</a>"
     "<a class=btn href='/log?on=" + (logEnabled ? "0" : "1") + "'>" +
       (logEnabled ? "Stop logging" : "Start logging") + "</a>"
@@ -335,6 +345,56 @@ static void handleStatus() {
     ",\"rawq\":" + String(rawBuf.length()) +
     ",\"raw_post\":" + String(lastRawCode) + "}");
 }
+// Latest decoded snapshot as JSON — for /live and (later) an on-device screen.
+static void handleData() {
+  server.send(200, "application/json",
+    "{\"age_ms\":" + String(latestMs ? (uint32_t)(millis() - latestMs) : 0) +
+    ",\"session\":" + String(sessionUp ? 1 : 0) +
+    ",\"rssi\":" + String(WiFi.RSSI()) +
+    ",\"signals\":" + (latestJson.length() ? latestJson : String("{}")) + "}");
+}
+// Self-contained live view: polls /data every second. Open on the phone/laptop on the
+// hotspot — no app, no screen. Same data will later drive an on-device display.
+static const char LIVE_HTML[] = R"HTML(<!doctype html>
+<meta name=viewport content='width=device-width,initial-scale=1'><title>D2 live</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;background:#0b0b0c;color:#eee}
+header{display:flex;gap:12px;align-items:center;padding:10px 14px;background:#141416;position:sticky;top:0}
+#dot{width:12px;height:12px;border-radius:50%;background:#555}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:12px}
+.card{background:#161719;border-radius:12px;padding:12px 14px}
+.k{font-size:13px;color:#9aa0a6}.v{font-size:30px;font-weight:700;margin-top:4px}
+.u{font-size:14px;color:#9aa0a6;margin-left:4px;font-weight:400}
+small{color:#9aa0a6}
+</style>
+<header><span id=dot></span><b>Discovery 2 · live</b><small id=meta></small></header>
+<div id=grid></div>
+<script>
+// key: [label, unit, decimals, divisor]
+const L={rpm:['Engine speed','rpm',0,1],coolant_c:['Coolant','°C',0,1],
+map_bar:['Boost','bar',2,1],maf:['Air mass*','kg/h',0,1],fuel_rate:['Fuel rate','L/h',1,1],
+economy:['Economy','L/mil',1,10],trip_economy:['Trip','L/mil',1,10],battery:['Battery','V',1,1],
+speed:['Speed','km/h',0,1],air_c:['Intake air','°C',0,1],fuel_c:['Fuel temp','°C',0,1],
+inj_mg:['Injection','mg',1,1],egr_pct:['EGR','%',0,1],wastegate_pct:['Wastegate','%',0,1],
+rpm_error:['RPM error','rpm',0,1],ambient_bar:['Ambient','bar',2,1],throttle_v:['Pedal','V',2,1],
+balance_1:['Cyl 1','',0,1],balance_2:['Cyl 2','',0,1],balance_3:['Cyl 3','',0,1],
+balance_4:['Cyl 4','',0,1],balance_5:['Cyl 5','',0,1]};
+const ORDER=['rpm','coolant_c','map_bar','maf','fuel_rate','economy','trip_economy','battery',
+'speed','air_c','fuel_c','inj_mg','egr_pct','wastegate_pct','rpm_error','ambient_bar','throttle_v',
+'balance_1','balance_2','balance_3','balance_4','balance_5'];
+function card(k,v){const m=L[k]||[k,'',1,1];const val=(v/m[3]).toFixed(m[2]);
+return `<div class=card><div class=k>${m[0]}</div><div class=v>${val}<span class=u>${m[1]}</span></div></div>`;}
+async function tick(){let d;try{d=await(await fetch('/data')).json();}catch(e){document.getElementById('dot').style.background='#c33';return;}
+const s=d.signals||{},dot=document.getElementById('dot');
+const live=d.session&&d.age_ms<3000;dot.style.background=live?'#3c3':'#c93';
+document.getElementById('meta').textContent=(d.session?'session up':'no session')+' · '+(d.age_ms/1000).toFixed(0)+'s ago · '+d.rssi+' dBm';
+const keys=ORDER.filter(k=>k in s).concat(Object.keys(s).filter(k=>!ORDER.includes(k)));
+document.getElementById('grid').innerHTML=keys.map(k=>card(k,s[k])).join('');}
+setInterval(tick,1000);tick();
+</script>
+<p style='color:#666;font-size:12px;padding:0 14px'>* air mass = ECU modelled value, sensor faulted (see notes).</p>
+)HTML";
+static void handleLive() { server.send(200, "text/html", LIVE_HTML); }
 static void handleScan() {
   // Pause logging around the manual scan so the two don't fight over the bus.
   bool was = logEnabled; logEnabled = false; sessionUp = false;
@@ -371,6 +431,8 @@ void setup() {
 
   server.on("/", handleRoot);
   server.on("/status", handleStatus);
+  server.on("/live", handleLive);
+  server.on("/data", handleData);
   server.on("/scan", handleScan);
   server.on("/log", handleLog);
   server.begin();
