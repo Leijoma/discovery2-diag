@@ -350,6 +350,7 @@ static void handleData() {
   server.send(200, "application/json",
     "{\"age_ms\":" + String(latestMs ? (uint32_t)(millis() - latestMs) : 0) +
     ",\"session\":" + String(sessionUp ? 1 : 0) +
+    ",\"logging\":" + String(logEnabled ? 1 : 0) +
     ",\"rssi\":" + String(WiFi.RSSI()) +
     ",\"signals\":" + (latestJson.length() ? latestJson : String("{}")) + "}");
 }
@@ -366,8 +367,10 @@ header{display:flex;gap:12px;align-items:center;padding:10px 14px;background:#14
 .k{font-size:13px;color:#9aa0a6}.v{font-size:30px;font-weight:700;margin-top:4px}
 .u{font-size:14px;color:#9aa0a6;margin-left:4px;font-weight:400}
 small{color:#9aa0a6}
+button{margin-left:auto;padding:8px 14px;border:0;border-radius:8px;color:#fff;font-weight:600}
 </style>
-<header><span id=dot></span><b>Discovery 2 · live</b><small id=meta></small></header>
+<header><span id=dot></span><b>Discovery 2 · live</b><small id=meta></small>
+<button id=bus onclick='togglebus()'>…</button></header>
 <div id=grid></div>
 <script>
 // key: [label, unit, decimals, divisor]
@@ -388,8 +391,10 @@ async function tick(){let d;try{d=await(await fetch('/data')).json();}catch(e){d
 const s=d.signals||{},dot=document.getElementById('dot');
 const live=d.session&&d.age_ms<3000;dot.style.background=live?'#3c3':'#c93';
 document.getElementById('meta').textContent=(d.session?'session up':'no session')+' · '+(d.age_ms/1000).toFixed(0)+'s ago · '+d.rssi+' dBm';
+const b=document.getElementById('bus');b.textContent=d.logging?'Silence bus':'Resume polling';b.style.background=d.logging?'#1e6feb':'#3a7d46';
 const keys=ORDER.filter(k=>k in s).concat(Object.keys(s).filter(k=>!ORDER.includes(k)));
 document.getElementById('grid').innerHTML=keys.map(k=>card(k,s[k])).join('');}
+async function togglebus(){try{const d=await(await fetch('/data')).json();await fetch('/log?on='+(d.logging?'0':'1'));}catch(e){}setTimeout(tick,300);}
 setInterval(tick,1000);tick();
 </script>
 <p style='color:#666;font-size:12px;padding:0 14px'>* air mass = ECU modelled value, sensor faulted (see notes).</p>
@@ -407,8 +412,13 @@ static void handleScan() {
 static void handleLog() {
   if (server.hasArg("on")) {
     logEnabled = server.arg("on") != "0";
-    if (!logEnabled) sessionUp = false;
-    quietUntil = 0; linkMaybeOpen = true;       // re-clear + establish promptly when turned on
+    if (!logEnabled) {
+      // SILENCE: free the shared bus for another tool (Nanocom etc.) and stay off K-line.
+      sessionUp = false; lastFuelMs = 0;
+      stopComm();                                // send 82 once → release our link
+    } else {
+      quietUntil = 0; linkMaybeOpen = true;      // RESUME: re-clear + establish promptly
+    }
   }
   server.send(200, "application/json",
     "{\"logging\":" + String(logEnabled ? 1 : 0) + "}");
