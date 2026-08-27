@@ -126,6 +126,42 @@ static void klineFastInit() {                  // ISO 14230-2 fast init
   serial2Up = true;
 }
 
+// 5-baud slow init (ISO 9141 / ISO 14230-1) to `address` — for modules that don't do fast init
+// (BCU 0x40, airbag 0x5B). Bit-bang the address at 5 baud (start bit + 8 data LSB-first + stop,
+// 200 ms/bit), then read the ECU's sync 0x55 + key bytes KW1/KW2, wait W4, send ~KW2, and read the
+// ~address confirmation. Fills `out` with ALL bytes received (55 KW1 KW2 [echo ~addr]) and returns
+// the count; empty / no leading 0x55 = no module answered. Mirrors SerialTransport.slow_init. Done
+// LOCALLY (like klineFastInit) because the ~25-50 ms W4 window can't survive a USB/BT relay round-trip.
+static size_t klineSlowInit(uint8_t address, uint8_t *out, size_t cap) {
+  const uint32_t BIT_MS = 200, W4_MS = 30;
+  Serial2.end();
+  pinMode(PIN_KTX, OUTPUT);
+  digitalWrite(PIN_KTX, KLINE_INVERT ? LOW : HIGH); delay(BIT_MS);   // idle (high) before start
+  uint8_t bits[10]; size_t nb = 0;
+  bits[nb++] = 0;                                     // start bit
+  for (int i = 0; i < 8; i++) bits[nb++] = (address >> i) & 1;       // 8 data bits, LSB first
+  bits[nb++] = 1;                                     // stop bit
+  for (size_t i = 0; i < nb; i++) {
+    if (bits[i]) digitalWrite(PIN_KTX, KLINE_INVERT ? LOW : HIGH);   // 1 = idle/high
+    else         digitalWrite(PIN_KTX, KLINE_INVERT ? HIGH : LOW);   // 0 = break/low
+    delay(BIT_MS);
+  }
+  digitalWrite(PIN_KTX, KLINE_INVERT ? LOW : HIGH);   // back to idle
+  Serial2.begin(KLINE_BAUD, SERIAL_8N1, PIN_KRX, PIN_KTX, KLINE_INVERT);
+  serial2Up = true;
+  while (Serial2.available()) Serial2.read();          // discard RX garbage from our own bit-bang
+  if (cap < 6) return 0;
+  size_t got = readBytes(out, 3, 500);                 // 0x55, KW1, KW2
+  if (got >= 3 && out[0] == 0x55) {
+    uint8_t inv = (uint8_t)(~out[2]);                  // ~KW2 back to the ECU after W4
+    delay(W4_MS);
+    while (Serial2.available()) Serial2.read();
+    Serial2.write(&inv, 1); Serial2.flush();
+    got += readBytes(out + got, 3, 300);               // half-duplex echo + ~address confirmation
+  }
+  return got;
+}
+
 // Unaddressed KWP2000 request (`<len> <SID> <payload…> <cs>`), tolerant read. On a
 // positive reply (SID|0x40) copies the data field (echoed id + data, NO checksum) to
 // `out` and returns its length; returns -1 on a negative response or no reply. The

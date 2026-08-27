@@ -65,6 +65,20 @@ def test_ping():
     assert t.ping() is True
 
 
+def test_slow_init_maps_to_command_and_parses_keybytes():
+    t, ser = _wired()
+    ser.replies = [b"RX 55 8F E9 16\n"]           # sync 0x55 + KW1 + KW2 + ~addr echo
+    raw = t.slow_init(0x40)
+    assert ser.written[0] == b"SLOWINIT 40\n"      # ESP runs the 5-baud handshake locally
+    assert raw == bytes.fromhex("558FE916")
+    assert t.parse_slow_init(raw) == (0x8F, 0xE9)  # KW1, KW2
+
+
+def test_parse_slow_init_none_without_sync():
+    from d2diag.transport import EspTransport
+    assert EspTransport.parse_slow_init(b"\x00\x11\x22") is None
+
+
 def test_wait_ready_returns_on_pong():
     t, ser = _wired()
     ser.replies = [b"PONG\n"]

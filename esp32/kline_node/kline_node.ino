@@ -498,6 +498,8 @@ static void handleLog() {
 //   INIT          -> "OK"                   fast-init pulse only
 //   INIT AA BB .. -> "RX CC DD .."          pulse THEN write bytes + read burst (atomic: the
 //                                           pulse->StartComm gap must not cross USB)
+//   SLOWINIT AA   -> "RX 55 K1 K2 .."       5-baud slow init to address AA (BCU/airbag), done
+//                                           locally (the W4 handshake can't cross the relay)
 //   TX AA BB ..   -> "RX CC DD .."          write bytes, read the reply burst
 //   STOP          -> "OK"                   StopCommunication (release the link)
 // All framing / seed-key / decoding stays in the host; the ESP only owns the 25 ms pulse
@@ -549,6 +551,14 @@ static bool bridgeHandle(const String &line) {
     while (Serial2.available()) Serial2.read();
     Serial2.write(tx, n); Serial2.flush();  // ...fused with the StartComm frame, atomically
     uint8_t rx[300]; size_t r = readBurst(rx, sizeof rx, 500, 40);
+    bridgePrintRx(rx, r); return true;
+  }
+  if (line.startsWith("SLOWINIT")) {
+    bridgeEnter();
+    String rest = line.substring(8); rest.trim();     // the address byte in hex
+    uint8_t addr[1]; size_t n = bridgeParseHex(rest, addr, 1);
+    uint8_t rx[32];
+    size_t r = (n >= 1) ? klineSlowInit(addr[0], rx, sizeof rx) : 0;  // the ~2 s handshake, LOCAL
     bridgePrintRx(rx, r); return true;
   }
   if (line.startsWith("TX")) {

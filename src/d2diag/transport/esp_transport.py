@@ -129,6 +129,28 @@ class EspTransport(Transport):
         if self._ser is not None:
             self._ser.reset_input_buffer()
 
+    # ---- 5-baud slow init (BCU/airbag) ------------------------------------- #
+    def slow_init(self, address: int) -> bytes:
+        """Drive a 5-baud slow init via the bridge (`SLOWINIT <addr>`). The ESP runs the whole
+        ~2 s handshake LOCALLY — the W4 window can't cross the relay — and returns the raw bytes
+        (`55 KW1 KW2 …`). `KLine.slow_init` calls this then :meth:`parse_slow_init`."""
+        reply = self._cmd(f"SLOWINIT {address & 0xFF:02X}")
+        out = bytearray()
+        if reply.startswith("RX"):
+            for tok in reply[2:].split():
+                try:
+                    out.append(int(tok, 16))
+                except ValueError:
+                    pass
+        return bytes(out)
+
+    @staticmethod
+    def parse_slow_init(raw: bytes) -> "tuple[int, int] | None":
+        """(KW1, KW2) from a slow-init reply that starts with 0x55 — same as SerialTransport."""
+        if len(raw) >= 3 and raw[0] == 0x55:
+            return raw[1], raw[2]
+        return None
+
     # ---- convenience ------------------------------------------------------- #
     def ping(self) -> bool:
         """True if the bridge answers PING with PONG (probe the port/firmware)."""

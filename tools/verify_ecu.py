@@ -93,15 +93,50 @@ def verify_slabs(port: str, buzzer: bool = False, esp: bool = False) -> int:
     return 0
 
 
+def verify_bcu(port: str, buzzer: bool = False, esp: bool = False) -> int:
+    from d2diag.bcu import BCU_ADDRESS, Bcu
+    b = Bcu(_kwp(port, target=BCU_ADDRESS, esp=esp))   # 5-baud slow init, unaddressed session
+    b.open()
+    try:
+        print("BCU: 5-baud slow init to 0x40 (tip: needs an ignition cycle to connect)…")
+        kw = b.establish(progress=lambda m: print("   ", m))
+        print(f"  ✓ slow-init handshake OK, keybytes {kw[0]:02X} {kw[1]:02X}")
+        print("\nIdentity (1A xx) — ASCII part/software id proves it is the BCU:")
+        for k, v in b.identify().items():
+            txt = "".join(chr(c) if 32 <= c < 127 else "." for c in v)
+            print(f"    1A {k} = {_hex(v):32}  {txt!r}")
+    finally:
+        b.close()
+    return 0
+
+
+def verify_airbag(port: str, buzzer: bool = False, esp: bool = False) -> int:
+    from d2diag.airbag import AIRBAG_ADDRESS, Airbag
+    # Airbag is addressed framing throughout (unlike TD5/SLABS/BCU). Read-only by construction.
+    a = Airbag(KWP2000(KLine(_transport(port, esp), target=AIRBAG_ADDRESS), tolerant=True, addressed=True))
+    a.open()
+    try:
+        print("AIRBAG: 5-baud slow init to 0x5B → StartDiagnosticSession…")
+        kw = a.establish()
+        print(f"  ✓ established, keybytes {kw[0]:02X} {kw[1]:02X}")
+        print("\nSRS fault codes (read-only — no clear, no outputs):")
+        for f in a.read_faults() or ["(none)"]:
+            print("  -", f)
+    finally:
+        a.close()
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Active read-only ECU verification")
-    ap.add_argument("module", choices=["td5", "slabs"])
+    ap.add_argument("module", choices=["td5", "slabs", "bcu", "airbag"])
     ap.add_argument("port")
     ap.add_argument("--buzzer", action="store_true", help="SLABS: offer a buzzer test (write)")
     ap.add_argument("--esp", action="store_true",
                     help="talk over an ESP32 in USB cable mode instead of a KKL cable")
     args = ap.parse_args()
-    fn = {"td5": verify_td5, "slabs": verify_slabs}[args.module]
+    fn = {"td5": verify_td5, "slabs": verify_slabs,
+          "bcu": verify_bcu, "airbag": verify_airbag}[args.module]
     try:
         return fn(args.port, args.buzzer, args.esp)
     except Exception as exc:  # noqa: BLE001
