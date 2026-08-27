@@ -101,6 +101,21 @@ static void stopComm() {
   readBurst(tmp, sizeof tmp, 120, 30);         // absorb C2 / let the link close
   while (Serial2.available()) Serial2.read();
 }
+// Close OUR Td5 session cleanly: StopDiagnosticSession (20) THEN StopCommunication (82) —
+// exactly like the KKL/Python end_session. The node OPENS a diagnostic session (10 A0) but
+// only ever sent 82, leaving that diag session open; on RDL016 (2026-08-27) that left the ECU
+// stuck (7F 81 10 to every re-init) until an ignition cycle. Send 20 first so the session is
+// actually torn down, then 82 to drop the link. Call whenever WE had a session (mute / cable /
+// lost read). Establish/leftover-clearing is different — that's 82-once-then-silence (below).
+static void endSession() {
+  ensureSerial();
+  uint8_t stopSess[3] = { 0x01, 0x20, 0x21 };    // StopDiagnosticSession (20)
+  while (Serial2.available()) Serial2.read();
+  Serial2.write(stopSess, 3); Serial2.flush();
+  uint8_t tmp[16];
+  readBurst(tmp, sizeof tmp, 200, 30);           // absorb 60 (positive) / 7F, let the ECU process it
+  stopComm();                                    // then StopCommunication (82)
+}
 static void klineFastInit() {                  // ISO 14230-2 fast init
   Serial2.end();
   pinMode(PIN_KTX, OUTPUT);
@@ -162,14 +177,12 @@ static uint16_t td5KeyFromSeed(uint16_t seed) {
 }
 
 // Full Td5 bring-up to an unlocked, readable session. Returns true on success.
-// Sends StopCommunication (82) FIRST, on EVERY attempt — exactly like the proven KKL/Python
-// _establish. On RDL016 (2026-08-27) a dropped link does NOT die from bus silence (25 s and an
-// ESP reboot both failed; only an accepted 82 or an ignition cycle clears it), so the earlier
-// "send 82 once then stay silent" strategy left the ECU stuck. Releasing before each init gives
-// the ECU a fresh teardown every time. If it still won't accept 82 (stuck), StartComm keeps
-// getting 7F 81 10 and the caller escalates to an ignition-cycle prompt.
+// PURE init: no 82 here. Clearing a leftover link is the CALLER's job — send the teardown
+// (endSession = 20+82) ONCE, then keep the bus SILENT (sending anything, even 82, each attempt
+// resets the ECU's wait — the lesson from the KKL _establish, whose idle is a QUIET period).
+// The caller does teardown → silence → td5Establish(), and escalates the silence / prompts an
+// ignition cycle if it stays stuck.
 static bool td5Establish() {
-  stopComm();                 // release any link still open (dropped session / prior run) before re-init
   klineFastInit();
   // StartCommunication (addressed 81 13 F7 81) → expect C1 in the burst.
   uint8_t req[5] = { 0x81, TD5_ADDR, TESTER_ADDR, 0x81, 0 };

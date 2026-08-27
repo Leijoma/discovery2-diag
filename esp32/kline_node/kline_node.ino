@@ -99,14 +99,16 @@ static uint32_t latestMs = 0;          // millis() of the last snapshot
 // cycle does. So td5Establish() sends 82 before EVERY attempt (like the KKL stack), and if the
 // ECU still rejects after IGN_HINT_AFTER tries we surface an ignition-cycle prompt in the UI.
 static uint32_t quietUntil    = 0;     // don't touch K-line before this (ms)
-static bool     needIgnCycle  = false; // establish keeps failing → 82 isn't clearing it, cycle the key
+static bool     recoveryCleared = false; // teardown (endSession) sent for this recovery episode?
+static bool     needIgnCycle  = false; // establish keeps failing → teardown+silence not clearing it, cycle the key
 static uint8_t  sessionMiss  = 0;      // consecutive failed read cycles while a session is up
 static uint16_t estabTries   = 0;      // consecutive establish failures since the last success
 static const uint32_t LOG_INTERVAL_MS   = 1000;
 static const uint32_t ESTAB_QUIET_MS    = 6000;   // settle window after /scan hit the bus
-static const uint32_t ESTAB_RETRY_MS    = 2500;   // gap between establish attempts (each re-sends 82)
+static const uint32_t RECOVERY_IDLE_MS  = 6000;   // base bus-silent window after a teardown (escalates)
+static const uint32_t RECOVERY_IDLE_MAX = 25000;  // ...up to this (the KKL stack idles ~25 s; car-proven)
 static const uint8_t  SESSION_MISS_GRACE  = 3;    // tolerate this many glitchy reads before dropping a session
-static const uint16_t IGN_HINT_AFTER    = 5;      // establish fails in a row → prompt an ignition cycle
+static const uint16_t IGN_HINT_AFTER    = 4;      // establish fails in a row → prompt an ignition cycle
 // KL15 power = power-on IS ignition-on, so hold off K-line for the first few seconds to clear
 // the crank / BCU<->ECM immobiliser handshake window. Hardware-free (a timed floor, not a
 // measurement); harmless on USB/constant-12V too. WiFi/WG bring-up usually covers this already,
@@ -323,25 +325,30 @@ static void logTick() {
   lastCycle = now;
   if (!sessionUp) {
     if (now < BOOT_QUIET_MS) return;              // skip the crank/immobiliser window at ignition-on
-    if (now < quietUntil) return;                 // brief spacing between attempts
-    sessionUp = td5Establish();                    // sends 82 (release) → fast init → StartComm → unlock
-    if (sessionUp) { estabTries = 0; sessionMiss = 0; needIgnCycle = false; Serial.println("EST: SESSION UP"); }
+    if (!recoveryCleared) {                        // ONE clean teardown per recovery episode...
+      endSession();                                // ...StopDiagnosticSession (20) + StopCommunication (82)
+      recoveryCleared = true;
+      quietUntil = now + RECOVERY_IDLE_MS;         // ...then SILENCE so the ECU actually drops it
+      return;
+    }
+    if (now < quietUntil) return;                 // stay OFF the bus during the quiet window
+    sessionUp = td5Establish();                    // PURE init (no 82 — keep the silence intact)
+    if (sessionUp) { estabTries = 0; sessionMiss = 0; needIgnCycle = false; recoveryCleared = false; Serial.println("EST: SESSION UP"); }
     else {
       estabFails++;
-      if (++estabTries >= IGN_HINT_AFTER) needIgnCycle = true;  // 82 isn't clearing it → prompt ignition cycle
-      quietUntil = millis() + ESTAB_RETRY_MS;
+      if (++estabTries >= IGN_HINT_AFTER) needIgnCycle = true;  // teardown+silence not clearing it → prompt key cycle
+      uint32_t q = RECOVERY_IDLE_MS * (estabTries + 1);         // escalate the silence for a stubborn link
+      quietUntil = millis() + (q > RECOVERY_IDLE_MAX ? RECOVERY_IDLE_MAX : q);
     }
     return;
   }
   // Ride through a transient bad read: a single unreadable cycle (weak K-line) should NOT nuke
-  // the session — re-establishing is expensive and can hit a stale-link reject. Only tear down
-  // after several misses in a row (session genuinely gone, e.g. ignition off).
+  // the session — re-establishing is expensive. Only tear down after several misses in a row.
   if (!logCycle()) {
     if (++sessionMiss < SESSION_MISS_GRACE) return;   // tolerate a glitch; keep the session
     Serial.println("EST: SESSION LOST");
-    stopComm();                                        // release promptly (td5Establish re-sends 82 too)
     sessionUp = false; sessionMiss = 0;
-    quietUntil = millis() + ESTAB_RETRY_MS;
+    recoveryCleared = false;                          // recovery block will endSession (20+82) then idle
     lastFuelMs = 0;                                    // pause fuel integration across the gap
   } else sessionMiss = 0;
 }
@@ -464,19 +471,21 @@ static void handleScan() {
   stopComm();                    // RELEASE the link /scan just opened (esp. SLABS' C1) — a link left
                                  // open here makes the logger's next TD5 StartComm get 7F 81 10.
   logEnabled = was;
-  // /scan hit the bus (its own inits); let it settle before the logger reconnects (which re-sends 82).
-  quietUntil = millis() + ESTAB_QUIET_MS;
+  // /scan hit the bus (its own inits); force a fresh recovery (endSession → silence → init).
+  recoveryCleared = false; estabTries = 0; needIgnCycle = false;
   server.send(200, "text/plain", out);
 }
 static void handleLog() {
   if (server.hasArg("on")) {
     logEnabled = server.arg("on") != "0";
     if (!logEnabled) {
-      // SILENCE: free the shared bus for another tool (Nanocom etc.) and stay off K-line.
+      // MUTE: free the shared bus for another tool. Close cleanly (20+82) so the ECU doesn't
+      // stay stuck, then stay off K-line (logTick won't run while logEnabled is false).
       sessionUp = false; lastFuelMs = 0;
-      stopComm();                                // send 82 once → release our link
+      endSession(); recoveryCleared = true;
     } else {
-      quietUntil = 0; estabTries = 0; needIgnCycle = false;   // RESUME: establish promptly (re-sends 82)
+      // RESUME: fresh recovery (endSession → silence → init) — establishes as soon as it clears.
+      quietUntil = 0; recoveryCleared = false; estabTries = 0; needIgnCycle = false;
     }
   }
   server.send(200, "application/json",
@@ -497,13 +506,13 @@ static void bridgeEnter() {
   if (!bridgeMode) {
     bridgeMode = true;
     sessionUp = false; lastFuelMs = 0;     // drop our own logging session...
-    stopComm();                            // ...and release our link so the host inits clean
+    endSession(); recoveryCleared = true;  // ...close it cleanly (20+82) so the host inits clean
   }
   bridgeIdleUntil = millis() + BRIDGE_IDLE_MS;
 }
 static void bridgeExit() {
   bridgeMode = false; bridgeSticky = false;
-  quietUntil = millis() + ESTAB_QUIET_MS;      // settle, then relog (td5Establish re-sends 82)
+  quietUntil = 0; recoveryCleared = false;     // fresh recovery (endSession → silence → init), then relog
   estabTries = 0; needIgnCycle = false;
 }
 static int bridgeNib(char c) {
