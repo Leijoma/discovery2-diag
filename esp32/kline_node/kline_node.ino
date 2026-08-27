@@ -37,6 +37,7 @@
 #include <LittleFS.h>            // on-device spill for offline logging (store-and-forward)
 #include "secrets.h"
 #include "kline_core.h"          // K-line/KWP2000/Td5 comms core (no WiFi/Influx/web)
+#include "live_html.h"           // the live web UI (embedded page; own header, see note there)
 
 static WebServer server(80);
 static WireGuard wg;
@@ -116,8 +117,9 @@ static const uint32_t BEAT_INTERVAL_MS  = 15000;  // node heartbeat cadence
 // after the last USB command. Frees the KKL cable: plug the ESP into the Mac, run the
 // whole Python stack over it like the cable, then it goes back to logging on its own.
 static bool     bridgeMode      = false;
+static bool     bridgeSticky    = false;          // set via /bridge (web) — hold until explicitly left
 static uint32_t bridgeIdleUntil = 0;
-static const uint32_t BRIDGE_IDLE_MS = 30000;     // resume logging this long after the last USB command
+static const uint32_t BRIDGE_IDLE_MS = 30000;     // AUTO (USB) mode: resume logging this long after the last command
 
 // Offline logging (store-and-forward): when an engine POST fails (no WG/Influx), spill the
 // line to LittleFS and flush it back when the uplink returns — so a drive out of hotspot
@@ -437,51 +439,8 @@ static void handleData() {
     ",\"rssi\":" + String(WiFi.RSSI()) +
     ",\"signals\":" + (latestJson.length() ? latestJson : String("{}")) + "}");
 }
-// Self-contained live view: polls /data every second. Open on the phone/laptop on the
-// hotspot — no app, no screen. Same data will later drive an on-device display.
-static const char LIVE_HTML[] = R"HTML(<!doctype html>
-<meta name=viewport content='width=device-width,initial-scale=1'><title>D2 live</title>
-<style>
-body{font-family:system-ui,sans-serif;margin:0;background:#0b0b0c;color:#eee}
-header{display:flex;gap:12px;align-items:center;padding:10px 14px;background:#141416;position:sticky;top:0}
-#dot{width:12px;height:12px;border-radius:50%;background:#555}
-#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:12px}
-.card{background:#161719;border-radius:12px;padding:12px 14px}
-.k{font-size:13px;color:#9aa0a6}.v{font-size:30px;font-weight:700;margin-top:4px}
-.u{font-size:14px;color:#9aa0a6;margin-left:4px;font-weight:400}
-small{color:#9aa0a6}
-button{margin-left:auto;padding:8px 14px;border:0;border-radius:8px;color:#fff;font-weight:600}
-</style>
-<header><span id=dot></span><b>Discovery 2 · live</b><small id=meta></small>
-<button id=bus onclick='togglebus()'>…</button></header>
-<div id=grid></div>
-<script>
-// key: [label, unit, decimals, divisor]
-const L={rpm:['Engine speed','rpm',0,1],coolant_c:['Coolant','°C',0,1],
-map_bar:['Boost','bar',2,1],maf:['Air mass*','kg/h',0,1],fuel_rate:['Fuel rate','L/h',1,1],
-economy:['Economy','L/mil',1,10],trip_economy:['Trip','L/mil',1,10],battery:['Battery','V',1,1],
-speed:['Speed','km/h',0,1],air_c:['Intake air','°C',0,1],fuel_c:['Fuel temp','°C',0,1],
-inj_mg:['Injection','mg',1,1],egr_pct:['EGR','%',0,1],wastegate_pct:['Wastegate','%',0,1],
-rpm_error:['RPM error','rpm',0,1],ambient_bar:['Ambient','bar',2,1],throttle_v:['Pedal','V',2,1],
-balance_1:['Cyl 1','',0,1],balance_2:['Cyl 2','',0,1],balance_3:['Cyl 3','',0,1],
-balance_4:['Cyl 4','',0,1],balance_5:['Cyl 5','',0,1]};
-const ORDER=['rpm','coolant_c','map_bar','maf','fuel_rate','economy','trip_economy','battery',
-'speed','air_c','fuel_c','inj_mg','egr_pct','wastegate_pct','rpm_error','ambient_bar','throttle_v',
-'balance_1','balance_2','balance_3','balance_4','balance_5'];
-function card(k,v){const m=L[k]||[k,'',1,1];const val=(v/m[3]).toFixed(m[2]);
-return `<div class=card><div class=k>${m[0]}</div><div class=v>${val}<span class=u>${m[1]}</span></div></div>`;}
-async function tick(){let d;try{d=await(await fetch('/data')).json();}catch(e){document.getElementById('dot').style.background='#c33';return;}
-const s=d.signals||{},dot=document.getElementById('dot');
-const live=d.session&&d.age_ms<3000;dot.style.background=live?'#3c3':'#c93';
-document.getElementById('meta').textContent=(d.bridge?'CABLE MODE (USB) · ':'')+(d.session?'session up':'no session')+' · '+(d.age_ms/1000).toFixed(0)+'s ago · '+d.rssi+' dBm';
-const b=document.getElementById('bus');b.textContent=d.logging?'Silence bus':'Resume polling';b.style.background=d.logging?'#1e6feb':'#3a7d46';
-const keys=ORDER.filter(k=>k in s).concat(Object.keys(s).filter(k=>!ORDER.includes(k)));
-document.getElementById('grid').innerHTML=keys.map(k=>card(k,s[k])).join('');}
-async function togglebus(){try{const d=await(await fetch('/data')).json();await fetch('/log?on='+(d.logging?'0':'1'));}catch(e){}setTimeout(tick,300);}
-setInterval(tick,1000);tick();
-</script>
-<p style='color:#666;font-size:12px;padding:0 14px'>* air mass = ECU modelled value, sensor faulted (see notes).</p>
-)HTML";
+// The live web UI (served at "/" and "/live") lives in its own header (live_html.h) so the
+// Arduino auto-prototype generator doesn't parse its embedded JavaScript as C++.
 static void handleLive() { server.send(200, "text/html", LIVE_HTML); }
 static void handleScan() {
   // Pause logging around the manual scan so the two don't fight over the bus.
@@ -526,7 +485,7 @@ static void bridgeEnter() {
   bridgeIdleUntil = millis() + BRIDGE_IDLE_MS;
 }
 static void bridgeExit() {
-  bridgeMode = false;
+  bridgeMode = false; bridgeSticky = false;
   linkMaybeOpen = true; quietUntil = millis() + ESTAB_QUIET_MS;   // re-clear + settle, then relog
 }
 static int bridgeNib(char c) {
@@ -585,8 +544,8 @@ static void serviceBridgeSerial() {
 }
 static void handleBridge() {
   if (server.hasArg("on")) {
-    if (server.arg("on") != "0") bridgeEnter();   // force cable mode: free the bus, wait for USB
-    else bridgeExit();                             // back to autonomous logging
+    if (server.arg("on") != "0") { bridgeEnter(); bridgeSticky = true; }  // hold until Back to live
+    else bridgeExit();                                                    // back to autonomous logging
   }
   server.send(200, "application/json", "{\"bridge\":" + String(bridgeMode ? 1 : 0) + "}");
 }
@@ -608,7 +567,8 @@ void setup() {
   ArduinoOTA.begin();                       // also starts mDNS as OTA_HOSTNAME
   MDNS.addService("http", "tcp", 80);       // advertise the web server (shows up in Fing/Bonjour)
 
-  server.on("/", handleRoot);
+  server.on("/", handleLive);               // startup = the polished live view
+  server.on("/info", handleRoot);           // WiFi/IP/OTA status page (debug)
   server.on("/status", handleStatus);
   server.on("/live", handleLive);
   server.on("/data", handleData);
@@ -634,7 +594,8 @@ void loop() {
   server.handleClient();
   serviceBridgeSerial();                     // a host tool may take over the bus over USB
   if (bridgeMode) {
-    if ((int32_t)(millis() - bridgeIdleUntil) > 0) bridgeExit();  // USB idle → resume logging
+    // AUTO (USB) mode resumes logging after idle; web-selected (sticky) mode holds until Back to live.
+    if (!bridgeSticky && (int32_t)(millis() - bridgeIdleUntil) > 0) bridgeExit();
     return;                                  // bus belongs to the host; skip WiFi churn + logging
   }
   if (WiFi.status() != WL_CONNECTED && millis() - lastWifiCheck > 10000) {
