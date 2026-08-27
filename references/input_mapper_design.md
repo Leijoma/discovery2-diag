@@ -120,6 +120,30 @@ Each confirmed bit → `upsert_field` on `<module>.json`:
 - **EKA / PII**: never capture or store the EKA LID (`21 CC`) value; redact it (the code already
   lives in the sister project, and the value is dual-use immobiliser material).
 
+## Outputs — a separate, guarded track (NOT this tool)
+
+Mapping outputs means sending **writes** (actuator tests) — the opposite of the read-only input
+mapper. Feasibility splits by module:
+
+- **BCU body/exterior lamps** (LH/RH indicators, front/tail wiper, headlamp power wash, heated
+  rear screen, horn, ignition interlock): **BLOCKED.** They sit behind the BCU's four
+  WriteLocalIdentifier banks, gated by **SecurityAccess (`27`)**. The BCU seed→key algorithm is
+  **unknown** and can't be derived from our captures — a wrong key returns `7F 27 83` (DENIED) and
+  the Td5 keygen doesn't match. We can't send the write at all, and the bank/bit→output mapping is
+  open too. Path forward: collect seed/key pairs from a reference tool and derive the algorithm;
+  **do not brute-force** (NRC `0x83` implies an attempt counter / lockout). See
+  `valeo_bcu_capabilities.md`.
+- **TD5 cluster outputs** (MIL lamp `30 A2`, rev counter `30 B7`, temp gauge `30 BA`, fuel pump
+  `30 A1`, glow plugs `30 B3`, …): **reachable** — service `0x30` InputOutputControl, and we have
+  the TD5 session + seed/key. Tagged "experimental"; a guarded *blink-and-observe* is exactly how
+  they get promoted to "verified".
+- **SLABS outputs**: already **verified** (ABS / air-suspension actuator tests, `0x31`).
+
+So "blink one at a time, map what lights" is feasible for **TD5 cluster outputs** (and SLABS is
+done), but **not for BCU body lamps** until the seed→key is solved. Any output tool is write-side:
+behind **explicit confirmation, stationary + ignition on**, warn on risky actuators
+(injectors/pump) — a different, guarded tool from the passive input mapper.
+
 ## Phased build plan (when we do it)
 
 1. **Bench CLI** — `Mapper` (stable/diff/record) + A-B-A flow + volatile-byte mask, over cable/KKL,
