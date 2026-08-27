@@ -168,7 +168,7 @@ async function tick(){
    const key=`${r.lid}:${r.off}:${bit}`;const named=d.labels[key];
    let cls='cell '+(c.masked?'masked':('v'+c.v))+(c.changed?' changed':'')+(named?' named':'');
    const t=named?` title="${named}"`:'';
-   html+=`<td><div class="${cls}"${t} onclick="click_(${JSON.stringify(r.lid)},${r.off},${bit},${c.masked})">${c.masked?'·':c.v}</div></td>`;
+   html+=`<td><div class="${cls}"${t} onclick="click_('${r.lid}',${r.off},${bit},${c.masked})">${c.masked?'·':c.v}</div></td>`;
   });
   html+='</tr>';
  }
