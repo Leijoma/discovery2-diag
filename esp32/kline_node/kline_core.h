@@ -162,11 +162,14 @@ static uint16_t td5KeyFromSeed(uint16_t seed) {
 }
 
 // Full Td5 bring-up to an unlocked, readable session. Returns true on success.
-// NOTE: no stopComm() at the top. Clearing a stale link is the CALLER's job — send 82
-// ONCE, then keep the bus SILENT so the module's own timeout drops the link. Sending
-// anything (even 82) each attempt resets that timer and the link never dies (the lesson
-// baked into the KKL stack's _establish). We only send 82 below when WE opened a link.
+// Sends StopCommunication (82) FIRST, on EVERY attempt — exactly like the proven KKL/Python
+// _establish. On RDL016 (2026-08-27) a dropped link does NOT die from bus silence (25 s and an
+// ESP reboot both failed; only an accepted 82 or an ignition cycle clears it), so the earlier
+// "send 82 once then stay silent" strategy left the ECU stuck. Releasing before each init gives
+// the ECU a fresh teardown every time. If it still won't accept 82 (stuck), StartComm keeps
+// getting 7F 81 10 and the caller escalates to an ignition-cycle prompt.
 static bool td5Establish() {
+  stopComm();                 // release any link still open (dropped session / prior run) before re-init
   klineFastInit();
   // StartCommunication (addressed 81 13 F7 81) → expect C1 in the burst.
   uint8_t req[5] = { 0x81, TD5_ADDR, TESTER_ADDR, 0x81, 0 };
@@ -184,10 +187,10 @@ static bool td5Establish() {
   // a half-opened link left behind is exactly what makes the NEXT StartCommunication get
   // 7F 81 10 (generalReject), which then never self-clears.
   int ci = findSeq(burst, got, 0xC1, 0x57);
-  // No C1 (silent or 7F 81 10 generalReject): we did NOT open a link this attempt, so do
-  // NOT send 82 — that would reset the stale link's timeout. Just fail; the caller stays
-  // quiet and the module drops its old link on its own. Print the burst so a car-side stale
-  // link (7F 81 10) is distinguishable from a silent bus (empty) over serial.
+  // No C1 — either a silent bus or 7F 81 10 (generalReject = a link is still open and the 82
+  // above did not clear it). We already sent our teardown; just fail and let the caller retry
+  // (and, after enough rejects, prompt an ignition cycle). Print the burst so a stuck link
+  // (7F 81 10) is distinguishable from a silent bus (empty) over serial.
   if (ci < 0 || ci + 2 >= (int)got || burst[ci + 2] != 0x8F) {
     Serial.print("EST: no C1, burst=["); Serial.print(got ? toHex(burst, got) : String("silent")); Serial.println("]");
     return false;

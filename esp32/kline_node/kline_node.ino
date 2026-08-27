@@ -93,19 +93,20 @@ static uint32_t lastFuelMs   = 0;      // last integration tick (0 = not started
 // no locking needed.
 static String   latestJson;            // {"rpm":763,...}
 static uint32_t latestMs = 0;          // millis() of the last snapshot
-// Stale-link recovery: a link left open (e.g. a reflash mid-session) makes the module
-// answer 7F 81 10 to every StartCommunication until it times out. The ONLY thing that
-// clears it is bus SILENCE — sending 82/init during the wait resets the module's timer
-// (proven on the KKL stack). So: send 82 ONCE (linkMaybeOpen), then stay off the bus
-// until quietUntil, then init clean.
-static bool     linkMaybeOpen = true;  // assume a leftover link at boot
+// Stale-link recovery: a link left open (dropped session / prior run) makes the ECU answer
+// 7F 81 10 to every StartCommunication. On RDL016 (2026-08-27) bus SILENCE does NOT clear it
+// (25 s + ESP reboot both failed) — only an accepted StopCommunication (82) or an ignition
+// cycle does. So td5Establish() sends 82 before EVERY attempt (like the KKL stack), and if the
+// ECU still rejects after IGN_HINT_AFTER tries we surface an ignition-cycle prompt in the UI.
 static uint32_t quietUntil    = 0;     // don't touch K-line before this (ms)
+static bool     needIgnCycle  = false; // establish keeps failing → 82 isn't clearing it, cycle the key
 static uint8_t  sessionMiss  = 0;      // consecutive failed read cycles while a session is up
 static uint16_t estabTries   = 0;      // consecutive establish failures since the last success
 static const uint32_t LOG_INTERVAL_MS   = 1000;
-static const uint32_t ESTAB_QUIET_MS    = 6000;   // bus-silent window that lets a stale link die
-static const uint32_t ESTAB_QUIET_LONG_MS = 16000; // escalated silence after repeated rejects (car needs ~16 s)
+static const uint32_t ESTAB_QUIET_MS    = 6000;   // settle window after /scan hit the bus
+static const uint32_t ESTAB_RETRY_MS    = 2500;   // gap between establish attempts (each re-sends 82)
 static const uint8_t  SESSION_MISS_GRACE  = 3;    // tolerate this many glitchy reads before dropping a session
+static const uint16_t IGN_HINT_AFTER    = 5;      // establish fails in a row → prompt an ignition cycle
 // KL15 power = power-on IS ignition-on, so hold off K-line for the first few seconds to clear
 // the crank / BCU<->ECM immobiliser handshake window. Hardware-free (a timed floor, not a
 // measurement); harmless on USB/constant-12V too. WiFi/WG bring-up usually covers this already,
@@ -322,20 +323,13 @@ static void logTick() {
   lastCycle = now;
   if (!sessionUp) {
     if (now < BOOT_QUIET_MS) return;              // skip the crank/immobiliser window at ignition-on
-    if (now < quietUntil) return;                 // stay OFF the bus — silence clears a stale link
-    if (linkMaybeOpen) {                           // tear a leftover link down ONCE, then wait
-      stopComm();
-      linkMaybeOpen = false;
-      quietUntil = now + ESTAB_QUIET_MS;           // ...and now SILENCE so the module times it out
-      return;
-    }
-    sessionUp = td5Establish();                    // clean init after the quiet window (sends no 82)
-    if (sessionUp) { estabTries = 0; sessionMiss = 0; Serial.println("EST: SESSION UP"); }
+    if (now < quietUntil) return;                 // brief spacing between attempts
+    sessionUp = td5Establish();                    // sends 82 (release) → fast init → StartComm → unlock
+    if (sessionUp) { estabTries = 0; sessionMiss = 0; needIgnCycle = false; Serial.println("EST: SESSION UP"); }
     else {
-      // Retry with ESCALATING silence: a stale link that survived 6 s of quiet needs longer
-      // (proven in RDL016 2026-08-27 — 6 s repeatedly rejected with 7F 81 10, ~16 s cleared it).
-      estabFails++; estabTries++;
-      quietUntil = millis() + (estabTries >= 3 ? ESTAB_QUIET_LONG_MS : ESTAB_QUIET_MS);
+      estabFails++;
+      if (++estabTries >= IGN_HINT_AFTER) needIgnCycle = true;  // 82 isn't clearing it → prompt ignition cycle
+      quietUntil = millis() + ESTAB_RETRY_MS;
     }
     return;
   }
@@ -345,9 +339,9 @@ static void logTick() {
   if (!logCycle()) {
     if (++sessionMiss < SESSION_MISS_GRACE) return;   // tolerate a glitch; keep the session
     Serial.println("EST: SESSION LOST");
-    stopComm();                                        // really gone — tear it down, then go quiet
+    stopComm();                                        // release promptly (td5Establish re-sends 82 too)
     sessionUp = false; sessionMiss = 0;
-    quietUntil = millis() + ESTAB_QUIET_MS;
+    quietUntil = millis() + ESTAB_RETRY_MS;
     lastFuelMs = 0;                                    // pause fuel integration across the gap
   } else sessionMiss = 0;
 }
@@ -439,6 +433,7 @@ static void handleStatus() {
     ",\"logging\":" + String(logEnabled ? 1 : 0) +
     ",\"bridge\":" + String(bridgeMode ? 1 : 0) +
     ",\"session\":" + String(sessionUp ? 1 : 0) +
+    ",\"ign_cycle\":" + String(needIgnCycle ? 1 : 0) +
     ",\"points\":" + String(pointsSent) +
     ",\"estab_fails\":" + String(estabFails) +
     ",\"last_post\":" + String(lastPost) +
@@ -455,6 +450,7 @@ static void handleData() {
     ",\"session\":" + String(sessionUp ? 1 : 0) +
     ",\"logging\":" + String(logEnabled ? 1 : 0) +
     ",\"bridge\":" + String(bridgeMode ? 1 : 0) +
+    ",\"ign_cycle\":" + String(needIgnCycle ? 1 : 0) +
     ",\"rssi\":" + String(WiFi.RSSI()) +
     ",\"signals\":" + (latestJson.length() ? latestJson : String("{}")) + "}");
 }
@@ -468,8 +464,8 @@ static void handleScan() {
   stopComm();                    // RELEASE the link /scan just opened (esp. SLABS' C1) — a link left
                                  // open here makes the logger's next TD5 StartComm get 7F 81 10.
   logEnabled = was;
-  // /scan hit the bus (its own inits); make the logger re-clear + settle before it reconnects.
-  linkMaybeOpen = true; quietUntil = millis() + ESTAB_QUIET_MS;
+  // /scan hit the bus (its own inits); let it settle before the logger reconnects (which re-sends 82).
+  quietUntil = millis() + ESTAB_QUIET_MS;
   server.send(200, "text/plain", out);
 }
 static void handleLog() {
@@ -480,7 +476,7 @@ static void handleLog() {
       sessionUp = false; lastFuelMs = 0;
       stopComm();                                // send 82 once → release our link
     } else {
-      quietUntil = 0; linkMaybeOpen = true;      // RESUME: re-clear + establish promptly
+      quietUntil = 0; estabTries = 0; needIgnCycle = false;   // RESUME: establish promptly (re-sends 82)
     }
   }
   server.send(200, "application/json",
@@ -507,7 +503,8 @@ static void bridgeEnter() {
 }
 static void bridgeExit() {
   bridgeMode = false; bridgeSticky = false;
-  linkMaybeOpen = true; quietUntil = millis() + ESTAB_QUIET_MS;   // re-clear + settle, then relog
+  quietUntil = millis() + ESTAB_QUIET_MS;      // settle, then relog (td5Establish re-sends 82)
+  estabTries = 0; needIgnCycle = false;
 }
 static int bridgeNib(char c) {
   if (c >= '0' && c <= '9') return c - '0';

@@ -141,6 +141,7 @@ async function tick(){
  }
  if(d.bridge) return renderState('Cable mode','The node is acting as a USB K-line cable for the diagnostic tool. Live logging is paused.','backToLive()','Back to live mode');
  if(!d.logging) return renderState('Muted','Polling is stopped and the K-line bus is free for another tool.','unmute()','Unmute');
+ if(d.ign_cycle){$('#main').innerHTML=`<div class=state><div class="big pulse">Cycle the ignition</div><div class=sub>The ECU is holding the previous link open and won't accept a new one. Turn the key off, then back on — the node reconnects on its own. (Bus silence and reboot don't clear it on this car.)</div></div>`;return;}
  renderLive(d);
 }
 setInterval(tick,1000);tick();
