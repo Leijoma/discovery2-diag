@@ -144,8 +144,11 @@ static int influxPost(const String &body) {
   HTTPClient http;
   String url = String(INFLUX_URL) + "/api/v2/write?org=" + INFLUX_ORG +
                "&bucket=" + INFLUX_BUCKET + "&precision=s";
-  http.setConnectTimeout(2000);
-  http.setTimeout(3000);
+  // Keep these SHORT: this POST runs on the K-line poll thread, so a slow uplink stalls
+  // both live reads (rpm lag) and control clicks (mute/bridge). Fail fast → spill instead;
+  // a healthy link answers in well under this, a slow one drops to the offline buffer.
+  http.setConnectTimeout(800);
+  http.setTimeout(1000);
   if (!http.begin(url)) return -2;
   http.addHeader("Authorization", String("Token ") + INFLUX_TOKEN);
   http.addHeader("Content-Type", "text/plain; charset=utf-8");
@@ -196,8 +199,8 @@ static bool rawConfigured() {
 static void rawFlush() {
   if (!wgUp || WiFi.status() != WL_CONNECTED || rawBuf.length() == 0) return;
   HTTPClient http;
-  http.setConnectTimeout(2000);
-  http.setTimeout(3000);
+  http.setConnectTimeout(800);
+  http.setTimeout(1200);
   if (!http.begin(RAW_URL)) return;
   http.addHeader("X-Token", RAW_TOKEN);
   http.addHeader("Content-Type", "text/plain");
@@ -287,6 +290,7 @@ static bool logCycle() {
   js += "}"; latestJson = js; latestMs = millis();   // publish the snapshot for /live + a screen
   long ts = epochNow();
   if (ts) { line += " "; line += String(ts); }
+  server.handleClient();                 // honour a pending mute/bridge click BEFORE the blocking POST
   lastPost = influxPost(line);
   if (lastPost == 204) pointsSent++;
   else spillLine(line);                  // offline / POST failed → buffer to LittleFS, flush later

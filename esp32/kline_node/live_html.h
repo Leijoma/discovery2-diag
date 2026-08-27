@@ -47,8 +47,13 @@ main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column}
 .state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;text-align:center;padding:24px}
 .state .big{font-size:clamp(36px,11vw,64px);font-weight:800;letter-spacing:.5px}
 .state .sub{font-size:14px;color:var(--fg2);max-width:340px;text-wrap:pretty}
-.btn{min-height:52px;padding:0 26px;border:1px solid var(--bd);border-radius:12px;background:var(--surface);color:var(--fg);font:inherit;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.btn{min-height:52px;padding:0 26px;border:1px solid var(--bd);border-radius:12px;background:var(--surface);color:var(--fg);font:inherit;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .05s}
 .btn.accent{border-color:var(--accent);background:var(--accent);color:var(--on)}
+.btn:active{transform:scale(.97);opacity:.85}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:38px;height:38px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .8s linear infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.pulse{animation:pulse 1.1s ease-in-out infinite}
 .sheet{position:fixed;inset:0;background:#000a;display:flex;align-items:flex-end;justify-content:center;z-index:9}
 .panel{width:100%;max-width:900px;background:var(--surface);border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px}
 .panel h3{margin:0;font-size:16px;font-weight:800}
@@ -107,17 +112,33 @@ function openSettings(){
 }
 function closeSettings(){$('#sheet').innerHTML='';}
 const hit=u=>fetch(u).catch(()=>{});
-async function mute(){closeSettings();await hit('/log?on=0');setTimeout(tick,200);}
-async function unmute(){await hit('/log?on=1');setTimeout(tick,200);}
-async function cable(){closeSettings();await hit('/bridge?on=1');setTimeout(tick,200);}
-async function backToLive(){await hit('/bridge?on=0');setTimeout(tick,200);}
-async function tick(){
- let d;try{d=await(await fetch('/data')).json();}catch(e){$('#dot').style.background='var(--red)';$('#sub').textContent='no connection';return;}
+// A control action shows an INSTANT transition screen (spinner), fires the request, and
+// holds that screen until /data confirms the new state — the node can be mid K-line poll
+// for a second or two. ACT maps each button to its endpoint + the "done" condition on /data.
+const ACT={
+ mute:  {u:'/log?on=0',    lbl:'Muting…',              done:d=>!d.logging},
+ unmute:{u:'/log?on=1',    lbl:'Resuming…',            done:d=>d.logging&&!d.bridge},
+ cable: {u:'/bridge?on=1', lbl:'Entering cable mode…', done:d=>d.bridge},
+ live:  {u:'/bridge?on=0', lbl:'Returning to live…',   done:d=>!d.bridge}};
+let pending=null,pendingSince=0;
+function transition(lbl){closeSettings();$('#main').innerHTML=`<div class=state><div class=spinner></div><div class="big pulse" style="font-size:clamp(26px,7vw,42px)">${lbl}</div></div>`;}
+function act(name){const a=ACT[name];pending=name;pendingSince=Date.now();transition(a.lbl);hit(a.u);setTimeout(tick,300);}
+function mute(){act('mute')} function unmute(){act('unmute')} function cable(){act('cable')} function backToLive(){act('live')}
+function header(d){
  const live=d.session&&d.age_ms<3000;
- $('#dot').style.background=d.bridge?'var(--blue)':(!d.logging?'var(--yellow)':(live?'var(--green)':'var(--yellow)'));
- $('#sub').textContent=d.bridge?'cable mode':(!d.logging?'muted':((d.session?'live · '+(d.age_ms/1000).toFixed(0)+'s':'no session')+' · '+d.rssi+' dBm'));
- if(d.bridge){closeSettings();return renderState('Cable mode','The node is acting as a USB K-line cable for the diagnostic tool. Live logging is paused.','backToLive()','Back to live mode');}
- if(!d.logging){closeSettings();return renderState('Muted','Polling is stopped and the K-line bus is free for another tool.','unmute()','Unmute');}
+ $('#dot').style.background=pending?'var(--blue)':(d.bridge?'var(--blue)':(!d.logging?'var(--yellow)':(live?'var(--green)':'var(--yellow)')));
+ $('#sub').textContent=pending?ACT[pending].lbl:(d.bridge?'cable mode':(!d.logging?'muted':((d.session?'live · '+(d.age_ms/1000).toFixed(0)+'s':'no session')+' · '+d.rssi+' dBm')));
+}
+async function tick(){
+ let d;try{d=await(await fetch('/data')).json();}catch(e){$('#dot').style.background='var(--red)';$('#sub').textContent=pending?ACT[pending].lbl:'no connection';return;}
+ header(d);
+ if(pending){
+  if(ACT[pending].done(d)) pending=null;                 // confirmed → fall through to the real state
+  else if(Date.now()-pendingSince<20000) return;         // still switching → keep the transition screen
+  else pending=null;                                     // gave up after 20 s → unfreeze
+ }
+ if(d.bridge) return renderState('Cable mode','The node is acting as a USB K-line cable for the diagnostic tool. Live logging is paused.','backToLive()','Back to live mode');
+ if(!d.logging) return renderState('Muted','Polling is stopped and the K-line bus is free for another tool.','unmute()','Unmute');
  renderLive(d);
 }
 setInterval(tick,1000);tick();
