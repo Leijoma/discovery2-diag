@@ -29,6 +29,7 @@
 #include <WiFiUdp.h>
 #include <HTTPClient.h>
 #include <time.h>
+#include <LittleFS.h>            // on-device spill for offline logging (store-and-forward)
 #include "secrets.h"
 #include "kline_core.h"          // K-line/KWP2000/Td5 comms core (no WiFi/Influx/web)
 
@@ -102,6 +103,20 @@ static const uint32_t ESTAB_QUIET_MS    = 6000;   // bus-silent window that lets
 static const uint32_t BOOT_QUIET_MS     = 5000;   // don't touch the bus in the first 5 s after boot
 static const uint32_t BEAT_INTERVAL_MS  = 15000;  // node heartbeat cadence
 
+// Offline logging (store-and-forward): when an engine POST fails (no WG/Influx), spill the
+// line to LittleFS and flush it back when the uplink returns — so a drive out of hotspot
+// range isn't lost. Each spilled line already carries its epoch timestamp, so it lands at
+// the right time; and Influx overwrites points with the same tag+timestamp, so re-sending
+// after a reboot is idempotent (we track the read offset in RAM only).
+static const char*    SPILL_PATH   = "/spill.lp";
+static const uint32_t SPILL_MAX    = 1000000;   // ~1 MB cap (~1–2 h) → drop newest when full
+static const uint32_t SPILL_CHUNK  = 8000;      // bytes per flush POST
+static const uint32_t SPILL_FLUSH_MS = 2000;
+static bool     fsReady      = false;
+static uint32_t spillOffset  = 0;               // bytes of SPILL_PATH already flushed (RAM)
+static uint32_t spillDropped = 0;               // lines dropped because the cap was hit
+static uint32_t lastSpillFlush = 0;
+
 static bool influxConfigured() {
   return strlen(INFLUX_TOKEN) > 20 && strncmp(INFLUX_TOKEN, "influx-write", 12) != 0;
 }
@@ -123,6 +138,37 @@ static int influxPost(const String &body) {
 static long epochNow() {
   time_t t = time(nullptr);
   return (t > 1700000000) ? (long)t : 0;      // 0 → let Influx stamp server time
+}
+// Append one failed engine line to the on-device spill (bounded). Newest is dropped when full
+// (the oldest, flushed first, is kept — a drive's start survives; a very long gap loses the tail).
+static void spillLine(const String &line) {
+  if (!fsReady || epochNow() == 0) return;    // need FS + a real timestamp to be useful later
+  File f = LittleFS.open(SPILL_PATH, FILE_APPEND);
+  if (!f) return;
+  if (f.size() < SPILL_MAX) { f.print(line); f.print('\n'); }
+  else spillDropped++;
+  f.close();
+}
+// Send a chunk of the spill backlog to Influx and advance the read offset; delete the file
+// once drained. Idempotent: on reboot spillOffset resets to 0 and we re-send from the start
+// (Influx overwrites same tag+timestamp points).
+static void flushSpill() {
+  if (!fsReady || !wgUp || WiFi.status() != WL_CONNECTED) return;
+  File f = LittleFS.open(SPILL_PATH, FILE_READ);
+  if (!f) return;
+  size_t sz = f.size();
+  if (spillOffset >= sz) { f.close(); LittleFS.remove(SPILL_PATH); spillOffset = 0; return; }
+  f.seek(spillOffset);
+  String chunk; chunk.reserve(SPILL_CHUNK + 256);
+  while (f.available() && chunk.length() < SPILL_CHUNK) chunk += (char)f.read();
+  while (f.available()) { char c = f.read(); chunk += c; if (c == '\n') break; }  // whole lines only
+  size_t consumed = f.position() - spillOffset;
+  f.close();
+  if (chunk.length() == 0) return;
+  if (influxPost(chunk) == 204) {
+    spillOffset += consumed;
+    if (spillOffset >= sz) { LittleFS.remove(SPILL_PATH); spillOffset = 0; }
+  }
 }
 static bool rawConfigured() {
   return strlen(RAW_TOKEN) > 8 && strncmp(RAW_TOKEN, "raw-collector", 13) != 0;
@@ -225,6 +271,7 @@ static bool logCycle() {
   if (ts) { line += " "; line += String(ts); }
   lastPost = influxPost(line);
   if (lastPost == 204) pointsSent++;
+  else spillLine(line);                  // offline / POST failed → buffer to LittleFS, flush later
   return true;
 }
 // Node health heartbeat — proves the Influx pipe even with no car attached.
@@ -243,6 +290,7 @@ static const uint32_t RAW_FLUSH_MS = 3000;      // ship raw batches every ~3 s
 static void logTick() {
   uint32_t now = millis();
   if (now - lastBeat > BEAT_INTERVAL_MS) { lastBeat = now; nodeHeartbeat(); }
+  if (now - lastSpillFlush > SPILL_FLUSH_MS) { lastSpillFlush = now; flushSpill(); }  // drain offline backlog
   if (rawOn && now - lastRawFlush > RAW_FLUSH_MS) { lastRawFlush = now; rawFlush(); }
   if (now - lastCycle < LOG_INTERVAL_MS) return;
   lastCycle = now;
@@ -337,6 +385,11 @@ static void handleRoot() {
   server.send(200, "text/html", html);
 }
 static void handleStatus() {
+  uint32_t spillPending = 0;
+  if (fsReady) {
+    File sf = LittleFS.open(SPILL_PATH, FILE_READ);
+    if (sf) { uint32_t s = sf.size(); spillPending = s > spillOffset ? s - spillOffset : 0; sf.close(); }
+  }
   server.send(200, "application/json",
     "{\"ssid\":\"" + WiFi.SSID() + "\",\"ip\":\"" + WiFi.localIP().toString() +
     "\",\"rssi\":" + String(WiFi.RSSI()) +
@@ -349,7 +402,9 @@ static void handleStatus() {
     ",\"last_post\":" + String(lastPost) +
     ",\"raw\":" + String(rawOn ? 1 : 0) +
     ",\"rawq\":" + String(rawBuf.length()) +
-    ",\"raw_post\":" + String(lastRawCode) + "}");
+    ",\"raw_post\":" + String(lastRawCode) +
+    ",\"spill\":" + String(spillPending) +
+    ",\"spill_dropped\":" + String(spillDropped) + "}");
 }
 // Latest decoded snapshot as JSON — for /live and (later) an on-device screen.
 static void handleData() {
@@ -433,6 +488,8 @@ static void handleLog() {
 void setup() {
   Serial.begin(115200); delay(300); bootMs = millis();
   Serial.println("\n== K-line node: WiFi + OTA + web + K-line + Influx ==");
+  fsReady = LittleFS.begin(true);            // mount (format on first boot) for the offline spill
+  Serial.printf("LittleFS: %s\n", fsReady ? "mounted" : "FAILED");
   WiFi.mode(WIFI_STA); WiFi.setHostname(OTA_HOSTNAME); WiFi.setAutoReconnect(true);
   wifiConnect();
   wgStart();                                 // fixed WG IP, reachable via the tunnel
