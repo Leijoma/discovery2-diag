@@ -186,8 +186,12 @@ static bool td5Establish() {
   int ci = findSeq(burst, got, 0xC1, 0x57);
   // No C1 (silent or 7F 81 10 generalReject): we did NOT open a link this attempt, so do
   // NOT send 82 — that would reset the stale link's timeout. Just fail; the caller stays
-  // quiet and the module drops its old link on its own.
-  if (ci < 0 || ci + 2 >= (int)got || burst[ci + 2] != 0x8F) return false;
+  // quiet and the module drops its old link on its own. Print the burst so a car-side stale
+  // link (7F 81 10) is distinguishable from a silent bus (empty) over serial.
+  if (ci < 0 || ci + 2 >= (int)got || burst[ci + 2] != 0x8F) {
+    Serial.print("EST: no C1, burst=["); Serial.print(got ? toHex(burst, got) : String("silent")); Serial.println("]");
+    return false;
+  }
 
   uint8_t out[64];
   // StartDiagnosticSession 0xA0 → positive 0x50.

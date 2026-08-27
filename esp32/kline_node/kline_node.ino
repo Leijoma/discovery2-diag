@@ -100,8 +100,12 @@ static uint32_t latestMs = 0;          // millis() of the last snapshot
 // until quietUntil, then init clean.
 static bool     linkMaybeOpen = true;  // assume a leftover link at boot
 static uint32_t quietUntil    = 0;     // don't touch K-line before this (ms)
+static uint8_t  sessionMiss  = 0;      // consecutive failed read cycles while a session is up
+static uint16_t estabTries   = 0;      // consecutive establish failures since the last success
 static const uint32_t LOG_INTERVAL_MS   = 1000;
 static const uint32_t ESTAB_QUIET_MS    = 6000;   // bus-silent window that lets a stale link die
+static const uint32_t ESTAB_QUIET_LONG_MS = 16000; // escalated silence after repeated rejects (car needs ~16 s)
+static const uint8_t  SESSION_MISS_GRACE  = 3;    // tolerate this many glitchy reads before dropping a session
 // KL15 power = power-on IS ignition-on, so hold off K-line for the first few seconds to clear
 // the crank / BCU<->ECM immobiliser handshake window. Hardware-free (a timed floor, not a
 // measurement); harmless on USB/constant-12V too. WiFi/WG bring-up usually covers this already,
@@ -326,15 +330,26 @@ static void logTick() {
       return;
     }
     sessionUp = td5Establish();                    // clean init after the quiet window (sends no 82)
-    if (!sessionUp) { estabFails++; quietUntil = millis() + ESTAB_QUIET_MS; }  // quiet, then retry
+    if (sessionUp) { estabTries = 0; sessionMiss = 0; Serial.println("EST: SESSION UP"); }
+    else {
+      // Retry with ESCALATING silence: a stale link that survived 6 s of quiet needs longer
+      // (proven in RDL016 2026-08-27 — 6 s repeatedly rejected with 7F 81 10, ~16 s cleared it).
+      estabFails++; estabTries++;
+      quietUntil = millis() + (estabTries >= 3 ? ESTAB_QUIET_LONG_MS : ESTAB_QUIET_MS);
+    }
     return;
   }
-  if (!logCycle()) {                               // lost session (engine off?) — WE had a link:
-    stopComm();                                    // tear it down once, then go quiet before retry
-    sessionUp = false;
+  // Ride through a transient bad read: a single unreadable cycle (weak K-line) should NOT nuke
+  // the session — re-establishing is expensive and can hit a stale-link reject. Only tear down
+  // after several misses in a row (session genuinely gone, e.g. ignition off).
+  if (!logCycle()) {
+    if (++sessionMiss < SESSION_MISS_GRACE) return;   // tolerate a glitch; keep the session
+    Serial.println("EST: SESSION LOST");
+    stopComm();                                        // really gone — tear it down, then go quiet
+    sessionUp = false; sessionMiss = 0;
     quietUntil = millis() + ESTAB_QUIET_MS;
-    lastFuelMs = 0;                                // pause fuel integration across the gap
-  }
+    lastFuelMs = 0;                                    // pause fuel integration across the gap
+  } else sessionMiss = 0;
 }
 
 // Bring up the WireGuard tunnel so the node has a fixed WG IP. The handshake needs
@@ -450,6 +465,8 @@ static void handleScan() {
   // Pause logging around the manual scan so the two don't fight over the bus.
   bool was = logEnabled; logEnabled = false; sessionUp = false;
   String out = kwpStartComm(0x13, "TD5") + "\n" + kwpStartComm(0x29, "SLABS") + "\n";
+  stopComm();                    // RELEASE the link /scan just opened (esp. SLABS' C1) — a link left
+                                 // open here makes the logger's next TD5 StartComm get 7F 81 10.
   logEnabled = was;
   // /scan hit the bus (its own inits); make the logger re-clear + settle before it reconnects.
   linkMaybeOpen = true; quietUntil = millis() + ESTAB_QUIET_MS;

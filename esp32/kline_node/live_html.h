@@ -94,7 +94,9 @@ function tile(t,s){
  return `<div class=dtile><div class=dlabel>${t.lab}</div><div class=dval><span class=cv-num>${num(v,t.d)}</span><span class=cv-unit>${t.u}</span></div></div>`;
 }
 function renderLive(d){
- const s=d.signals||{};
+ // Stale guard: if no fresh snapshot for 5 s (session dropped / bus quiet), blank every card
+ // to "–" rather than showing frozen values.
+ const s=(d.age_ms<5000)?(d.signals||{}):{};
  let rows=0; for(let i=0;i<TILES.length;i+=2) rows+=TILES.slice(i,i+2).some(t=>t.g)?2:1;
  $('#main').innerHTML=`<div class=drive style="aspect-ratio:4/${rows}">${TILES.map(t=>tile(t,s)).join('')}</div>`;
 }
