@@ -74,23 +74,22 @@ primitives the front-ends drive:
 
 Front-end (web or CLI) only drives the A-B-A flow and the wiggle view over those three.
 
-## Form factor
+## Form factor & session owner — DECIDED
 
-- **Web on the phone = primary.** In-car the operator is alone, reaching for door handles / the
-  key — they want to hold the phone and tap one big button, not reach a laptop keyboard. It also
-  fits the existing web UI.
-- **CLI (`tools/map_inputs.py`) = bench.** Simplest first cut for bench/desk work.
+**The host (Mac/Pi) owns the mapping session; the ESP firmware stays clean.** All mapping
+intelligence lives on the host and drives the bus over a swappable transport (KKL
+`SerialTransport` **or** the ESP in cable mode via `EspTransport`). The ESP is *not* given a
+"map mode" — it stays a dumb cable + the TD5 logger. This matches the 3-layer split (comms on the
+device, interpretation + consumers on the host) and keeps all the flexibility — big screen, full
+Python, fast iteration, no reflashing — on the host.
 
-### Decision to make: who owns the session during mapping?
+Rationale (Magnus, 2026-08-27): the Mac is more flexible and has a large screen; adding slow-init
+polling + a bit-matrix to the node would bloat firmware we deliberately keep minimal.
 
-- **Node "map mode"** — the ESP holds the module session and its web page shows the bit-matrix
-  directly. Best one-handed in-car UX, but requires adding slow-init **polling** to the node
-  firmware (currently the node only fast-inits TD5 for logging).
-- **Cable mode** — Mac/Pi drives it over `EspTransport`; zero new firmware, but needs the computer
-  present in the car.
-
-Lean: start with **cable mode + CLI** (no firmware risk), add the **phone-web wiggle view** next,
-and only add a node map-mode if one-handed-without-a-laptop turns out to matter.
+**UI:** extend the **existing web dashboard's map mode** (`web/server.py` `/admin` +
+`dashboard_v2` already carry mapping tabs), served by the host — so one UI works both on the Mac's
+big screen *and* on the phone on the same network (detail-on-desk and one-handed-in-car from the
+same code). A thin `tools/map_inputs.py` CLI is the quickest first cut for bench work.
 
 ## Data model / output
 
@@ -125,14 +124,14 @@ Each confirmed bit → `upsert_field` on `<module>.json`:
 
 1. **Bench CLI** — `Mapper` (stable/diff/record) + A-B-A flow + volatile-byte mask, over cable/KKL,
    writing `kandidat` to `bcu.json`. Prove the de-noising on a known input (driver door).
-2. **Phone-web wiggle view** — live bit-matrix that flashes changed cells; tap-to-label.
-3. **Node map-mode** (optional) — slow-init polling + bit-matrix served from the ESP, for
-   one-handed in-car mapping without a laptop.
+2. **Web map mode** — extend the existing host dashboard: live bit-matrix that flashes changed
+   cells, tap-to-label, the A-B-A flow. Host-served, usable on the big screen and the phone.
+
+*No ESP firmware work in either phase — the node stays a clean cable + logger.*
 
 ## Open questions to settle first
 
-- Session owner: node map-mode vs cable mode (see above).
-- Web vs CLI first (lean: CLI bench, then phone-web).
+- ~~Session owner~~ — **DECIDED: host-driven (Mac/Pi), ESP firmware stays clean.**
 - How to present **multi-bit** inputs (e.g. a 3-position switch spanning several bits).
 - Inputs that need the **engine running / ignition on** — how to script those safely.
 - Promotion rule `kandidat -> belagt` (how many independent confirmations).
