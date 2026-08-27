@@ -76,6 +76,24 @@ def changed_bits(ref: "dict[tuple, int]", cur: "dict[tuple, int]") -> "list[tupl
             if (lid, off, bit) in ref and ref[(lid, off, bit)] != v]
 
 
+def build_matrix(frame: "dict[str, bytes]", ref: "dict[tuple, int]",
+                 mask: "set[tuple]") -> "list[dict]":
+    """Current frame → GUI matrix rows (one per LID byte, 8 cells). Each cell: value 0/1,
+    ``masked`` (noisy → greyed), ``changed`` (differs from the baseline ``ref`` and not masked)."""
+    rows = []
+    for lid in sorted(frame):
+        for off, byte in enumerate(frame[lid]):
+            cells = []
+            for bit in range(8):
+                key = (lid, off, bit)
+                v = (byte >> bit) & 1
+                masked = key in mask
+                cells.append({"v": v, "masked": masked,
+                              "changed": (not masked) and key in ref and ref[key] != v})
+            rows.append({"lid": lid, "off": off, "cells": cells})
+    return rows
+
+
 # ---- I/O ------------------------------------------------------------------- #
 def _transport(port: str, esp: bool):
     return EspTransport(port, ready_timeout=30.0) if esp else SerialTransport(port, timeout=1.0)

@@ -37,6 +37,17 @@ def test_changed_bits_reports_only_real_flips():
                for (lid, off, bit, _, _) in changes)  # only bit0 changed
 
 
+def test_build_matrix_marks_changed_and_masked():
+    frame = {"d8": bytes([0b0000_1000])}          # bit3 high
+    ref = {("d8", 0, 3): 0, ("d8", 0, 0): 0}      # baseline had bit3 low
+    mask = {("d8", 0, 0)}                          # bit0 is masked noise
+    rows = m.build_matrix(frame, ref, mask)
+    assert rows[0]["lid"] == "d8" and rows[0]["off"] == 0
+    cells = rows[0]["cells"]
+    assert cells[3]["v"] == 1 and cells[3]["changed"] is True
+    assert cells[0]["masked"] is True and cells[0]["changed"] is False
+
+
 def test_masked_bit_never_reported_as_changed():
     samples = [{"56": b"\x01"}, {"56": b"\x00"}]     # bit0 is noisy
     mask = m.volatile_bits(samples)
