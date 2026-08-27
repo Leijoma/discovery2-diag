@@ -7,7 +7,10 @@ talks to the car correctly and that the decoding is right.
     PYTHONPATH=src python3 tools/verify_ecu.py td5   /dev/cu.usbserial-XXXX
     PYTHONPATH=src python3 tools/verify_ecu.py slabs /dev/cu.usbserial-XXXX
     PYTHONPATH=src python3 tools/verify_ecu.py slabs /dev/cu.usbserial-XXXX --buzzer
+    PYTHONPATH=src python3 tools/verify_ecu.py td5   /dev/cu.usbserial-0001 --esp   # over an ESP node
 
+The transport is swappable: a KKL cable (default) or an ESP32 in USB cable mode (--esp,
+esp32/kline_node) — same stack either way, so the ESP frees the KKL cable to lend out.
 Ignition ON, car stationary. SLABS comms die above ~8–20 km/h.
 """
 import argparse
@@ -18,22 +21,27 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from d2diag.kline import KLine  # noqa: E402
 from d2diag.kwp2000 import KWP2000  # noqa: E402
-from d2diag.transport import SerialTransport  # noqa: E402
+from d2diag.transport import EspTransport, SerialTransport  # noqa: E402
 
 
 def _hex(b) -> str:
     return b.hex(" ")
 
 
-def _kwp(port: str, target: "int | None" = None) -> KWP2000:
-    kline = KLine(SerialTransport(port, timeout=1.0), target=target) if target is not None \
-        else KLine(SerialTransport(port, timeout=1.0))
+def _transport(port: str, esp: bool):
+    # Same Transport ABC either way — the diagnostic stack is front-end-agnostic.
+    return EspTransport(port) if esp else SerialTransport(port, timeout=1.0)
+
+
+def _kwp(port: str, target: "int | None" = None, esp: bool = False) -> KWP2000:
+    kline = KLine(_transport(port, esp), target=target) if target is not None \
+        else KLine(_transport(port, esp))
     return KWP2000(kline, tolerant=True)
 
 
-def verify_td5(port: str, buzzer: bool = False) -> int:
+def verify_td5(port: str, buzzer: bool = False, esp: bool = False) -> int:
     from d2diag.td5 import Td5
-    t = Td5(_kwp(port))
+    t = Td5(_kwp(port, esp=esp))
     t.open()
     try:
         print("TD5: establishing (fast init 0x13 → session A0 → security)…")
@@ -51,9 +59,9 @@ def verify_td5(port: str, buzzer: bool = False) -> int:
     return 0
 
 
-def verify_slabs(port: str, buzzer: bool = False) -> int:
+def verify_slabs(port: str, buzzer: bool = False, esp: bool = False) -> int:
     from d2diag.slabs import SLABS_ADDRESS, Slabs
-    s = Slabs(_kwp(port, target=SLABS_ADDRESS))
+    s = Slabs(_kwp(port, target=SLABS_ADDRESS, esp=esp))
     s.open()
     try:
         print("SLABS: establishing (fast init 0x29)…")
@@ -90,10 +98,12 @@ def main() -> int:
     ap.add_argument("module", choices=["td5", "slabs"])
     ap.add_argument("port")
     ap.add_argument("--buzzer", action="store_true", help="SLABS: offer a buzzer test (write)")
+    ap.add_argument("--esp", action="store_true",
+                    help="talk over an ESP32 in USB cable mode instead of a KKL cable")
     args = ap.parse_args()
     fn = {"td5": verify_td5, "slabs": verify_slabs}[args.module]
     try:
-        return fn(args.port, args.buzzer)
+        return fn(args.port, args.buzzer, args.esp)
     except Exception as exc:  # noqa: BLE001
         print(f"\nERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
         print("Check: right port? ignition on? transmitting cable? vehicle stationary?", file=sys.stderr)

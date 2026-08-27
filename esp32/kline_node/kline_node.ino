@@ -6,7 +6,12 @@
 //   - OTA: after the first USB flash, later flashes go over WiFi (password-gated).
 //   - WireGuard: fixed tunnel IP so the node is reachable from the phone regardless
 //     of the hotspot DHCP address (see hardware/README.md).
-//   - Web: status page + /status JSON + /scan (fast init + StartCommunication) + /log.
+//   - Web: status page + /status JSON + /scan (fast init + StartCommunication) + /log + /bridge.
+//   - USB CABLE MODE: the same firmware doubles as a K-line cable. A host tool (Python
+//     EspTransport) sending PING/INIT/TX/STOP over USB takes the shared bus; the node
+//     suspends logging, relays raw bytes (fast-init pulse done locally), and resumes
+//     logging when USB goes quiet. So there is ONE firmware — logging and cable are two
+//     runtime roles, selectable from the web (/bridge) or automatic on a USB command.
 //   - LOGGING: establishes a full Td5 session (fast init → StartCommunication →
 //     StartDiagnosticSession 0xA0 → SecurityAccess seed→key) and reads a curated set
 //     of LIDs ~1 Hz, decodes them to physical units, and POSTs Influx line protocol to
@@ -102,6 +107,17 @@ static const uint32_t ESTAB_QUIET_MS    = 6000;   // bus-silent window that lets
 // but this guarantees it even if no network was found and setup returned fast.
 static const uint32_t BOOT_QUIET_MS     = 5000;   // don't touch the bus in the first 5 s after boot
 static const uint32_t BEAT_INTERVAL_MS  = 15000;  // node heartbeat cadence
+
+// USB serial bridge (ESP-as-cable). One firmware, two roles: normally the node LOGS
+// autonomously; when a host tool (Python EspTransport, KKL-compatible line protocol)
+// sends a command over USB, the node hands it the shared K-line bus. K-line is a single-
+// master half-duplex bus, so the roles can't drive it at once — but they switch at runtime
+// (auto on a USB command, or via /bridge), and the node resumes logging BRIDGE_IDLE_MS
+// after the last USB command. Frees the KKL cable: plug the ESP into the Mac, run the
+// whole Python stack over it like the cable, then it goes back to logging on its own.
+static bool     bridgeMode      = false;
+static uint32_t bridgeIdleUntil = 0;
+static const uint32_t BRIDGE_IDLE_MS = 30000;     // resume logging this long after the last USB command
 
 // Offline logging (store-and-forward): when an engine POST fails (no WG/Influx), spill the
 // line to LittleFS and flush it back when the uplink returns — so a drive out of hotspot
@@ -375,11 +391,15 @@ static void handleRoot() {
     "<li>Logging: <code>" + (logEnabled ? String("on") : String("off")) +
       "</code> · session <code>" + (sessionUp ? "up" : "down") +
       "</code> · points <code>" + String(pointsSent) +
-      "</code> · last POST <code>" + String(lastPost) + "</code></li></ul>"
+      "</code> · last POST <code>" + String(lastPost) + "</code></li>"
+    "<li>Bridge: <code>" + (bridgeMode ? String("ON — USB cable mode (host owns the bus)") : String("off")) +
+      "</code></li></ul>"
     "<a class=btn href='/live'>Live data</a>"
     "<a class=btn href='/scan'>Test car (TD5 + SLABS)</a>"
     "<a class=btn href='/log?on=" + (logEnabled ? "0" : "1") + "'>" +
       (logEnabled ? "Stop logging" : "Start logging") + "</a>"
+    "<a class=btn href='/bridge?on=" + (bridgeMode ? "0" : "1") + "'>" +
+      (bridgeMode ? "Exit cable mode" : "Cable mode (USB)") + "</a>"
     "<p style='color:#888;font-size:13px'>Ignition on, node wired to OBD (K/12V/GND + 1k pull-up). "
     "Logs to InfluxDB <code>" + INFLUX_BUCKET + "</code> at <code>" + INFLUX_URL + "</code>.</p>";
   server.send(200, "text/html", html);
@@ -396,6 +416,7 @@ static void handleStatus() {
     ",\"uptime_s\":" + String((millis()-bootMs)/1000) +
     ",\"wg\":" + String(wgUp ? 1 : 0) +
     ",\"logging\":" + String(logEnabled ? 1 : 0) +
+    ",\"bridge\":" + String(bridgeMode ? 1 : 0) +
     ",\"session\":" + String(sessionUp ? 1 : 0) +
     ",\"points\":" + String(pointsSent) +
     ",\"estab_fails\":" + String(estabFails) +
@@ -412,6 +433,7 @@ static void handleData() {
     "{\"age_ms\":" + String(latestMs ? (uint32_t)(millis() - latestMs) : 0) +
     ",\"session\":" + String(sessionUp ? 1 : 0) +
     ",\"logging\":" + String(logEnabled ? 1 : 0) +
+    ",\"bridge\":" + String(bridgeMode ? 1 : 0) +
     ",\"rssi\":" + String(WiFi.RSSI()) +
     ",\"signals\":" + (latestJson.length() ? latestJson : String("{}")) + "}");
 }
@@ -451,7 +473,7 @@ return `<div class=card><div class=k>${m[0]}</div><div class=v>${val}<span class
 async function tick(){let d;try{d=await(await fetch('/data')).json();}catch(e){document.getElementById('dot').style.background='#c33';return;}
 const s=d.signals||{},dot=document.getElementById('dot');
 const live=d.session&&d.age_ms<3000;dot.style.background=live?'#3c3':'#c93';
-document.getElementById('meta').textContent=(d.session?'session up':'no session')+' · '+(d.age_ms/1000).toFixed(0)+'s ago · '+d.rssi+' dBm';
+document.getElementById('meta').textContent=(d.bridge?'CABLE MODE (USB) · ':'')+(d.session?'session up':'no session')+' · '+(d.age_ms/1000).toFixed(0)+'s ago · '+d.rssi+' dBm';
 const b=document.getElementById('bus');b.textContent=d.logging?'Silence bus':'Resume polling';b.style.background=d.logging?'#1e6feb':'#3a7d46';
 const keys=ORDER.filter(k=>k in s).concat(Object.keys(s).filter(k=>!ORDER.includes(k)));
 document.getElementById('grid').innerHTML=keys.map(k=>card(k,s[k])).join('');}
@@ -485,8 +507,92 @@ static void handleLog() {
     "{\"logging\":" + String(logEnabled ? 1 : 0) + "}");
 }
 
+// ---------------- USB serial bridge (ESP as a K-line cable) ----------------
+// Host line protocol (USB @ 115200, '\n'-terminated), same as the Python EspTransport speaks:
+//   PING          -> "PONG"                 probe
+//   INIT          -> "OK"                   fast-init pulse only
+//   INIT AA BB .. -> "RX CC DD .."          pulse THEN write bytes + read burst (atomic: the
+//                                           pulse->StartComm gap must not cross USB)
+//   TX AA BB ..   -> "RX CC DD .."          write bytes, read the reply burst
+//   STOP          -> "OK"                   StopCommunication (release the link)
+// All framing / seed-key / decoding stays in the host; the ESP only owns the 25 ms pulse
+// (which can't cross a link) and relays raw bytes — reusing kline_core's primitives.
+static void bridgeEnter() {
+  if (!bridgeMode) {
+    bridgeMode = true;
+    sessionUp = false; lastFuelMs = 0;     // drop our own logging session...
+    stopComm();                            // ...and release our link so the host inits clean
+  }
+  bridgeIdleUntil = millis() + BRIDGE_IDLE_MS;
+}
+static void bridgeExit() {
+  bridgeMode = false;
+  linkMaybeOpen = true; quietUntil = millis() + ESTAB_QUIET_MS;   // re-clear + settle, then relog
+}
+static int bridgeNib(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  c |= 0x20;
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  return -1;
+}
+static size_t bridgeParseHex(const String &s, uint8_t *out, size_t cap) {
+  size_t n = 0; int i = 0, L = s.length();
+  while (i < L && n < cap) {
+    while (i < L && bridgeNib(s[i]) < 0) i++;             // skip spaces / non-hex
+    if (i >= L) break;
+    int hi = bridgeNib(s[i++]);
+    int lo = (i < L && bridgeNib(s[i]) >= 0) ? bridgeNib(s[i++]) : -1;
+    out[n++] = (lo < 0) ? (uint8_t)hi : (uint8_t)((hi << 4) | lo);
+  }
+  return n;
+}
+static void bridgePrintRx(const uint8_t *d, size_t n) {
+  Serial.print("RX ");
+  if (n) Serial.print(toHex(d, n));        // toHex: uppercase, space-separated (kline_core)
+  Serial.println();
+}
+// Handle one USB command line. Returns true if it was a bridge command (→ take the bus).
+static bool bridgeHandle(const String &line) {
+  if (line.startsWith("PING")) { bridgeEnter(); Serial.println("PONG"); return true; }
+  if (line.startsWith("INIT")) {
+    bridgeEnter();
+    klineFastInit();                        // the timing-critical pulse, done LOCALLY
+    String rest = line.substring(4); rest.trim();
+    if (rest.length() == 0) { Serial.println("OK"); return true; }
+    uint8_t tx[80]; size_t n = bridgeParseHex(rest, tx, sizeof tx);
+    while (Serial2.available()) Serial2.read();
+    Serial2.write(tx, n); Serial2.flush();  // ...fused with the StartComm frame, atomically
+    uint8_t rx[300]; size_t r = readBurst(rx, sizeof rx, 500, 40);
+    bridgePrintRx(rx, r); return true;
+  }
+  if (line.startsWith("TX")) {
+    bridgeEnter();
+    ensureSerial();
+    uint8_t tx[80]; size_t n = bridgeParseHex(line.substring(2), tx, sizeof tx);
+    while (Serial2.available()) Serial2.read();
+    Serial2.write(tx, n); Serial2.flush();
+    uint8_t rx[300]; size_t r = readBurst(rx, sizeof rx, 400, 40);
+    bridgePrintRx(rx, r); return true;
+  }
+  if (line.startsWith("STOP")) { bridgeEnter(); stopComm(); Serial.println("OK"); return true; }
+  return false;                             // not a bridge command (host banner / stray input)
+}
+static void serviceBridgeSerial() {
+  if (!Serial.available()) return;
+  String line = Serial.readStringUntil('\n');
+  line.trim();
+  if (line.length()) bridgeHandle(line);
+}
+static void handleBridge() {
+  if (server.hasArg("on")) {
+    if (server.arg("on") != "0") bridgeEnter();   // force cable mode: free the bus, wait for USB
+    else bridgeExit();                             // back to autonomous logging
+  }
+  server.send(200, "application/json", "{\"bridge\":" + String(bridgeMode ? 1 : 0) + "}");
+}
+
 void setup() {
-  Serial.begin(115200); delay(300); bootMs = millis();
+  Serial.begin(115200); Serial.setTimeout(80); delay(300); bootMs = millis();
   Serial.println("\n== K-line node: WiFi + OTA + web + K-line + Influx ==");
   fsReady = LittleFS.begin(true);            // mount (format on first boot) for the offline spill
   Serial.printf("LittleFS: %s\n", fsReady ? "mounted" : "FAILED");
@@ -508,6 +614,7 @@ void setup() {
   server.on("/data", handleData);
   server.on("/scan", handleScan);
   server.on("/log", handleLog);
+  server.on("/bridge", handleBridge);       // put the node in USB cable mode (or auto on a USB cmd)
   server.begin();
 
   logEnabled = influxConfigured();          // auto-start logging if a token is set
@@ -525,6 +632,11 @@ static uint32_t lastWgTry = 0;
 void loop() {
   ArduinoOTA.handle();
   server.handleClient();
+  serviceBridgeSerial();                     // a host tool may take over the bus over USB
+  if (bridgeMode) {
+    if ((int32_t)(millis() - bridgeIdleUntil) > 0) bridgeExit();  // USB idle → resume logging
+    return;                                  // bus belongs to the host; skip WiFi churn + logging
+  }
   if (WiFi.status() != WL_CONNECTED && millis() - lastWifiCheck > 10000) {
     lastWifiCheck = millis();
     Serial.println("WiFi: link down, reconnecting ...");

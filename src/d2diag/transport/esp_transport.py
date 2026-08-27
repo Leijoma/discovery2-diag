@@ -1,11 +1,16 @@
-"""EspTransport — use an ESP32 K-line bridge (esp32/kline_bridge) as a Transport.
+"""EspTransport — use an ESP32 in USB cable mode as a Transport.
 
 The ESP becomes "just another cable": it does the timing-critical fast-init pulse LOCALLY
 and relays raw bytes to/from K-line over a simple USB-serial line protocol, so the whole
 stack (`KLine`→`KWP2000`→`Td5`/`faultscan`/`verify_ecu`) runs over it exactly as over a KKL
 cable — which frees the KKL cable to lend to a community tester.
 
-Line protocol (see `esp32/kline_bridge/kline_bridge.ino`):
+The cable role lives in the node firmware (`esp32/kline_node/`): a host command over USB
+puts the node into bridge mode (it suspends its own logging and hands over the bus), and it
+resumes logging once USB goes quiet. Because that firmware brings up WiFi/WG in `setup()`
+before it services USB, `open()` waits for the bridge to answer PING (see `_wait_ready`).
+
+Line protocol (see the bridge section of `esp32/kline_node/kline_node.ino`):
     PING -> PONG ; INIT [hex] -> OK|"RX hex" ; TX hex -> "RX hex" ; STOP -> OK
 
 Mapping onto the `Transport` contract: `KLine.fast_init` calls `fast_init_low()` then
@@ -26,11 +31,14 @@ class EspTransport(Transport):
     """A `Transport` backed by the ESP32 K-line bridge over USB (or any serial link)."""
 
     def __init__(self, port: str, baudrate: int = 115200, timeout: float = 2.0,
-                 boot_wait: float = 2.0) -> None:
+                 boot_wait: float = 2.0, require_ready: bool = True,
+                 ready_timeout: float = 20.0) -> None:
         self._port = port
         self._baudrate = baudrate
         self._timeout = timeout          # readline() ceiling: an INIT does ~0.35 s pulse + burst
         self._boot_wait = boot_wait      # the ESP resets on port open (DTR) — wait for its banner
+        self._require_ready = require_ready  # open() blocks until the bridge answers PING
+        self._ready_timeout = ready_timeout  # ...up to this long (the node boots WiFi/WG first)
         self._ser = None
         self._rx = bytearray()           # burst buffered from the last send()
         self._init_pending = False       # next send() must fuse with the fast-init pulse
@@ -42,6 +50,23 @@ class EspTransport(Transport):
             time.sleep(self._boot_wait)
             self._ser.reset_input_buffer()
         self._is_open = True
+        if self._require_ready:
+            self._wait_ready()
+
+    def _wait_ready(self, timeout: "float | None" = None) -> None:
+        """Block until the bridge answers PING, then return. The node firmware brings up
+        WiFi/WG in setup() before it services USB, so a fresh reset can take many seconds;
+        raise a clear error if it never answers (not flashed / wrong port)."""
+        budget = self._ready_timeout if timeout is None else timeout
+        deadline = time.monotonic() + budget
+        while True:
+            if self.ping():
+                return
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"ESP K-line bridge on {self._port} did not answer PING within {budget:.0f}s "
+                    "— flashed with kline_node and the right port? (cable mode is auto on a USB command)")
+            time.sleep(0.2)
 
     def close(self) -> None:
         if self._ser is not None:

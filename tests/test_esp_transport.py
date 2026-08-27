@@ -1,7 +1,7 @@
 """EspTransport — the ESP32 bridge used as a Transport (protocol mapping, no hardware).
 
 Proven live on the ESP over USB; these lock the send/receive/fast-init mapping so the
-line protocol can't drift from esp32/kline_bridge/kline_bridge.ino.
+line protocol can't drift from the bridge section of esp32/kline_node/kline_node.ino.
 """
 from d2diag.transport import EspTransport
 
@@ -63,3 +63,16 @@ def test_ping():
     t, ser = _wired()
     ser.replies = [b"PONG\n"]
     assert t.ping() is True
+
+
+def test_wait_ready_returns_on_pong():
+    t, ser = _wired()
+    ser.replies = [b"PONG\n"]
+    t._wait_ready(timeout=1.0)              # returns (no raise) as soon as the bridge answers
+
+
+def test_wait_ready_raises_without_pong():
+    import pytest
+    t, _ = _wired()                        # FakeSer has no replies → PING never answered
+    with pytest.raises(RuntimeError):
+        t._wait_ready(timeout=0.05)
