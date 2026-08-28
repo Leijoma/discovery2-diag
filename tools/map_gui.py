@@ -81,14 +81,32 @@ class Mapper:
             self.baselining, self._samples, self._until = True, [], None
 
     def _loop(self):
+        fails = 0
         while not self._stop:
             try:
                 fr = self.session.read_block(self.lids)
-            except Exception as exc:  # noqa: BLE001
-                with self.lock:
-                    self.status = f"error: {exc}"
-                time.sleep(1.0)
+            except Exception:  # noqa: BLE001
+                fr = {}
+            if not fr:                                  # every LID failed → session likely gone
+                fails += 1
+                if fails >= 5:                          # ~2 s of nothing → re-establish and carry on
+                    with self.lock:
+                        self.status = "reconnecting…"
+                    try:
+                        self.session.establish()
+                        fails = 0
+                        with self.lock:
+                            self.status = "connected"
+                    except Exception as exc:  # noqa: BLE001
+                        with self.lock:
+                            self.status = f"reconnect failed: {exc}"
+                        time.sleep(2.0)
+                else:
+                    with self.lock:
+                        self.status = "no data"
+                    time.sleep(self.period)
                 continue
+            fails = 0
             now = time.monotonic()
             with self.lock:
                 self.frame, self.status = fr, "connected"
