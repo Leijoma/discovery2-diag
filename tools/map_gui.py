@@ -45,7 +45,7 @@ class FakeMapSession:
         self._counter = 0
 
     def read_block(self, lids):
-        self._counter = (self._counter + 1) & 0xFF
+        self._counter = (self._counter + 1) & 0x07     # small counter → low bits masked, highs quiet
         out = {}
         for lid in lids:
             h = f"{lid:02x}"
@@ -71,6 +71,7 @@ class Mapper:
         self.lock = threading.Lock()
         self.frame, self.ref, self.mask = {}, {}, set()
         self.baselining, self.status = True, "connecting"
+        self.touched = set()          # bits that have differed from baseline since the last clear
         self._samples, self._until, self._stop = [], None, False
 
     def start(self):
@@ -79,6 +80,11 @@ class Mapper:
     def rebaseline(self):
         with self.lock:
             self.baselining, self._samples, self._until = True, [], None
+            self.touched = set()
+
+    def clear_changes(self):
+        with self.lock:
+            self.touched = set()
 
     def _loop(self):
         fails = 0
@@ -118,6 +124,10 @@ class Mapper:
                         self.mask = mi.volatile_bits(self._samples)
                         self.ref = mi.stable_bits(self._samples, self.mask)
                         self.baselining = False
+                else:
+                    for key, v in mi.bits_of(fr).items():   # remember every bit that ever moved
+                        if key not in self.mask and key in self.ref and self.ref[key] != v:
+                            self.touched.add(key)
             time.sleep(self.period)
 
     def _labels(self):
@@ -129,9 +139,17 @@ class Mapper:
 
     def state(self):
         with self.lock:
+            labels = self._labels()
+            cur = mi.bits_of(self.frame)
+            changes = [{"lid": lid, "off": off, "bit": bit, "v": cur.get((lid, off, bit)),
+                        "changed": (lid, off, bit) in self.ref
+                                   and cur.get((lid, off, bit)) != self.ref[(lid, off, bit)],
+                        "name": labels.get(f"{lid}:{off}:{bit}")}
+                       for (lid, off, bit) in sorted(self.touched)]
             return {"module": self.module, "status": self.status, "baselining": self.baselining,
                     "rows": mi.build_matrix(self.frame, self.ref, self.mask),
-                    "labels": self._labels(), "suggestions": _SUGGESTIONS.get(self.module, [])}
+                    "labels": labels, "changes": changes,
+                    "suggestions": _SUGGESTIONS.get(self.module, [])}
 
 
 PAGE = r"""<!doctype html><html data-theme=dark><head>
@@ -145,6 +163,14 @@ header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var
 h1{font-size:15px;margin:0;font-weight:800}.sub{font-size:12px;color:var(--fg2)}
 .btn{margin-left:auto;min-height:36px;padding:0 14px;border:1px solid var(--bd);border-radius:9px;background:var(--surface);color:var(--fg);font:inherit;font-weight:700;cursor:pointer}
 #banner{margin:12px 16px 0;padding:10px 14px;border-radius:10px;background:#3a3410;color:var(--flash);font-weight:700;font-size:13px}
+#changes{position:sticky;top:57px;z-index:5;background:var(--bg);padding:8px 12px;border-bottom:1px solid var(--border)}
+#changes:empty{display:none}
+.chhead{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:800;margin-bottom:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip2{padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid transparent;white-space:nowrap}
+.chip2.v1{background:var(--red)}.chip2.v0{background:var(--green)}
+.chip2.on{border-color:var(--flash);box-shadow:0 0 7px var(--flash)}.chip2.off{opacity:.5}
+.btn2{min-height:28px;padding:0 10px;border:1px solid var(--bd);border-radius:7px;background:var(--surface);color:var(--fg);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 table{border-collapse:separate;border-spacing:6px;margin:12px}
 td.lbl{font-size:13px;color:var(--fg2);white-space:nowrap;text-align:right;padding-right:6px}
 .cell{width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;
@@ -162,6 +188,7 @@ font-size:12px;font-weight:700;cursor:pointer;border:2px solid transparent;posit
 <header><div><h1>Input mapper</h1><div class=sub id=sub>…</div></div>
 <button class=btn onclick=rebaseline()>Re-baseline</button></header>
 <div id=banner style=display:none></div>
+<div id=changes></div>
 <div id=grid></div>
 <p id=tip>Green = 0, red = 1, grey = masked noise. A bit that differs from the baseline glows —
 toggle an input, then click the glowing square to name it.</p>
@@ -180,6 +207,13 @@ async function tick(){
  const b=document.getElementById('banner');
  if(d.baselining){b.style.display='block';b.textContent='Baselining — leave everything at rest…';}
  else b.style.display='none';
+ const ch=d.changes||[];
+ document.getElementById('changes').innerHTML = ch.length ? (
+  `<div class=chhead>Changes (${ch.length}) <button class=btn2 onclick=clearChanges()>Clear</button></div>`+
+  '<div class=chips>'+ch.map(c=>{
+    const cls='chip2 '+(c.v?'v1':'v0')+(c.changed?' on':' off');const nm=c.name?(' · '+c.name):'';
+    return `<span class="${cls}" onclick="click_('${c.lid}',${c.off},${c.bit},false)">21 ${c.lid.toUpperCase()} b${c.off}.${c.bit}=${c.v==null?'?':c.v}${nm}</span>`;
+  }).join('')+'</div>') : '';
  document.getElementById('names').innerHTML=(d.suggestions||[]).map(s=>`<option value="${s}">`).join('');
  let html='<table>';
  for(const r of d.rows){
@@ -206,6 +240,7 @@ async function post_(name){ if(!cur)return; await fetch('/label',{method:'POST',
 function saveLab(){post_(document.getElementById('labname').value.trim());}
 function clearLab(){post_('');}
 async function rebaseline(){await fetch('/rebaseline',{method:'POST'});tick();}
+async function clearChanges(){await fetch('/clear_changes',{method:'POST'});tick();}
 document.getElementById('labname').addEventListener('keydown',e=>{if(e.key==='Enter')saveLab();});
 setInterval(tick,400);tick();
 </script></body></html>
@@ -254,6 +289,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, "{\"ok\":true}")
         elif self.path == "/rebaseline":
             m.rebaseline()
+            self._send(200, "{\"ok\":true}")
+        elif self.path == "/clear_changes":
+            m.clear_changes()
             self._send(200, "{\"ok\":true}")
         elif self.path == "/sim" and isinstance(m.session, FakeMapSession):
             d = self._body()
