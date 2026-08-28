@@ -124,6 +124,29 @@ def test_upsert_field_round_trip(tmp_path, monkeypatch):
     assert {r["lid"] for r in rows} == {"1C", "0D"}
 
 
+def test_remove_field_supports_reassign_and_clear(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "_DIR", tmp_path)
+    store._CACHE.clear()
+    (tmp_path / "demo.json").write_text("[]", encoding="utf-8")
+
+    upsert_field("demo", {"name": "door", "lid": "56", "offset": 0, "kind": "bit", "bit": 0})
+    upsert_field("demo", {"name": "bonnet", "lid": "56", "offset": 0, "kind": "bit", "bit": 1})
+
+    # remove ONLY bit 0 (same lid+offset, different bit is untouched)
+    assert store.remove_field("demo", "56", 0, bit=0) == 1
+    rows = store.load_records("demo")
+    assert len(rows) == 1 and rows[0]["name"] == "bonnet"
+
+    # rename = remove-by-bit then upsert → no orphaned old record
+    store.remove_field("demo", "56", 0, bit=1)
+    upsert_field("demo", {"name": "engine cover", "lid": "56", "offset": 0, "kind": "bit", "bit": 1})
+    rows = store.load_records("demo")
+    assert len(rows) == 1 and rows[0]["name"] == "engine cover"
+
+    # removing a bit that isn't assigned is a no-op
+    assert store.remove_field("demo", "56", 0, bit=7) == 0
+
+
 def test_slabs_store_has_belagt_heights_and_door():
     by = {s.name: s for s in load_signals("slabs")}
     assert by["height_left"].confidence == "belagt"

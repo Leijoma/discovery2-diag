@@ -164,3 +164,36 @@ def upsert_field(module: str, record: dict) -> None:
     finally:
         if os.path.exists(tmp):
             os.remove(tmp)
+
+
+def remove_field(module: str, lid, offset: int, bit: "int | None" = None) -> int:
+    """Remove stored field(s) at ``(lid, offset)`` — and, when ``bit`` is given, only the bit
+    field with that bit index. Returns how many records were removed. Atomic rewrite. Used to
+    reassign/clear a bit in the mapper (upsert keys on name, so a rename would otherwise orphan
+    the old record)."""
+    def _norm_lid(v) -> str:
+        return f"{(int(v, 16) if isinstance(v, str) else int(v)):02X}"
+
+    key_lid, off = _norm_lid(lid), int(offset)
+
+    def _match(r: dict) -> bool:
+        if _norm_lid(r["lid"]) != key_lid or int(r["offset"]) != off:
+            return False
+        return bit is None or (r.get("kind") == "bit" and int(r.get("bit", -1)) == int(bit))
+
+    rows = load_records(module)
+    kept = [r for r in rows if not _match(r)]
+    removed = len(rows) - len(kept)
+    if removed:
+        p = _path(module)
+        fd, tmp = tempfile.mkstemp(dir=str(_DIR), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(kept, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+            os.replace(tmp, p)
+            _CACHE.pop(module, None)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+    return removed

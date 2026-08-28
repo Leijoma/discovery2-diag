@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(_TOOLS, "..", "src"))
 sys.path.insert(0, _TOOLS)
 
 import map_inputs as mi  # noqa: E402  (pure logic + _establish + _DEFAULT_LIDS)
-from d2diag.signals import load_records, upsert_field  # noqa: E402
+from d2diag.signals import load_records, remove_field, upsert_field  # noqa: E402
 
 # Documented input-name suggestions for the click-to-label datalist (valeo_bcu_capabilities.md).
 _SUGGESTIONS = {
@@ -148,14 +148,16 @@ font-size:12px;font-weight:700;cursor:pointer;border:2px solid transparent;posit
 <p id=tip>Green = 0, red = 1, grey = masked noise. A bit that differs from the baseline glows —
 toggle an input, then click the glowing square to name it.</p>
 <div id=labeler><div class=box><b id=labtitle></b>
+<div class=sub id=labcur></div>
 <input id=labname list=names placeholder="name this input…" autocomplete=off>
 <datalist id=names></datalist>
-<div class=row><button onclick=closeLab()>Cancel</button><button class=save onclick=saveLab()>Save</button></div>
+<div class=row><button onclick=closeLab()>Cancel</button><button onclick=clearLab()>Clear</button><button class=save onclick=saveLab()>Save</button></div>
 </div></div>
 <script>
-let cur=null;
+let cur=null, LABELS={};
 async function tick(){
  let d;try{d=await(await fetch('/state')).json();}catch(e){document.getElementById('sub').textContent='no connection';return;}
+ LABELS=d.labels||{};
  document.getElementById('sub').textContent=d.module.toUpperCase()+' · '+d.status;
  const b=document.getElementById('banner');
  if(d.baselining){b.style.display='block';b.textContent='Baselining — leave everything at rest…';}
@@ -175,12 +177,16 @@ async function tick(){
  document.getElementById('grid').innerHTML=html+'</table>';
 }
 function click_(lid,off,bit,masked){ if(masked)return; cur={lid,off,bit};
+ const name=LABELS[`${lid}:${off}:${bit}`]||'';
  document.getElementById('labtitle').textContent=`21 ${lid.toUpperCase()} byte${off} bit${bit}`;
- document.getElementById('labname').value=''; document.getElementById('labeler').style.display='flex';
- document.getElementById('labname').focus(); }
+ document.getElementById('labcur').textContent=name?('Currently: '+name):'Unassigned';
+ document.getElementById('labname').value=name;
+ document.getElementById('labeler').style.display='flex';
+ const inp=document.getElementById('labname'); inp.focus(); inp.select(); }
 function closeLab(){document.getElementById('labeler').style.display='none';}
-async function saveLab(){const name=document.getElementById('labname').value.trim();if(!name||!cur){closeLab();return;}
- await fetch('/label',{method:'POST',body:JSON.stringify({...cur,name})}); closeLab(); tick(); }
+async function post_(name){ if(!cur)return; await fetch('/label',{method:'POST',body:JSON.stringify({...cur,name})}); closeLab(); tick(); }
+function saveLab(){post_(document.getElementById('labname').value.trim());}
+function clearLab(){post_('');}
 async function rebaseline(){await fetch('/rebaseline',{method:'POST'});tick();}
 document.getElementById('labname').addEventListener('keydown',e=>{if(e.key==='Enter')saveLab();});
 setInterval(tick,400);tick();
@@ -217,13 +223,16 @@ class Handler(BaseHTTPRequestHandler):
         m = self.server.mapper
         if self.path == "/label":
             d = self._body()
-            lid = d["lid"]
-            upsert_field(m.module, {
-                "name": d["name"], "lid": lid, "offset": int(d["off"]), "kind": "bit",
-                "bit": int(d["bit"]), "scale": 1.0, "bias": 0.0, "unit": "", "confidence": "kandidat",
-                "states": {"0": "off", "1": "on"},
-                "source": f"differential map (GUI) — {m.module} 21 {lid.upper()} b{d['off']}.{d['bit']}",
-            })
+            lid, off, bit = d["lid"], int(d["off"]), int(d["bit"])
+            name = (d.get("name") or "").strip()
+            remove_field(m.module, lid, off, bit)        # drop any existing assignment on this bit
+            if name:                                     # empty name = clear (remove only)
+                upsert_field(m.module, {
+                    "name": name, "lid": lid, "offset": off, "kind": "bit", "bit": bit,
+                    "scale": 1.0, "bias": 0.0, "unit": "", "confidence": "kandidat",
+                    "states": {"0": "off", "1": "on"},
+                    "source": f"differential map (GUI) — {m.module} 21 {lid.upper()} b{off}.{bit}",
+                })
             self._send(200, "{\"ok\":true}")
         elif self.path == "/rebaseline":
             m.rebaseline()
