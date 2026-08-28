@@ -93,6 +93,8 @@ static uint32_t lastFuelMs   = 0;      // last integration tick (0 = not started
 // no locking needed.
 static String   latestJson;            // {"rpm":763,...}
 static uint32_t latestMs = 0;          // millis() of the last snapshot
+static String   faultsHex;             // raw 21 3B fault block (hex) — browser decodes via faultmap.json
+static uint8_t  faultTick = 0;         // counter: read the fault block ~every 10th cycle
 // Stale-link recovery: a link left open (dropped session / prior run) makes the ECU answer
 // 7F 81 10 to every StartCommunication. On RDL016 (2026-08-27) bus SILENCE does NOT clear it
 // (25 s + ESP reboot both failed) — only an accepted StopCommunication (82) or an ignition
@@ -254,6 +256,16 @@ static bool logCycle() {
     uint8_t sbuf[80];
     td5ReadLid(SWEEP[sweepIdx], sbuf, sizeof sbuf);
     sweepIdx = (sweepIdx + 1) % NSWEEP;
+  }
+
+  // Fault block (21 3B): read lightly (~every 10th cycle) and stash the RAW bytes. The ESP does
+  // NOT decode — the browser fetches faultmap.json from GitHub and turns these bits into text,
+  // so the fault dictionary stays off the node. Trim to the 35-byte block (drop checksum glitch).
+  if (++faultTick >= 10) {
+    faultTick = 0;
+    uint8_t fb[64];
+    int fn = td5ReadLid(0x3B, fb, sizeof fb);
+    if (fn > 0) faultsHex = toHex(fb, fn > 35 ? 35 : fn);
   }
 
   String line = String("engine,vehicle=") + LOG_VEHICLE + " ";
@@ -459,6 +471,7 @@ static void handleData() {
     ",\"bridge\":" + String(bridgeMode ? 1 : 0) +
     ",\"ign_cycle\":" + String(needIgnCycle ? 1 : 0) +
     ",\"rssi\":" + String(WiFi.RSSI()) +
+    ",\"faults\":\"" + faultsHex + "\"" +
     ",\"signals\":" + (latestJson.length() ? latestJson : String("{}")) + "}");
 }
 // The live web UI (served at "/" and "/live") lives in its own header (live_html.h) so the
