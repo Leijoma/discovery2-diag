@@ -309,6 +309,9 @@ def main() -> int:
     ap.add_argument("--mock", action="store_true", help="offline fake session (no car)")
     ap.add_argument("--lids", help="comma-separated hex LIDs (overrides the default set)")
     ap.add_argument("--http", type=int, default=8090, help="HTTP port (default 8090)")
+    ap.add_argument("--baseline", type=float, default=3.0,
+                    help="seconds of quiet baseline — longer catches slow noise (default 3)")
+    ap.add_argument("--period", type=float, default=0.4, help="poll period seconds (default 0.4)")
     args = ap.parse_args()
 
     lids = ([int(x, 16) for x in args.lids.replace(" ", "").split(",")]
@@ -321,7 +324,7 @@ def main() -> int:
             ap.error("a serial port is required unless --mock")
         session = mi._establish(args.module, args.port, args.esp)
 
-    mapper = Mapper(session, args.module, lids)
+    mapper = Mapper(session, args.module, lids, period=args.period, baseline_s=args.baseline)
     mapper.start()
     httpd = ThreadingHTTPServer(("0.0.0.0", args.http), Handler)
     httpd.mapper = mapper
