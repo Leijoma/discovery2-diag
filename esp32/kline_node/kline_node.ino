@@ -406,6 +406,7 @@ static void slabsExcursion() {
   }
   String line = String("slabs,vehicle=") + LOG_VEHICLE + " reachable=" + (ok ? "1i" : "0i");
   if (!isnan(lastSpeedKmh)) { line += ",speed="; line += String(lastSpeedKmh, 1); }
+  if (!ok) { line += ",sb=\"" + klineLastBurst + "\""; }   // diagnostic: what did SLABS StartComm return?
   if (ok) {
     uint8_t b[80]; int n;
     n = td5ReadLid(0x54, b, sizeof b); if (n > 0) { line += ",h54=\"" + toHex(b, n) + "\""; }  // heights

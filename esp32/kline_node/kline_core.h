@@ -277,6 +277,7 @@ static int td5ReadLid(uint8_t lid, uint8_t *data, size_t cap) {
 // SLABS needs no diagnostic session/security (services work right after C1), so this is all it
 // takes before reading 21 xx (unaddressed, via td5ReadLid). Returns true if it answered C1.
 static const uint8_t SLABS_ADDR = 0x29;
+static String klineLastBurst;                  // last StartComm reply burst (diagnostic: silent vs 7F 81 10)
 static bool slabsEstablish() {
   klineFastInit();
   uint8_t req[5] = { 0x81, SLABS_ADDR, TESTER_ADDR, 0x81, 0 };
@@ -285,6 +286,7 @@ static bool slabsEstablish() {
   Serial2.write(req, 5); Serial2.flush();
   uint8_t burst[32];
   size_t got = readBurst(burst, sizeof burst, 500, 40);
+  klineLastBurst = got ? toHex(burst, got) : String("silent");   // strip our own echo? keep raw for RE
   return findSeq(burst, got, 0xC1, 0x57) >= 0;
 }
 
