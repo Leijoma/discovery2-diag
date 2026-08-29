@@ -735,7 +735,8 @@ void setup() {
   fsReady = LittleFS.begin(true);            // mount (format on first boot) for the offline spill
   Serial.printf("LittleFS: %s\n", fsReady ? "mounted" : "FAILED");
   prefs.begin("node", false);                // NVS: restore persisted settings…
-  slabsPoll = prefs.getBool("slabs", false); // …so a mid-drive reboot resumes the SLABS excursion
+  slabsPoll = prefs.getBool("slabs", true);  // …default ON (excursion is standstill-only + read-only,
+                                             // safe; captures SLABS heights/ABS-V/faults at every stop)
   Serial.printf("Boot reason: %s · slabs_poll %s\n", resetReasonStr(), slabsPoll ? "ON" : "off");
   WiFi.mode(WIFI_STA); WiFi.setHostname(OTA_HOSTNAME); WiFi.setAutoReconnect(true);
   wifiConnect();
