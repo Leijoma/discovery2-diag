@@ -26,6 +26,7 @@ _SPEC = [
     ("accel_way3", 0x1B, 4, "u16", 0.001, 0.0, "V"),
     ("accel_supply", 0x1B, 6, "u16", 0.001, 0.0, "V"),
     ("manifold_press", 0x1C, 0, "u16", 0.0001, 0.0, "bar"),
+    ("maf_sensor", 0x1C, 4, "u16", 1.0, 0.0, "raw"),
     ("maf", 0x1D, 4, "u16", 0.1, -515.0, "kg/hr"),
     ("injection_qty", 0x1D, 6, "u16", 0.01, 0.0, "mg/stroke"),
     ("egr_modulator", 0x1D, 15, "u8", 100 / 255, 0.0, "%"),

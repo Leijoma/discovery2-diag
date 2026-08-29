@@ -13,6 +13,7 @@ static const Field FIELDS[] = {
   { "throttle_v", 0x1B,  0, U16,        0.001f,       0.0f },
   { "map_bar", 0x1C,  0, U16,       0.0001f,       0.0f },
   { "maf", 0x1D,  4, U16,          0.1f,    -515.0f },
+  { "maf_raw", 0x1C,  4, U16,          1.0f,       0.0f },
   { "inj_mg", 0x1D,  6, U16,         0.01f,       0.0f },
   { "egr_pct", 0x1D, 15, U8 ,  0.392156863f,       0.0f },
   { "wastegate_pct", 0x1D, 17, U8 ,  0.392156863f,       0.0f },

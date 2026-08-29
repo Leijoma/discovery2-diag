@@ -37,7 +37,8 @@ _FIELDS = [
     ("fuel_c",        "fuel_temp"),
     ("throttle_v",    "accel_way1"),
     ("map_bar",       "manifold_press"),
-    ("maf",           "maf"),
+    ("maf",           "maf"),          # ECU MODELLED air mass (uses IAT)
+    ("maf_raw",       "maf_sensor"),   # PHYSICAL MAF sensor (1C@4) — is it ever alive? free: 1C already read
     ("inj_mg",        "injection_qty"),
     ("egr_pct",       "egr_modulator"),
     ("wastegate_pct", "wastegate_modulator"),

@@ -295,7 +295,9 @@ static bool logCycle() {
     faultTick = 0;
     uint8_t fb[64];
     int fn = td5ReadLid(0x3B, fb, sizeof fb);
-    if (fn > 0) {
+    // Only trust a FULL 35-byte block. A short read over the ESP relay was giving phantom bits
+    // (nfaults jittering 0..9) — reject it and keep the last good block instead of logging noise.
+    if (fn >= 34) {
       int n = fn > 35 ? 35 : fn;
       faultsHex = toHex(fb, n);
       int cnt = 0;
