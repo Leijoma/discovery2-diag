@@ -131,6 +131,7 @@ static bool     slabsPoll   = false;   // toggled from Settings
 static uint32_t lastSlabs   = 0;
 static float    lastSpeedKmh = NAN;    // last decoded TD5 speed — logged with the SLABS sample
 static const uint32_t SLABS_INTERVAL_MS = 30000;
+static const uint32_t SLABS_SETTLE_MS   = 900;    // bus-silent gap after TD5 teardown before SLABS init
 
 // USB serial bridge (ESP-as-cable). One firmware, two roles: normally the node LOGS
 // autonomously; when a host tool (Python EspTransport, KKL-compatible line protocol)
@@ -390,9 +391,19 @@ static void nodeHeartbeat() {
 // SLABS answered at the current speed, then hand the bus back to TD5 (fast re-establish). The raw
 // LID hex is logged for offline decode; `reachable` + `speed` are numbers so Grafana can show at
 // what speed SLABS diagnostics drop out.
+// Stay OFF the K-line for `ms` (so a link can time out) while keeping the web server responsive.
+static void busQuiet(uint32_t ms) {
+  uint32_t t = millis();
+  while (millis() - t < ms) { server.handleClient(); delay(5); }
+}
 static void slabsExcursion() {
   endSession();                                   // close the TD5 session cleanly (20 + 82)
-  bool ok = slabsEstablish();
+  busQuiet(SLABS_SETTLE_MS);                       // ...then SILENCE so TD5's link releases before SLABS init
+  bool ok = false;
+  for (int i = 0; i < 3 && !ok; i++) {            // retry: a lingering link makes StartComm get 7F 81 10
+    if (i) { stopComm(); busQuiet(SLABS_SETTLE_MS); }
+    ok = slabsEstablish();
+  }
   String line = String("slabs,vehicle=") + LOG_VEHICLE + " reachable=" + (ok ? "1i" : "0i");
   if (!isnan(lastSpeedKmh)) { line += ",speed="; line += String(lastSpeedKmh, 1); }
   if (ok) {
