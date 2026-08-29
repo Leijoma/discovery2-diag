@@ -72,7 +72,7 @@ main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column}
 const $=s=>document.querySelector(s);
 // Fault codes: the ESP reports the RAW 21 3B block; the dictionary lives in the repo and is
 // fetched from GitHub (the phone hotspot has data) + cached in localStorage for offline use.
-let FMAP=null, FAULTS_NOW=[];
+let FMAP=null, FAULTS_NOW=[], SLABSPOLL=0;
 const FMAP_URL='https://raw.githubusercontent.com/Leijoma/discovery2-diag/main/src/d2diag/td5/faultmap.json';
 async function loadFaultMap(){
  try{const r=await fetch(FMAP_URL);if(r.ok){FMAP=await r.json();localStorage.setItem('faultmap',JSON.stringify(FMAP));return;}}catch(e){}
@@ -137,9 +137,11 @@ function openSettings(){
   <h3>Settings</h3>
   <button class=btn onclick=mute()>Mute</button>
   <button class=btn onclick=cable()>Cable mode</button>
-  <div class=foot>Mute stops polling and frees the K-line bus. Cable mode turns the node into a USB K-line cable for the diagnostic tool.</div>
+  <button class=btn onclick=toggleSlabs()>SLABS poll: ${SLABSPOLL?'ON':'off'}</button>
+  <div class=foot>Mute frees the K-line bus. Cable mode = USB K-line cable for the diagnostic tool. SLABS poll briefly samples SLABS every ~30 s (pauses live data a couple of seconds).</div>
   <button class=btn style=opacity:.7 onclick=closeSettings()>Close</button></div></div>`;
 }
+async function toggleSlabs(){closeSettings();await hit('/slabs?on='+(SLABSPOLL?0:1));setTimeout(tick,200);}
 function closeSettings(){$('#sheet').innerHTML='';}
 const hit=u=>fetch(u).catch(()=>{});
 // A control action shows an INSTANT transition screen (spinner), fires the request, and
@@ -162,6 +164,7 @@ function header(d){
 async function tick(){
  let d;try{d=await(await fetch('/data')).json();}catch(e){$('#dot').style.background='var(--red)';$('#sub').textContent=pending?ACT[pending].lbl:'no connection';return;}
  header(d);
+ SLABSPOLL=d.slabs_poll||0;
  FAULTS_NOW=decodeFaults(d.faults);
  const fb=$('#fbtn');
  if(FAULTS_NOW.length){fb.style.display='inline-flex';$('#fn').textContent=FAULTS_NOW.length;}

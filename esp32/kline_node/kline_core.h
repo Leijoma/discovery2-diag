@@ -273,6 +273,21 @@ static int td5ReadLid(uint8_t lid, uint8_t *data, size_t cap) {
   return (int)len;
 }
 
+// Minimal SLABS bring-up: fast init + StartCommunication (81 29 F7 81) → expect C1 57 8F.
+// SLABS needs no diagnostic session/security (services work right after C1), so this is all it
+// takes before reading 21 xx (unaddressed, via td5ReadLid). Returns true if it answered C1.
+static const uint8_t SLABS_ADDR = 0x29;
+static bool slabsEstablish() {
+  klineFastInit();
+  uint8_t req[5] = { 0x81, SLABS_ADDR, TESTER_ADDR, 0x81, 0 };
+  req[4] = checksum(req, 4);
+  while (Serial2.available()) Serial2.read();
+  Serial2.write(req, 5); Serial2.flush();
+  uint8_t burst[32];
+  size_t got = readBurst(burst, sizeof burst, 500, 40);
+  return findSeq(burst, got, 0xC1, 0x57) >= 0;
+}
+
 // One module StartCommunication for the /scan diagnostic page.
 static String kwpStartComm(uint8_t addr, const char *name) {
   stopComm();

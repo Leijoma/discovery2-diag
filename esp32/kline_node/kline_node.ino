@@ -121,6 +121,14 @@ static const uint16_t IGN_HINT_AFTER    = 4;      // establish fails in a row �
 static const uint32_t BOOT_QUIET_MS     = 5000;   // don't touch the bus in the first 5 s after boot
 static const uint32_t BEAT_INTERVAL_MS  = 15000;  // node heartbeat cadence
 
+// Sparse SLABS excursion (opt-in via /slabs): every SLABS_INTERVAL_MS the node briefly leaves the
+// TD5 session, reads a few SLABS LIDs, logs them + whether SLABS answered at the current speed
+// (to find where SLABS diagnostics drop out), then returns to TD5. Pauses live TD5 data ~2-3 s.
+static bool     slabsPoll   = false;   // toggled from Settings
+static uint32_t lastSlabs   = 0;
+static float    lastSpeedKmh = NAN;    // last decoded TD5 speed — logged with the SLABS sample
+static const uint32_t SLABS_INTERVAL_MS = 30000;
+
 // USB serial bridge (ESP-as-cable). One firmware, two roles: normally the node LOGS
 // autonomously; when a host tool (Python EspTransport, KKL-compatible line protocol)
 // sends a command over USB, the node hands it the shared K-line bus. K-line is a single-
@@ -312,6 +320,7 @@ static bool logCycle() {
   }
 
   appendField(line, js, first, "nfaults", (float)nFaults);   // fault count — see fault onset in Grafana
+  if (!isnan(speedKmh)) lastSpeedKmh = speedKmh;             // remember speed for the SLABS excursion
 
   // Fuel computer — derived at the source. L/h = inj[mg] * INJ_PER_REV * rpm * 60 / 1e6 /
   // (density g/mL); economy L/100km = rate/speed*100 when moving; trip integrates over time.
@@ -357,6 +366,28 @@ static void nodeHeartbeat() {
   if (ts) { line += " "; line += String(ts); }
   influxPost(line);
 }
+// Brief SLABS excursion: leave TD5, read heights/ABS-sensor-V/wheel-speeds, log them + whether
+// SLABS answered at the current speed, then hand the bus back to TD5 (fast re-establish). The raw
+// LID hex is logged for offline decode; `reachable` + `speed` are numbers so Grafana can show at
+// what speed SLABS diagnostics drop out.
+static void slabsExcursion() {
+  endSession();                                   // close the TD5 session cleanly (20 + 82)
+  bool ok = slabsEstablish();
+  String line = String("slabs,vehicle=") + LOG_VEHICLE + " reachable=" + (ok ? "1i" : "0i");
+  if (!isnan(lastSpeedKmh)) { line += ",speed="; line += String(lastSpeedKmh, 1); }
+  if (ok) {
+    uint8_t b[80]; int n;
+    n = td5ReadLid(0x54, b, sizeof b); if (n > 0) { line += ",h54=\"" + toHex(b, n) + "\""; }  // heights
+    n = td5ReadLid(0x50, b, sizeof b); if (n > 0) { line += ",v50=\"" + toHex(b, n) + "\""; }  // ABS sensor V
+    n = td5ReadLid(0x43, b, sizeof b); if (n > 0) { line += ",w43=\"" + toHex(b, n) + "\""; }  // wheel speeds
+  }
+  stopComm();                                     // release SLABS
+  long ts = epochNow(); if (ts) { line += " "; line += String(ts); }
+  influxPost(line);
+  sessionUp = false; recoveryCleared = true;      // bus is clean → fast TD5 re-establish (skip the long idle)
+  quietUntil = millis() + 600; lastFuelMs = 0;
+}
+
 static const uint32_t RAW_FLUSH_MS = 3000;      // ship raw batches every ~3 s
 static void logTick() {
   uint32_t now = millis();
@@ -382,6 +413,12 @@ static void logTick() {
       uint32_t q = RECOVERY_IDLE_MS * (estabTries + 1);         // escalate the silence for a stubborn link
       quietUntil = millis() + (q > RECOVERY_IDLE_MAX ? RECOVERY_IDLE_MAX : q);
     }
+    return;
+  }
+  // Sparse SLABS excursion (opt-in): every 30 s, briefly hop to SLABS, sample it, come back.
+  if (slabsPoll && millis() - lastSlabs > SLABS_INTERVAL_MS) {
+    lastSlabs = millis();
+    slabsExcursion();
     return;
   }
   // Ride through a transient bad read: a single unreadable cycle (weak K-line) should NOT nuke
@@ -501,6 +538,7 @@ static void handleData() {
     ",\"logging\":" + String(logEnabled ? 1 : 0) +
     ",\"bridge\":" + String(bridgeMode ? 1 : 0) +
     ",\"ign_cycle\":" + String(needIgnCycle ? 1 : 0) +
+    ",\"slabs_poll\":" + String(slabsPoll ? 1 : 0) +
     ",\"rssi\":" + String(WiFi.RSSI()) +
     ",\"faults\":\"" + faultsHex + "\"" +
     ",\"signals\":" + (latestJson.length() ? latestJson : String("{}")) + "}");
@@ -630,6 +668,10 @@ static void handleBridge() {
   }
   server.send(200, "application/json", "{\"bridge\":" + String(bridgeMode ? 1 : 0) + "}");
 }
+static void handleSlabsPoll() {
+  if (server.hasArg("on")) { slabsPoll = server.arg("on") != "0"; if (slabsPoll) lastSlabs = 0; }
+  server.send(200, "application/json", "{\"slabs_poll\":" + String(slabsPoll ? 1 : 0) + "}");
+}
 
 void setup() {
   Serial.begin(115200); Serial.setTimeout(80); delay(300); bootMs = millis();
@@ -656,6 +698,7 @@ void setup() {
   server.on("/scan", handleScan);
   server.on("/log", handleLog);
   server.on("/bridge", handleBridge);       // put the node in USB cable mode (or auto on a USB cmd)
+  server.on("/slabs", handleSlabsPoll);     // toggle the sparse SLABS excursion
   server.begin();
 
   logEnabled = influxConfigured();          // auto-start logging if a token is set
