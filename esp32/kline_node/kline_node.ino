@@ -95,6 +95,9 @@ static String   latestJson;            // {"rpm":763,...}
 static uint32_t latestMs = 0;          // millis() of the last snapshot
 static String   faultsHex;             // raw 21 3B fault block (hex) — browser decodes via faultmap.json
 static uint8_t  faultTick = 0;         // counter: read the fault block ~every 10th cycle
+static uint8_t  prevFaults[35];        // last fault block, for edge detection (onset/clear events)
+static bool     haveFaultBase = false; // seen the first block this session? (don't emit pre-existing as new)
+static int      nFaults = 0;           // active fault bits right now (logged to Influx each cycle)
 // Stale-link recovery: a link left open (dropped session / prior run) makes the ECU answer
 // 7F 81 10 to every StartCommunication. On RDL016 (2026-08-27) bus SILENCE does NOT clear it
 // (25 s + ESP reboot both failed) — only an accepted StopCommunication (82) or an ignition
@@ -227,6 +230,17 @@ static void appendField(String &line, String &js, bool &first, const char *key, 
   js += "\""; js += key; js += "\":"; js += b;
 }
 
+// Post a fault edge as its own timestamped Influx point (raw bit id — Grafana/analysis maps it
+// to text via faultmap.json). state=1 onset, 0 cleared. Lets you overlay "when did the fault
+// appear" against rpm/boost/battery in the engine series at the same timestamp.
+static void postFaultEvent(int off, int bit, int state) {
+  String line = String("fault,vehicle=") + LOG_VEHICLE + ",bit=" + String(off) + "." + String(bit) +
+                " state=" + String(state) + "i";
+  long ts = epochNow();
+  if (ts) { line += " "; line += String(ts); }
+  influxPost(line);
+}
+
 // Read the curated LIDs, decode, and POST one `engine` line. Returns false if the
 // session looks dead (rpm LID unreadable) so the caller re-establishes.
 static bool logCycle() {
@@ -265,7 +279,21 @@ static bool logCycle() {
     faultTick = 0;
     uint8_t fb[64];
     int fn = td5ReadLid(0x3B, fb, sizeof fb);
-    if (fn > 0) faultsHex = toHex(fb, fn > 35 ? 35 : fn);
+    if (fn > 0) {
+      int n = fn > 35 ? 35 : fn;
+      faultsHex = toHex(fb, n);
+      int cnt = 0;
+      for (int i = 0; i < n; i++) for (int b = 0; b < 8; b++) if (fb[i] & (1 << b)) cnt++;
+      nFaults = cnt;
+      if (haveFaultBase) {                          // emit an event for each bit that flipped
+        for (int i = 0; i < n; i++) {
+          uint8_t d = fb[i] ^ prevFaults[i];
+          if (d) for (int b = 0; b < 8; b++) if (d & (1 << b)) postFaultEvent(i, b, (fb[i] >> b) & 1);
+        }
+      }
+      haveFaultBase = true;
+      for (int i = 0; i < n; i++) prevFaults[i] = fb[i];
+    }
   }
 
   String line = String("engine,vehicle=") + LOG_VEHICLE + " ";
@@ -282,6 +310,8 @@ static bool logCycle() {
     else if (!strcmp(f.key, "speed")) speedKmh = v;
     appendField(line, js, first, f.key, v);
   }
+
+  appendField(line, js, first, "nfaults", (float)nFaults);   // fault count — see fault onset in Grafana
 
   // Fuel computer — derived at the source. L/h = inj[mg] * INJ_PER_REV * rpm * 60 / 1e6 /
   // (density g/mL); economy L/100km = rate/speed*100 when moving; trip integrates over time.
@@ -361,6 +391,7 @@ static void logTick() {
     Serial.println("EST: SESSION LOST");
     sessionUp = false; sessionMiss = 0;
     recoveryCleared = false;                          // recovery block will endSession (20+82) then idle
+    haveFaultBase = false;                            // re-baseline faults on the next session (don't re-emit)
     lastFuelMs = 0;                                    // pause fuel integration across the gap
   } else sessionMiss = 0;
 }
