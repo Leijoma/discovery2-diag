@@ -1,0 +1,8 @@
+{
+  "module": "slabs",
+  "block_len": 16,
+  "bits": {
+    "3.4": "020: right front wheel speed sensor — output too low",
+    "10.4": "027: shuttle valve switch — electrical failure"
+  }
+}

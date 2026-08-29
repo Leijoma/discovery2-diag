@@ -70,33 +70,35 @@ main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column}
 <div id=sheet></div>
 <script>
 const $=s=>document.querySelector(s);
-// Fault codes: the ESP reports the RAW 21 3B block; the dictionary lives in the repo and is
-// fetched from GitHub (the phone hotspot has data) + cached in localStorage for offline use.
-let FMAP=null, FAULTS_NOW=[], SLABSPOLL=0;
-const FMAP_URL='https://raw.githubusercontent.com/Leijoma/discovery2-diag/main/src/d2diag/td5/faultmap.json';
-async function loadFaultMap(){
- try{const r=await fetch(FMAP_URL);if(r.ok){FMAP=await r.json();localStorage.setItem('faultmap',JSON.stringify(FMAP));return;}}catch(e){}
- const c=localStorage.getItem('faultmap');if(c)FMAP=JSON.parse(c);   // offline → last cached map
+// Fault codes: the ESP reports RAW blocks; the dictionaries live in the repo and are fetched from
+// GitHub (the phone hotspot has data) + cached in localStorage for offline use. TD5 (21 3B) and
+// SLABS (logged 21 11 / current 21 47).
+let FMAP=null, SMAP=null, FAULTS_NOW=[], SLABSPOLL=0;
+const RAW='https://raw.githubusercontent.com/Leijoma/discovery2-diag/main/src/d2diag/';
+async function loadMap(url,key){
+ try{const r=await fetch(url);if(r.ok){const j=await r.json();localStorage.setItem(key,JSON.stringify(j));return j;}}catch(e){}
+ const c=localStorage.getItem(key);return c?JSON.parse(c):null;   // offline → last cached
 }
-function decodeFaults(hex){
+async function loadFaultMaps(){ FMAP=await loadMap(RAW+'td5/faultmap.json','fmap_td5'); SMAP=await loadMap(RAW+'slabs/faultmap.json','fmap_slabs'); }
+function decodeFaults(hex,map){
  const by=(hex||'').trim()?hex.trim().split(/\s+/).map(x=>parseInt(x,16)):[];
  if(!by.length)return [];
- if(!FMAP)return by.flatMap((b,o)=>[0,1,2,3,4,5,6,7].filter(bit=>b&(1<<bit)).map(bit=>`byte${o}.bit${bit}`));
- const block=by.slice(0,FMAP.block_len),out=[],known={};
- for(const k in FMAP.bits){const p=k.split('.'),o=+p[0],bit=+p[1];known[o]=(known[o]||0)|(1<<bit);if(block[o]!==undefined&&(block[o]&(1<<bit)))out.push(FMAP.bits[k]);}
+ if(!map)return by.flatMap((b,o)=>[0,1,2,3,4,5,6,7].filter(bit=>b&(1<<bit)).map(bit=>`byte${o}.bit${bit}`));
+ const block=by.slice(0,map.block_len),out=[],known={};
+ for(const k in map.bits){const p=k.split('.'),o=+p[0],bit=+p[1];known[o]=(known[o]||0)|(1<<bit);if(block[o]!==undefined&&(block[o]&(1<<bit)))out.push(map.bits[k]);}
  for(let o=0;o<block.length;o++){const unk=block[o]&~(known[o]||0)&0xFF;for(let bit=0;bit<8;bit++)if(unk&(1<<bit))out.push('byte'+o+'.bit'+bit);}
  return out;
 }
 function showFaults(){
- const txt=FAULTS_NOW.join('\n')||'(none)';
+ const txt=FAULTS_NOW.map(f=>f.m+': '+f.t).join('\n')||'(none)';
  $('#sheet').innerHTML=`<div class=sheet onclick="if(event.target===this)closeSettings()"><div class=panel>
   <h3>Fault codes (${FAULTS_NOW.length})</h3>
   <textarea id=ftext readonly style="width:100%;min-height:180px;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:9px;padding:10px;font:inherit;font-size:13px">${txt}</textarea>
-  <div class=foot>${FMAP?'Decoded via faultmap.json (GitHub)':'Raw bits — fault map not loaded yet (no internet)'}.</div>
+  <div class=foot>${(FMAP||SMAP)?'Decoded via GitHub faultmaps (TD5 + SLABS)':'Raw bits — maps not loaded yet (no internet)'}.</div>
   <button class=btn onclick=copyFaults()>Copy</button>
   <button class=btn style=opacity:.7 onclick=closeSettings()>Close</button></div></div>`;
 }
-async function copyFaults(){const t=FAULTS_NOW.join('\n');try{await navigator.clipboard.writeText(t);}catch(e){const el=$('#ftext');if(el){el.focus();el.select();try{document.execCommand('copy');}catch(_){}}}}
+async function copyFaults(){const t=FAULTS_NOW.map(f=>f.m+': '+f.t).join('\n');try{await navigator.clipboard.writeText(t);}catch(e){const el=$('#ftext');if(el){el.focus();el.select();try{document.execCommand('copy');}catch(_){}}}}
 // {n:key, lab, u:unit, d:decimals, div:divisor, g:[min,max] for a gauge}
 const TILES=[
  {n:'speed',lab:'Speed',u:'km/h',d:0},
@@ -165,7 +167,9 @@ async function tick(){
  let d;try{d=await(await fetch('/data')).json();}catch(e){$('#dot').style.background='var(--red)';$('#sub').textContent=pending?ACT[pending].lbl:'no connection';return;}
  header(d);
  SLABSPOLL=d.slabs_poll||0;
- FAULTS_NOW=decodeFaults(d.faults);
+ FAULTS_NOW=[...decodeFaults(d.faults,FMAP).map(t=>({m:'TD5',t})),
+             ...decodeFaults(d.slabs_flog,SMAP).map(t=>({m:'SLABS log',t})),
+             ...decodeFaults(d.slabs_fcur,SMAP).map(t=>({m:'SLABS cur',t}))];
  const fb=$('#fbtn');
  if(FAULTS_NOW.length){fb.style.display='inline-flex';$('#fn').textContent=FAULTS_NOW.length;}
  else fb.style.display='none';
@@ -179,6 +183,6 @@ async function tick(){
  if(d.ign_cycle){$('#main').innerHTML=`<div class=state><div class="big pulse">Cycle the ignition</div><div class=sub>The ECU is holding the previous link open and won't accept a new one. Turn the key off, then back on — the node reconnects on its own. (Bus silence and reboot don't clear it on this car.)</div></div>`;return;}
  renderLive(d);
 }
-loadFaultMap();setInterval(tick,1000);tick();
+loadFaultMaps();setInterval(tick,1000);tick();
 </script></body></html>
 )HTML";

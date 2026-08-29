@@ -129,6 +129,7 @@ static const uint32_t BEAT_INTERVAL_MS  = 15000;  // node heartbeat cadence
 // (to find where SLABS diagnostics drop out), then returns to TD5. Pauses live TD5 data ~2-3 s.
 static bool     slabsPoll   = false;   // toggled from Settings
 static uint32_t lastSlabs   = 0;
+static String   slabsFlog, slabsFcur;  // raw SLABS fault blocks (logged 21 11 / current 21 47) for /live
 static float    lastSpeedKmh = NAN;    // last decoded TD5 speed — gates + labels the SLABS sample
 // SLABS diagnostics answer ONLY at a standstill (proven RDL016 2026-08-29: silent — StartComm just
 // echoes, no reply — once moving, and stays dead until an ignition cycle). So only excurse when
@@ -423,9 +424,11 @@ static void slabsExcursion() {
     n = td5ReadLid(0x11, b, sizeof b);
     if (n > 0) {
       int c = 0; for (int i = 0; i < n; i++) for (int k = 0; k < 8; k++) if (b[i] & (1 << k)) c++;
-      line += ",flog=\"" + toHex(b, n) + "\",nflog=" + String(c) + "i";
+      slabsFlog = toHex(b, n);                        // also expose to /live for browser decode
+      line += ",flog=\"" + slabsFlog + "\",nflog=" + String(c) + "i";
     }
-    n = td5ReadLid(0x47, b, sizeof b); if (n > 0) { line += ",fcur=\"" + toHex(b, n) + "\""; }  // current
+    n = td5ReadLid(0x47, b, sizeof b);
+    if (n > 0) { slabsFcur = toHex(b, n); line += ",fcur=\"" + slabsFcur + "\""; }  // current
   }
   stopComm();                                     // release SLABS
   long ts = epochNow(); if (ts) { line += " "; line += String(ts); }
@@ -588,6 +591,8 @@ static void handleData() {
     ",\"slabs_poll\":" + String(slabsPoll ? 1 : 0) +
     ",\"rssi\":" + String(WiFi.RSSI()) +
     ",\"faults\":\"" + faultsHex + "\"" +
+    ",\"slabs_flog\":\"" + slabsFlog + "\"" +
+    ",\"slabs_fcur\":\"" + slabsFcur + "\"" +
     ",\"signals\":" + (latestJson.length() ? latestJson : String("{}")) + "}");
 }
 // The live web UI (served at "/" and "/live") lives in its own header (live_html.h) so the
