@@ -134,7 +134,9 @@ static float    lastSpeedKmh = NAN;    // last decoded TD5 speed — gates + lab
 // SLABS diagnostics answer ONLY at a standstill (proven RDL016 2026-08-29: silent — StartComm just
 // echoes, no reply — once moving, and stays dead until an ignition cycle). So only excurse when
 // stopped, and then sample a bit more often (SLABS is up, so it succeeds on the first try).
-static const uint32_t SLABS_STILL_MS  = 10000;    // sample this often while stationary
+static const uint32_t SLABS_STILL_MS  = 60000;    // sample this often while stationary (60 s: logged
+                                                  // faults/heights change slowly; the ~10 s cadence
+                                                  // visibly blinked the dash each excursion — RDL016)
 static const float    SLABS_STILL_KMH = 5.0f;     // "stationary" threshold
 static const uint32_t SLABS_SETTLE_MS = 900;      // bus-silent gap after TD5 teardown before SLABS init
 
