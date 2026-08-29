@@ -129,9 +129,13 @@ static const uint32_t BEAT_INTERVAL_MS  = 15000;  // node heartbeat cadence
 // (to find where SLABS diagnostics drop out), then returns to TD5. Pauses live TD5 data ~2-3 s.
 static bool     slabsPoll   = false;   // toggled from Settings
 static uint32_t lastSlabs   = 0;
-static float    lastSpeedKmh = NAN;    // last decoded TD5 speed — logged with the SLABS sample
-static const uint32_t SLABS_INTERVAL_MS = 30000;
-static const uint32_t SLABS_SETTLE_MS   = 900;    // bus-silent gap after TD5 teardown before SLABS init
+static float    lastSpeedKmh = NAN;    // last decoded TD5 speed — gates + labels the SLABS sample
+// SLABS diagnostics answer ONLY at a standstill (proven RDL016 2026-08-29: silent — StartComm just
+// echoes, no reply — once moving, and stays dead until an ignition cycle). So only excurse when
+// stopped, and then sample a bit more often (SLABS is up, so it succeeds on the first try).
+static const uint32_t SLABS_STILL_MS  = 10000;    // sample this often while stationary
+static const float    SLABS_STILL_KMH = 5.0f;     // "stationary" threshold
+static const uint32_t SLABS_SETTLE_MS = 900;      // bus-silent gap after TD5 teardown before SLABS init
 
 // USB serial bridge (ESP-as-cable). One firmware, two roles: normally the node LOGS
 // autonomously; when a host tool (Python EspTransport, KKL-compatible line protocol)
@@ -447,8 +451,9 @@ static void logTick() {
     }
     return;
   }
-  // Sparse SLABS excursion (opt-in): every 30 s, briefly hop to SLABS, sample it, come back.
-  if (slabsPoll && millis() - lastSlabs > SLABS_INTERVAL_MS) {
+  // SLABS excursion (opt-in) — ONLY while stationary, where SLABS actually answers.
+  if (slabsPoll && (isnan(lastSpeedKmh) || lastSpeedKmh < SLABS_STILL_KMH)
+      && millis() - lastSlabs > SLABS_STILL_MS) {
     lastSlabs = millis();
     slabsExcursion();
     return;

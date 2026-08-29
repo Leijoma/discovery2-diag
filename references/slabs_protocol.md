@@ -19,6 +19,15 @@ real traffic**, not guessed.
 - **Keepalive:** `01 3E` → `7E` (TesterPresent), ~1 s. **NOTE: bare `3E` without
   sub-byte** (frame `01 3e 3f`). `3E 01` gets no response and tears down the session.
 - Requires **ignition ON** (ignition-fed module). Comms die >8–20 km/h.
+- **⭐ Diagnostics are STANDSTILL-ONLY — proven RDL016 2026-08-29.** The ESP node sampled SLABS
+  every ~30 s while driving 0–71 km/h and logged whether `81 29 F7 81` got a reply: SLABS answered
+  (`C1`) at a **standstill right after an ignition cycle**, then went **silent the moment the car
+  moved** (StartComm just echoes back — `sb=81 29 F7 81 22`, no `C1`, no `7F 81 10`) and **did not
+  recover when stopped** — it stays dead until the next **ignition cycle**. So the "8–20 km/h"
+  figure is really "once you move at all". This is SLABS deliberately suspending diagnostics while
+  the ABS is active, not our polling or a stale link. **Consequence:** live ABS-sensor data *while
+  driving* is unreachable over K-line — only an analog tap on the sensor wires can get that. The
+  node's SLABS excursion is therefore gated to `speed < 5 km/h`.
 
 ### ⚠️ SLABS must be polled LIGHTLY (proven 2026-08-07)
 The reference tool ran ~**1 Hz keepalive + occasional reads** — not continuous

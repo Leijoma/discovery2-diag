@@ -173,17 +173,44 @@ on→off, confirm the ack, and do **not** run the full module sequence.
 
 ### P4 — Other modules
 
-#### T-16 `[key-on]` — BCU / EKA
-First contact. Read only. Requires an ignition cycle (off → key → on → key).
+#### T-16 `[key-on]` — BCU: map the read-only auth boundary
+**Question.** How much of the BCU is legible **without** SecurityAccess? First contact,
+address `0x40`, keybytes `E5 8F`, EKA-behind-SA and the rolling seed are all already
+settled (see Resolved and `references/valeo_bcu_capabilities.md`) — the seed→key is
+unknown and we have stopped chasing EKA. What we have **never** tested is whether the
+BCU's live inputs (doors, key-in, locking, indicators, `21 D8..E9/2C/2D`) and settings
+(`21 C6..EB`) actually *require* auth, or whether only EKA does. The reference tool did
+SA before every read out of habit, so the 2026-08-09 sniff cannot answer it. If the
+inputs read unauthenticated, we get live BCU body data for the dashboard for free.
+
+**Setup.** Read only — no writes, no key, no actuators. Ignition cycle (off → fob key →
+on) to put the BCU in diagnostic mode. New tool:
 ```
-PYTHONPATH=src python3 tools/bcu_probe.py --expect XXXX
+PYTHONPATH=src python3 tools/bcu_scan.py --serial auto
+PYTHONPATH=src python3 tools/bcu_scan.py --serial auto --stimulus "open the driver door"
+PYTHONPATH=src python3 tools/bcu_scan.py --serial auto --full     # optional: sweep 21 00..FF
 ```
-Three informative outcomes: reference value found (EKA encoding proven → document the
-**encoding** in `references/valeo_bcu_capabilities.md`, never the code — public repo);
-`securityAccessDenied` (the probe fetches a seed → keep `logs/bcu_probe-*.raw.log`, it is
-the input to the unknown Valeo keygen); or no contact on `0x40` (try `--address 0x18` and
-cycle the ignition again). The `1A` response should contain a readable Valeo part number
-if `0x40` really is the BCU.
+It sweeps each LID **twice in shuffled order**, fetches a seed up front to flag the
+`21 CC` decoy, and classifies every response: **DATA** (positive, plausibly real),
+**SEED-DECOY** (positive but just the current seed), **DENIED** (`7F..33`
+securityAccessDenied), **NRC** (other negative, e.g. `31` = no such LID), **NO-RESPONSE**,
+or **INCONSISTENT** (disagreed between passes = comms-flaky, not gating). `--stimulus`
+does a baseline → change one input → re-read and prints which LIDs' bytes **moved**.
+
+**Decision rule.**
+- A LID in **DATA**, stable across both passes, whose bytes **move** under `--stimulus`
+  = real live data readable without auth → add it to the BCU source (`web/sources.py`)
+  and map the field as `kandidat`. This is the win condition.
+- **DATA** but constant even under stimulus = a static/placeholder positive; record the
+  bytes, do not map a live field yet.
+- **DENIED** = genuinely auth-gated; note it and move on (we cannot unlock).
+- **NRC 0x31** = LID not supported on this module (expected for most of a `--full` sweep).
+- **INCONSISTENT / NO-RESPONSE on both passes** = do not conclude; the BCU init is flaky
+  (~1 in 4). Re-run before calling anything gated. **Mix the order, never read a block
+  as one time-ordered sweep** — the tool shuffles for exactly this reason.
+
+**Route results** to `references/valeo_bcu_capabilities.md` (the auth-boundary table) and,
+for any live field found, the signal store + a BCU `DataSource`. Never the EKA code.
 
 #### T-17 `[idle]` — Autobox (EAT) read faults
 The one module we have never got fault codes out of. Engine **running**, selector in
@@ -233,6 +260,14 @@ rows with a `comms_glitch` marker and classify in the analysis. Detail in `TODO.
 Move items here with the date and what actually settled them — including the ones that
 came back inconclusive, so we do not re-run them blind.
 
+- **2026-08-29 — SLABS diagnostics are STANDSTILL-ONLY (does it really die at speed?).** The ESP
+  node sampled SLABS while driving 0–71 km/h, logging whether `81 29 F7 81` got a reply. SLABS
+  answered `C1` at a standstill right after an ignition cycle, then went **silent the instant the
+  car moved** (StartComm only echoed — no `C1`, no `7F 81 10`) and **did not recover when stopped**
+  — dead until the next ignition cycle. So it's SLABS suspending diagnostics while the ABS is
+  active, not our polling. Live ABS-sensor data while driving is therefore **unreachable over
+  K-line** (analog tap needed). The node's SLABS excursion is now gated to `speed < 5 km/h`. See
+  `references/slabs_protocol.md`.
 - **2026-08-23 — ESP32 K-line node talks to the Td5.** Wiring proven: L9637D VS on pin 7,
   pull-up 510 Ω–1 k is critical, common ground required.
 - **2026-08-21 — `accel_way3` moves (0 → 2.23 V).** Pedal track 3 is live; `1B` mapping
