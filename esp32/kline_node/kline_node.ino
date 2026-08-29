@@ -418,6 +418,14 @@ static void slabsExcursion() {
     n = td5ReadLid(0x54, b, sizeof b); if (n > 0) { line += ",h54=\"" + toHex(b, n) + "\""; }  // heights
     n = td5ReadLid(0x50, b, sizeof b); if (n > 0) { line += ",v50=\"" + toHex(b, n) + "\""; }  // ABS sensor V
     n = td5ReadLid(0x43, b, sizeof b); if (n > 0) { line += ",w43=\"" + toHex(b, n) + "\""; }  // wheel speeds
+    // Fault blocks: 21 11 = LOGGED (historical — persists even though we can't catch current while
+    // moving), 21 47 = current. Raw hex + a logged-fault bit count so Grafana shows when they appear.
+    n = td5ReadLid(0x11, b, sizeof b);
+    if (n > 0) {
+      int c = 0; for (int i = 0; i < n; i++) for (int k = 0; k < 8; k++) if (b[i] & (1 << k)) c++;
+      line += ",flog=\"" + toHex(b, n) + "\",nflog=" + String(c) + "i";
+    }
+    n = td5ReadLid(0x47, b, sizeof b); if (n > 0) { line += ",fcur=\"" + toHex(b, n) + "\""; }  // current
   }
   stopComm();                                     // release SLABS
   long ts = epochNow(); if (ts) { line += " "; line += String(ts); }
