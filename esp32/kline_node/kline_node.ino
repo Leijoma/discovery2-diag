@@ -35,11 +35,14 @@
 #include <HTTPClient.h>
 #include <time.h>
 #include <LittleFS.h>            // on-device spill for offline logging (store-and-forward)
+#include <Preferences.h>         // NVS — persist slabs_poll across reboots
+#include <esp_system.h>          // esp_reset_reason() — why did we boot? (brownout/panic/wdt)
 #include "secrets.h"
 #include "kline_core.h"          // K-line/KWP2000/Td5 comms core (no WiFi/Influx/web)
 #include "live_html.h"           // the live web UI (embedded page; own header, see note there)
 
 static WebServer server(80);
+static Preferences prefs;              // NVS store for persisted settings (slabs_poll)
 static WireGuard wg;
 static bool wgUp = false;
 static WiFiUDP kaUdp;
@@ -354,6 +357,22 @@ static bool logCycle() {
   else spillLine(line);                  // offline / POST failed → buffer to LittleFS, flush later
   return true;
 }
+// Why did the ESP last boot? Distinguishes a crank/power brownout from a firmware panic/watchdog.
+static const char *resetReasonStr() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:   return "poweron";
+    case ESP_RST_BROWNOUT:  return "brownout";
+    case ESP_RST_PANIC:     return "panic";
+    case ESP_RST_TASK_WDT:  return "task_wdt";
+    case ESP_RST_INT_WDT:   return "int_wdt";
+    case ESP_RST_WDT:       return "wdt";
+    case ESP_RST_SW:        return "sw";
+    case ESP_RST_DEEPSLEEP: return "deepsleep";
+    case ESP_RST_EXT:       return "ext";
+    default:                return "other";
+  }
+}
+
 // Node health heartbeat — proves the Influx pipe even with no car attached.
 static void nodeHeartbeat() {
   String line = String("node,vehicle=") + LOG_VEHICLE +
@@ -361,6 +380,7 @@ static void nodeHeartbeat() {
                 ",uptime=" + String((millis() - bootMs) / 1000) +
                 ",wg=" + String(wgUp ? 1 : 0) +
                 ",session=" + String(sessionUp ? 1 : 0) +
+                ",reset=\"" + resetReasonStr() + "\"" +
                 ",points=" + String(pointsSent);
   long ts = epochNow();
   if (ts) { line += " "; line += String(ts); }
@@ -669,7 +689,11 @@ static void handleBridge() {
   server.send(200, "application/json", "{\"bridge\":" + String(bridgeMode ? 1 : 0) + "}");
 }
 static void handleSlabsPoll() {
-  if (server.hasArg("on")) { slabsPoll = server.arg("on") != "0"; if (slabsPoll) lastSlabs = 0; }
+  if (server.hasArg("on")) {
+    slabsPoll = server.arg("on") != "0";
+    if (slabsPoll) lastSlabs = 0;
+    prefs.putBool("slabs", slabsPoll);       // persist so it survives a mid-drive reboot
+  }
   server.send(200, "application/json", "{\"slabs_poll\":" + String(slabsPoll ? 1 : 0) + "}");
 }
 
@@ -678,6 +702,9 @@ void setup() {
   Serial.println("\n== K-line node: WiFi + OTA + web + K-line + Influx ==");
   fsReady = LittleFS.begin(true);            // mount (format on first boot) for the offline spill
   Serial.printf("LittleFS: %s\n", fsReady ? "mounted" : "FAILED");
+  prefs.begin("node", false);                // NVS: restore persisted settings…
+  slabsPoll = prefs.getBool("slabs", false); // …so a mid-drive reboot resumes the SLABS excursion
+  Serial.printf("Boot reason: %s · slabs_poll %s\n", resetReasonStr(), slabsPoll ? "ON" : "off");
   WiFi.mode(WIFI_STA); WiFi.setHostname(OTA_HOSTNAME); WiFi.setAutoReconnect(true);
   wifiConnect();
   wgStart();                                 // fixed WG IP, reachable via the tunnel
