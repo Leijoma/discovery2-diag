@@ -9,16 +9,32 @@ KKL cable. **Read-only** — nothing is written to the car by default.
   CH340 / CP210x need a small driver; **avoid Prolific PL2303** (flaky on modern macOS).
 - Python 3.9+ (macOS ships `python3`; otherwise `brew install python`).
 
-## 1. Check the cable is seen (before touching the car)
-Plug the cable into a **USB port** (not the car yet) and run:
+## 1. Cable pre-test — do this FIRST (no install needed)
+This one-minute check tells you if the cable will work on your Mac *before* you install anything.
+Just the cable + Terminal, **no car yet**:
+
 ```bash
-ls /dev/cu.usbserial-*      # or:  ls /dev/cu.*
+ls /dev/cu.* > /tmp/before.txt          # snapshot BEFORE plugging in
+# --- now plug the cable into a USB port, wait ~3 seconds ---
+ls /dev/cu.* > /tmp/after.txt ; diff /tmp/before.txt /tmp/after.txt
 ```
-You should see something like `/dev/cu.usbserial-1420`. **Note that path.**
-- Nothing shown → the driver isn't installed for your cable's chip, or the chip is Prolific.
-  Install the chip's macOS driver (FTDI/CH340/CP210x) and try another USB port.
-- If macOS blocks it: **System Settings → Privacy & Security → Allow**.
+- A **new line appears** (e.g. `> /dev/cu.usbserial-1420`, or `cu.wchusbserial…`, or
+  `cu.SLAB_USBtoUART…`) → **the driver works, you're good.** Note that path — you'll use it later.
+- **Nothing new** → the chip has no working driver yet. Identify the chip:
+  ```bash
+  system_profiler SPUSBDataType | grep -iE -A6 "serial|uart|ftdi|prolific|ch340|qinheng|cp210|silicon"
+  ```
+  The vendor tells you the chip → install that driver, then re-run the test:
+  | Vendor in the output | Chip | macOS |
+  |---|---|---|
+  | FTDI (0x0403) | FT232 | works driverless — if not seen, try another USB port/cable |
+  | QinHeng (0x1a86) | CH340 | install the CH340 macOS driver |
+  | Silicon Labs (0x10c4) | CP210x | install the CP210x VCP driver |
+  | Prolific (0x067b) | PL2303 | troublesome on modern macOS — driver often won't stick; consider a different cable |
+- If macOS blocks a driver: **System Settings → Privacy & Security → Allow**, then re-plug.
 - Always use `cu.*`, **never** `tty.*` (tty blocks on the Mac).
+
+**Only proceed to step 2 once a `cu.usbserial-*` (or cu.wch…/cu.SLAB…) device appears.**
 
 ## 2. Get the code and install
 ```bash
