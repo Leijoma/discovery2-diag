@@ -140,6 +140,31 @@ static const uint32_t SLABS_STILL_MS  = 60000;    // sample this often while sta
 static const float    SLABS_STILL_KMH = 5.0f;     // "stationary" threshold
 static const uint32_t SLABS_SETTLE_MS = 900;      // bus-silent gap after TD5 teardown before SLABS init
 
+// SLABS HOLD (fault-order test, references/test_plan.md T-23). The excursions above prove only that
+// SLABS refuses a NEW StartCommunication once the car has moved — so its CURRENT faults (21 47), the
+// "four amigos" that vanish at the next ignition cycle, have never been read while lit. Hold mode
+// drops TD5 logging entirely and keeps ONE SLABS session, opened at a standstill, alive through the
+// drive, logging every fault bit edge with a poll counter so the ORDER of onsets can be read back.
+// Load: one request per second (the session-killer was ~10 req/s — slabs_protocol.md), cycling
+// HOLD_PATTERN: 0 = 21 47 current faults, 1 = bare 3E keepalive, 2 = 21 43 wheel speeds / 21 11.
+static bool     slabsHold     = false;  // mode switch (persisted in NVS; /slabshold)
+static bool     holdUp        = false;  // a hold-mode SLABS session is currently established
+static uint32_t holdSince     = 0;      // millis() the current hold session came up
+static uint32_t holdLastTick  = 0;
+static uint32_t holdNextTry   = 0;      // next establish attempt (millis)
+static uint32_t holdSeq       = 0;      // 21 47 poll counter — orders events sharing a 1 s timestamp
+static uint32_t holdLostAfterS = 0;     // how long the last hold session survived before dying (s)
+static uint8_t  holdStep      = 0;
+static uint8_t  holdMiss      = 0;      // consecutive unanswered requests
+static uint8_t  holdWheelN    = 0;      // wheel-slot counter (every 8th slot reads 21 11 instead)
+static uint8_t  holdCur[16], holdLog[16];
+static bool     holdHaveCur   = false, holdHaveLog = false;
+static String   holdW43;                // last raw 21 43 (decoding belagt; scale + wheel order kandidat)
+static const uint8_t  HOLD_PATTERN[]  = { 0, 1, 0, 2 };  // current faults every 2 s; 3E + wheels every 4 s
+static const uint32_t HOLD_TICK_MS    = 1000;
+static const uint32_t HOLD_RETRY_MS   = 20000;  // retry establish this often after a loss / failed init
+static const uint8_t  HOLD_MISS_MAX   = 3;      // unanswered requests in a row → the session is gone
+
 // USB serial bridge (ESP-as-cable). One firmware, two roles: normally the node LOGS
 // autonomously; when a host tool (Python EspTransport, KKL-compatible line protocol)
 // sends a command over USB, the node hands it the shared K-line bus. K-line is a single-
@@ -390,6 +415,7 @@ static void nodeHeartbeat() {
                 ",uptime=" + String((millis() - bootMs) / 1000) +
                 ",wg=" + String(wgUp ? 1 : 0) +
                 ",session=" + String(sessionUp ? 1 : 0) +
+                ",hold=" + String(slabsHold ? (holdUp ? 2 : 1) : 0) +   // 0 off · 1 waiting · 2 SLABS held
                 ",reset=\"" + resetReasonStr() + "\"" +
                 ",points=" + String(pointsSent);
   long ts = epochNow();
@@ -439,12 +465,111 @@ static void slabsExcursion() {
   quietUntil = millis() + 600; lastFuelMs = 0;
 }
 
+// ---------------- SLABS hold ----------------
+// Post one hold-mode point; spill it if the uplink is down — the fault ORDER is the whole point of
+// the test, so an onset during a hotspot dropout must not be lost.
+static void holdPost(String line) {
+  long ts = epochNow();
+  if (ts) { line += " "; line += String(ts); }
+  if (influxPost(line) != 204) spillLine(line);
+}
+// Forget the hold session (the link was released elsewhere: mute / bridge / scan / mode switch).
+// Deliberately posts nothing — only a session that dies on its own is a test result.
+static void holdDrop() { holdUp = false; holdHaveCur = false; holdHaveLog = false; }
+// Emit one `slabs_fault` point per bit that changed vs the previous block. The first block of a
+// session is the baseline: bits already set are emitted with base=1 (present at connect, onset
+// unknown) so they are not mistaken for onsets observed live.
+static void holdEdges(const char *block, const uint8_t *now, uint8_t *prev, bool &have) {
+  for (int i = 0; i < 16; i++) {
+    uint8_t d = have ? (uint8_t)(now[i] ^ prev[i]) : now[i];
+    for (int b = 0; b < 8; b++) {
+      if (!(d & (1 << b))) continue;
+      holdPost(String("slabs_fault,vehicle=") + LOG_VEHICLE + ",block=" + block +
+               ",bit=" + String(i) + "." + String(b) +
+               " state=" + String((now[i] >> b) & 1) + "i,seq=" + String(holdSeq) +
+               "i,base=" + String(have ? 0 : 1) + "i");
+    }
+    prev[i] = now[i];
+  }
+  have = true;
+}
+// Session status: alive + how long it has survived + the latest raw wheel speeds / current block.
+static void holdStatus(int alive) {
+  String line = String("slabs_hold,vehicle=") + LOG_VEHICLE + " alive=" + String(alive) +
+                "i,up_s=" + String((millis() - holdSince) / 1000) + "i,seq=" + String(holdSeq) + "i";
+  if (holdW43.length())   line += ",w43=\"" + holdW43 + "\"";
+  if (slabsFcur.length()) line += ",fcur=\"" + slabsFcur + "\"";
+  holdPost(line);
+}
+static void holdEstablish() {
+  endSession();                                   // TD5 session / any stale link off the bus (20 + 82)
+  sessionUp = false; lastFuelMs = 0;
+  busQuiet(SLABS_SETTLE_MS);
+  bool ok = false;
+  for (int i = 0; i < 3 && !ok; i++) {            // same retry as the excursion (7F 81 10 on a lingering link)
+    if (i) { stopComm(); busQuiet(SLABS_SETTLE_MS); }
+    ok = slabsEstablish();
+  }
+  if (!ok) {
+    stopComm();
+    holdNextTry = millis() + HOLD_RETRY_MS;
+    // Expected once the car has moved (the 2026-08-29 finding) — logged so the timeline shows it.
+    holdPost(String("slabs_hold,vehicle=") + LOG_VEHICLE + " alive=0i,estab=0i,sb=\"" + klineLastBurst + "\"");
+    return;
+  }
+  holdUp = true; holdSince = millis(); holdLastTick = 0;
+  holdMiss = 0; holdStep = 0; holdHaveCur = false; holdHaveLog = false;
+  holdWheelN = 7;                                 // first wheel slot reads 21 11 → logged baseline early
+  holdStatus(1);
+}
+static void holdTick() {
+  uint32_t now = millis();
+  if (!holdUp) {
+    if (now < BOOT_QUIET_MS || (int32_t)(now - holdNextTry) < 0) return;
+    holdEstablish();
+    return;
+  }
+  if (now - holdLastTick < HOLD_TICK_MS) return;
+  holdLastTick = now;
+  uint8_t kind = HOLD_PATTERN[holdStep];
+  holdStep = (holdStep + 1) % sizeof HOLD_PATTERN;
+  uint8_t b[80];
+  int n;
+  bool ok;
+  if (kind == 1) {
+    ok = kwpRequest(0x3E, nullptr, 0, b, sizeof b) >= 0;     // BARE 3E — `3E 01` kills SLABS' session
+  } else if (kind == 0) {
+    holdSeq++;
+    n = td5ReadLid(0x47, b, sizeof b);                       // current faults
+    ok = n >= 0;
+    if (n >= 16) { slabsFcur = toHex(b, 16); holdEdges("cur", b, holdCur, holdHaveCur); }
+  } else if (++holdWheelN % 8 == 0) {
+    n = td5ReadLid(0x11, b, sizeof b);                       // logged faults (~every 32 s)
+    ok = n >= 0;
+    if (n >= 16) { slabsFlog = toHex(b, 16); holdEdges("log", b, holdLog, holdHaveLog); }
+  } else {
+    n = td5ReadLid(0x43, b, sizeof b);                       // wheel speeds, raw
+    ok = n >= 0;
+    if (n > 0) holdW43 = toHex(b, n);
+    if (holdWheelN % 3 == 1) holdStatus(1);                  // survival heartbeat ~every 12 s
+  }
+  if (ok) { holdMiss = 0; return; }
+  if (++holdMiss < HOLD_MISS_MAX) return;
+  holdLostAfterS = (now - holdSince) / 1000;
+  holdStatus(0);                                             // the moment it died + how long it lived
+  Serial.printf("HOLD: SLABS session lost after %lus\n", (unsigned long)holdLostAfterS);
+  stopComm();
+  holdDrop();
+  holdNextTry = millis() + HOLD_RETRY_MS;
+}
+
 static const uint32_t RAW_FLUSH_MS = 3000;      // ship raw batches every ~3 s
 static void logTick() {
   uint32_t now = millis();
   if (now - lastBeat > BEAT_INTERVAL_MS) { lastBeat = now; nodeHeartbeat(); }
   if (now - lastSpillFlush > SPILL_FLUSH_MS) { lastSpillFlush = now; flushSpill(); }  // drain offline backlog
   if (rawOn && now - lastRawFlush > RAW_FLUSH_MS) { lastRawFlush = now; rawFlush(); }
+  if (slabsHold) { holdTick(); return; }        // hold mode owns the bus: no TD5, no excursions
   if (now - lastCycle < LOG_INTERVAL_MS) return;
   lastCycle = now;
   if (!sessionUp) {
@@ -591,6 +716,10 @@ static void handleData() {
     ",\"bridge\":" + String(bridgeMode ? 1 : 0) +
     ",\"ign_cycle\":" + String(needIgnCycle ? 1 : 0) +
     ",\"slabs_poll\":" + String(slabsPoll ? 1 : 0) +
+    ",\"slabs_hold\":" + String(slabsHold ? 1 : 0) +
+    ",\"hold_up\":" + String(holdUp ? 1 : 0) +
+    ",\"hold_up_s\":" + String(holdUp ? (millis() - holdSince) / 1000 : 0) +
+    ",\"hold_lost_s\":" + String(holdLostAfterS) +
     ",\"rssi\":" + String(WiFi.RSSI()) +
     ",\"faults\":\"" + faultsHex + "\"" +
     ",\"slabs_flog\":\"" + slabsFlog + "\"" +
@@ -602,7 +731,7 @@ static void handleData() {
 static void handleLive() { server.send(200, "text/html", LIVE_HTML); }
 static void handleScan() {
   // Pause logging around the manual scan so the two don't fight over the bus.
-  bool was = logEnabled; logEnabled = false; sessionUp = false;
+  bool was = logEnabled; logEnabled = false; sessionUp = false; holdDrop();
   String out = kwpStartComm(0x13, "TD5") + "\n" + kwpStartComm(0x29, "SLABS") + "\n";
   stopComm();                    // RELEASE the link /scan just opened (esp. SLABS' C1) — a link left
                                  // open here makes the logger's next TD5 StartComm get 7F 81 10.
@@ -617,11 +746,12 @@ static void handleLog() {
     if (!logEnabled) {
       // MUTE: free the shared bus for another tool. Close cleanly (20+82) so the ECU doesn't
       // stay stuck, then stay off K-line (logTick won't run while logEnabled is false).
-      sessionUp = false; lastFuelMs = 0;
-      endSession(); recoveryCleared = true;
+      sessionUp = false; lastFuelMs = 0; holdDrop();
+      endSession(); recoveryCleared = true;     // 82 also releases a held SLABS link
     } else {
       // RESUME: fresh recovery (endSession → silence → init) — establishes as soon as it clears.
       quietUntil = 0; recoveryCleared = false; estabTries = 0; needIgnCycle = false;
+      holdNextTry = 0;                          // hold mode: re-establish SLABS right away
     }
   }
   server.send(200, "application/json",
@@ -644,6 +774,7 @@ static void bridgeEnter() {
   if (!bridgeMode) {
     bridgeMode = true;
     sessionUp = false; lastFuelMs = 0;     // drop our own logging session...
+    holdDrop();                            // ...or the held SLABS one (endSession's 82 releases it)
     endSession(); recoveryCleared = true;  // ...close it cleanly (20+82) so the host inits clean
   }
   bridgeIdleUntil = millis() + BRIDGE_IDLE_MS;
@@ -651,6 +782,7 @@ static void bridgeEnter() {
 static void bridgeExit() {
   bridgeMode = false; bridgeSticky = false;
   quietUntil = 0; recoveryCleared = false;     // fresh recovery (endSession → silence → init), then relog
+  holdNextTry = 0;
   estabTries = 0; needIgnCycle = false;
 }
 static int bridgeNib(char c) {
@@ -730,6 +862,25 @@ static void handleSlabsPoll() {
   }
   server.send(200, "application/json", "{\"slabs_poll\":" + String(slabsPoll ? 1 : 0) + "}");
 }
+// SLABS hold on/off. ON: the next logTick tears TD5 down and holds SLABS (establish only succeeds
+// at a standstill after an ignition cycle). OFF: release SLABS and run the normal TD5 recovery.
+static void handleSlabsHold() {
+  if (server.hasArg("on")) {
+    bool on = server.arg("on") != "0";
+    if (on != slabsHold) {
+      slabsHold = on;
+      if (on) { sessionUp = false; lastFuelMs = 0; holdDrop(); holdNextTry = 0; }
+      else {
+        if (holdUp) stopComm();
+        holdDrop();
+        sessionUp = false; quietUntil = 0; recoveryCleared = false; estabTries = 0; needIgnCycle = false;
+      }
+      prefs.putBool("hold", slabsHold);      // persist: survives a reboot, so every drive is a run
+    }
+  }
+  server.send(200, "application/json",
+    "{\"slabs_hold\":" + String(slabsHold ? 1 : 0) + ",\"hold_up\":" + String(holdUp ? 1 : 0) + "}");
+}
 
 void setup() {
   Serial.begin(115200); Serial.setTimeout(80); delay(300); bootMs = millis();
@@ -739,7 +890,9 @@ void setup() {
   prefs.begin("node", false);                // NVS: restore persisted settings…
   slabsPoll = prefs.getBool("slabs", true);  // …default ON (excursion is standstill-only + read-only,
                                              // safe; captures SLABS heights/ABS-V/faults at every stop)
-  Serial.printf("Boot reason: %s · slabs_poll %s\n", resetReasonStr(), slabsPoll ? "ON" : "off");
+  slabsHold = prefs.getBool("hold", false);  // SLABS hold (fault-order test) — off unless chosen
+  Serial.printf("Boot reason: %s · slabs_poll %s · slabs_hold %s\n", resetReasonStr(),
+                slabsPoll ? "ON" : "off", slabsHold ? "ON" : "off");
   WiFi.mode(WIFI_STA); WiFi.setHostname(OTA_HOSTNAME); WiFi.setAutoReconnect(true);
   wifiConnect();
   wgStart();                                 // fixed WG IP, reachable via the tunnel
@@ -748,7 +901,7 @@ void setup() {
   ArduinoOTA.setPassword(OTA_PASSWORD);
   // Suspend K-line/logging while an OTA image is uploading — a mid-flash bus read
   // would only steal cycles from the write.
-  ArduinoOTA.onStart([]() { logEnabled = false; sessionUp = false; });
+  ArduinoOTA.onStart([]() { logEnabled = false; sessionUp = false; holdDrop(); });
   ArduinoOTA.begin();                       // also starts mDNS as OTA_HOSTNAME
   MDNS.addService("http", "tcp", 80);       // advertise the web server (shows up in Fing/Bonjour)
 
@@ -761,6 +914,7 @@ void setup() {
   server.on("/log", handleLog);
   server.on("/bridge", handleBridge);       // put the node in USB cable mode (or auto on a USB cmd)
   server.on("/slabs", handleSlabsPoll);     // toggle the sparse SLABS excursion
+  server.on("/slabshold", handleSlabsHold); // SLABS hold mode (fault-order test, T-23)
   server.begin();
 
   logEnabled = influxConfigured();          // auto-start logging if a token is set

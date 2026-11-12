@@ -6,7 +6,7 @@ After the session, route each result to its permanent home (table below), then m
 item down to **Resolved** with the date and the outcome. Nothing else in the repo is a
 to-do list for car work — `TODO.md` covers code and infrastructure only.
 
-Updated 2026-08-25.
+Updated 2026-11-12.
 
 ## How to use it
 
@@ -164,6 +164,56 @@ setting, see which raw byte moves.
 handbrake, engine running, SLABS connected), spin it by hand, see which field moves.
 Repeat for a second wheel → then the byte order is proven. Without jacking, it stays a
 candidate — do not promote it on plausibility.
+
+#### T-23 `[idle]` `[drive]` — SLABS hold: does a held session survive driving? (fault onset order)
+**Why.** The owner's "four amigos" (ABS/TC/HDC + red brake lamp) light intermittently on most
+drives and clear at the next ignition cycle. The logged block `21 11` has read `020` + `027` on
+every one of 296 reads since 2026-08-31 (Influx `slabs.flog`) and `21 47` (current) has **never**
+been non-zero. That is because we only reach SLABS after an ignition cycle at a standstill, when
+the lamps have already cleared. The 2026-08-29 finding (Resolved) used **excursions**, which open
+a *new* StartCommunication every time. It proves SLABS refuses new connections once the car has
+moved. It does **not** test whether a session opened at a standstill and kept alive survives.
+What we want is the **order** the SLABS faults appear in (does `020` trigger `027`, or the
+reverse, or are they independent?).
+
+**Procedure.** There are two ways to run it. Both use the same loop and cadence, one request/s:
+`21 47` every 2 s, bare `3E` and `21 43` every 4 s, `21 11` about every 32 s. Neither logs engine
+data during the run.
+- **Mac (no flashing needed, preferred for the first run):**
+  `PYTHONPATH=src python3 tools/slabs_hold.py auto` with the KKL cable. The ESP node must be
+  muted or unplugged first. Or use `... /dev/cu.<esp> --esp` through the node's USB port, where
+  the node yields the bus on its own. Prints edges live, writes `logs/slabs_hold-*.csv`, and
+  **Enter** stamps a lamp mark (type e.g. `4 braking` first). The loop is
+  `d2diag.slabs.hold`, unit-tested in `tests/test_slabs_hold.py`.
+- **ESP node:** Settings → **SLABS hold: ON** (`/slabshold?on=1`). It logs to Influx. The setting
+  is persisted, so every drive is a run until it is switched off. The firmware has **not been
+  compiled yet** (no toolchain on the dev Mac 2026-11-12), so compile and OTA it before relying
+  on it.
+1. Ignition cycle, standstill, engine running. Wait for "SLABS held".
+2. **Stand still for 2 min first.** If the session dies here, the cadence is the problem, not the
+   speed. Stop and fix that before driving.
+3. Drive normally. Note the time and the situation (braking, bump, creeping) when the amigos light,
+   and whether it is 3 or 4 lamps.
+4. Read back, either from the Mac CSV (`kind`=up/down/edge/status/mark, the same fields) or from
+   Influx: `slabs_hold` (`alive`, `up_s`, raw `w43`) and `slabs_fault` (`block`=cur/log, `bit`,
+   `state`, `seq` orders edges within one second, `base`=1 means the bit was already set at
+   connect).
+
+**Decision rule (set before the test).**
+- **Session dies when the car starts to move** (`alive=0` with `up_s` matching the moment you
+  pulled away): proven that SLABS also closes an open session in motion. Then the onset order is
+  out of reach over K-line. Fall back to clear-and-drive (B-011 in `../Discovery 2/02-backlog.md`:
+  `14 FF FF` at a standstill, drive, ignition cycle, read `21 11`). That gives which codes per
+  drive, not their order.
+- **Session survives and `21 47` gets bits when the lamps light:** current faults captured live.
+  The `slabs_fault` `cur` edges, ordered by `seq`, give the onset order. Check it against the
+  lamp count (3 = `020` alone, 4 = `027` involved). Bits other than `3.4`/`10.4` are new anchor
+  points for `src/d2diag/slabs/faultmap.json`.
+- **Session survives but `21 47` stays zero while the lamps are lit:** `21 47` is not where the
+  lamp-driving faults live. Keep the raw capture and look at the other SLABS LIDs before
+  concluding anything.
+- **Bonus, any surviving run:** `w43` in motion gives the first moving wheel-speed data (scale +
+  wheel order, T-14) and shows whether the FR wheel drops out at a `020` onset.
 
 #### T-15 `[idle]` — ABS bleed commands, first live run
 ⚠️ **Brake system. Only during an actual brake bleed.** `abs_power_bleed(True/False)` and

@@ -28,6 +28,11 @@ real traffic**, not guessed.
   the ABS is active, not our polling or a stale link. **Consequence:** live ABS-sensor data *while
   driving* is unreachable over K-line — only an analog tap on the sensor wires can get that. The
   node's SLABS excursion is therefore gated to `speed < 5 km/h`.
+  **Scope of that proof (2026-11-12):** every sample was a *new* StartCommunication. That shows
+  SLABS rejects new connections in motion, but **not** that it drops a session that was opened
+  at a standstill and kept alive. That is open as `test_plan.md` T-23 (the node's **SLABS hold**
+  mode). Until it has been run, "live data while driving is unreachable" means "no new
+  connection while driving".
 
 ### ⚠️ SLABS must be polled LIGHTLY (proven 2026-08-07)
 The reference tool ran ~**1 Hz keepalive + occasional reads** — not continuous

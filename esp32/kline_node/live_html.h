@@ -7,7 +7,8 @@
 //   • live   — the driver's grid (default on startup)
 //   • Muted  — a full-screen "Muted" with Unmute        (logging off = K-line bus freed)
 //   • Cable  — a full-screen "Cable mode" with Back to live (node is a USB K-line cable)
-// Settings (gear) holds exactly two buttons: Mute and Cable mode.
+//   • Hold   — "SLABS hold": SLABS session state + current/logged SLABS faults (no engine data)
+// Settings (gear): Mute, Cable mode, SLABS poll, SLABS hold.
 #pragma once
 #include <Arduino.h>
 
@@ -73,7 +74,7 @@ const $=s=>document.querySelector(s);
 // Fault codes: the ESP reports RAW blocks; the dictionaries live in the repo and are fetched from
 // GitHub (the phone hotspot has data) + cached in localStorage for offline use. TD5 (21 3B) and
 // SLABS (logged 21 11 / current 21 47).
-let FMAP=null, SMAP=null, FAULTS_NOW=[], SLABSPOLL=0;
+let FMAP=null, SMAP=null, FAULTS_NOW=[], SLABSPOLL=0, SLABSHOLD=0;
 const RAW='https://raw.githubusercontent.com/Leijoma/discovery2-diag/main/src/d2diag/';
 async function loadMap(url,key){
  try{const r=await fetch(url);if(r.ok){const j=await r.json();localStorage.setItem(key,JSON.stringify(j));return j;}}catch(e){}
@@ -140,10 +141,23 @@ function openSettings(){
   <button class=btn onclick=mute()>Mute</button>
   <button class=btn onclick=cable()>Cable mode</button>
   <button class=btn onclick=toggleSlabs()>SLABS poll: ${SLABSPOLL?'ON':'off'}</button>
-  <div class=foot>Mute frees the K-line bus. Cable mode = USB K-line cable for the diagnostic tool. SLABS poll briefly samples SLABS every ~30 s (pauses live data a couple of seconds).</div>
+  <button class=btn onclick=toggleHold()>SLABS hold: ${SLABSHOLD?'ON':'off'}</button>
+  <div class=foot>Mute frees the K-line bus. Cable mode = USB K-line cable for the diagnostic tool. SLABS poll briefly samples SLABS at a standstill (pauses live data a couple of seconds). SLABS hold = fault-order test: NO engine data; holds one SLABS session through the drive and logs every fault onset. Switch it on at a standstill right after an ignition cycle.</div>
   <button class=btn style=opacity:.7 onclick=closeSettings()>Close</button></div></div>`;
 }
 async function toggleSlabs(){closeSettings();await hit('/slabs?on='+(SLABSPOLL?0:1));setTimeout(tick,200);}
+async function toggleHold(){closeSettings();await hit('/slabshold?on='+(SLABSHOLD?0:1));setTimeout(tick,200);}
+// SLABS hold view: session state + the current/logged SLABS faults, decoded via the SLABS faultmap.
+function renderHold(d){
+ const cur=decodeFaults(d.slabs_fcur,SMAP), log=decodeFaults(d.slabs_flog,SMAP);
+ const st=d.hold_up?`SLABS held · ${d.hold_up_s} s`
+  :`Waiting for SLABS${d.hold_lost_s?` · last session lived ${d.hold_lost_s} s`:''} — it only accepts a connection at a standstill after an ignition cycle`;
+ const li=a=>a.length?a.map(t=>`<div>${t}</div>`).join(''):'<div style=opacity:.6>none</div>';
+ $('#main').innerHTML=`<div class=state><div class=big style="font-size:clamp(26px,7vw,42px)">SLABS hold</div>
+  <div class=sub>${st}</div>
+  <div class=sub><b>Current</b>${li(cur)}<b>Logged</b>${li(log)}</div>
+  <button class="btn accent" onclick=toggleHold()>Back to engine logging</button></div>`;
+}
 function closeSettings(){$('#sheet').innerHTML='';}
 const hit=u=>fetch(u).catch(()=>{});
 // A control action shows an INSTANT transition screen (spinner), fires the request, and
@@ -161,12 +175,13 @@ function mute(){act('mute')} function unmute(){act('unmute')} function cable(){a
 function header(d){
  const live=d.session&&d.age_ms<3000;
  $('#dot').style.background=pending?'var(--blue)':(d.bridge?'var(--blue)':(!d.logging?'var(--yellow)':(live?'var(--green)':'var(--yellow)')));
- $('#sub').textContent=pending?ACT[pending].lbl:(d.bridge?'cable mode':(!d.logging?'muted':((d.session?'live · '+(d.age_ms/1000).toFixed(0)+'s':'no session')+' · '+d.rssi+' dBm')));
+ if(d.slabs_hold&&!pending&&!d.bridge&&d.logging) $('#dot').style.background=d.hold_up?'var(--green)':'var(--yellow)';
+ $('#sub').textContent=pending?ACT[pending].lbl:(d.bridge?'cable mode':(!d.logging?'muted':(d.slabs_hold?('SLABS hold · '+(d.hold_up?'held '+d.hold_up_s+'s':'waiting')+' · '+d.rssi+' dBm'):((d.session?'live · '+(d.age_ms/1000).toFixed(0)+'s':'no session')+' · '+d.rssi+' dBm'))));
 }
 async function tick(){
  let d;try{d=await(await fetch('/data')).json();}catch(e){$('#dot').style.background='var(--red)';$('#sub').textContent=pending?ACT[pending].lbl:'no connection';return;}
  header(d);
- SLABSPOLL=d.slabs_poll||0;
+ SLABSPOLL=d.slabs_poll||0; SLABSHOLD=d.slabs_hold||0;
  FAULTS_NOW=[...decodeFaults(d.faults,FMAP).map(t=>({m:'TD5',t})),
              ...decodeFaults(d.slabs_flog,SMAP).map(t=>({m:'SLABS log',t})),
              ...decodeFaults(d.slabs_fcur,SMAP).map(t=>({m:'SLABS cur',t}))];
@@ -180,6 +195,7 @@ async function tick(){
  }
  if(d.bridge) return renderState('Cable mode','The node is acting as a USB K-line cable for the diagnostic tool. Live logging is paused.','backToLive()','Back to live mode');
  if(!d.logging) return renderState('Muted','Polling is stopped and the K-line bus is free for another tool.','unmute()','Unmute');
+ if(d.slabs_hold) return renderHold(d);
  if(d.ign_cycle){$('#main').innerHTML=`<div class=state><div class="big pulse">Cycle the ignition</div><div class=sub>The ECU is holding the previous link open and won't accept a new one. Turn the key off, then back on — the node reconnects on its own. (Bus silence and reboot don't clear it on this car.)</div></div>`;return;}
  renderLive(d);
 }
