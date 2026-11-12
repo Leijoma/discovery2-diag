@@ -33,6 +33,11 @@ real traffic**, not guessed.
   at a standstill and kept alive. That is open as `test_plan.md` T-23 (the node's **SLABS hold**
   mode). Until it has been run, "live data while driving is unreachable" means "no new
   connection while driving".
+  **First hold runs (Mac, 2026-11-12, T-23):** a held session **lights a set of warning lamps**
+  while it is open (the owner saw them come on when the session opened, while `21 47` stayed
+  all-zero), and both the lamps and the session end a few seconds after pulling away (down
+  ~8–11 s after the last good read, wheels already turning). Lamps seen during a diagnostic
+  session are therefore not fault indications.
 
 ### ⚠️ SLABS must be polled LIGHTLY (proven 2026-08-07)
 The reference tool ran ~**1 Hz keepalive + occasional reads** — not continuous

@@ -215,6 +215,22 @@ data during the run.
 - **Bonus, any surviving run:** `w43` in motion gives the first moving wheel-speed data (scale +
   wheel order, T-14) and shows whether the FR wheel drops out at a `020` onset.
 
+**Run log, Mac + KKL, 2026-11-12 (still open: no fault was provoked while driving).**
+`logs/slabs_hold-20261112-*.csv`, five starts.
+- **The held session lights the lamps.** The owner saw a "many lamps" combination come on when
+  the session opened and go off a few seconds after pulling away. So it is our diagnostic session
+  that lights them, not a fault: `21 47` read all-zero on every poll while they were lit. Don't
+  take lamps seen during a hold run as fault onsets.
+- **The session dies in motion.** 15:05:34: alive at 47.5 s with the wheels turning (`21 43`
+  `eb 01 d1 01 ea 01 cc 01`, against `7c 00` ×4 at a standstill), then 3 empty `21` replies, down
+  at 55.5 s. 15:08:51: last standstill read at 23.4 s, down at 34.5 s, consistent with pulling
+  away. Lamps off and session dead come together, which fits SLABS ending the diagnostic session
+  above a speed threshold. That is the first decision-rule branch, so far unconfirmed on a drive
+  where the amigos actually lit. Two later starts (15:08:18, 15:08:41) got no connection at all
+  (moved without an ignition cycle, as expected).
+- **Next:** one more run where the amigos light *during* the drive. If the session is already
+  dead by then, close T-23 on branch 1 and rely on read-and-clear per start.
+
 #### T-15 `[idle]` — ABS bleed commands, first live run
 ⚠️ **Brake system. Only during an actual brake bleed.** `abs_power_bleed(True/False)` and
 `abs_module_bleed()` are proven from the sniff but have never been run from our code.
