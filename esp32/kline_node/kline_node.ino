@@ -139,6 +139,15 @@ static const uint32_t SLABS_STILL_MS  = 60000;    // sample this often while sta
                                                   // visibly blinked the dash each excursion — RDL016)
 static const float    SLABS_STILL_KMH = 5.0f;     // "stationary" threshold
 static const uint32_t SLABS_SETTLE_MS = 900;      // bus-silent gap after TD5 teardown before SLABS init
+// Read-and-clear at start (B-011 in ../Discovery 2/02-backlog.md). The intermittent "amigos" clear
+// at every ignition cycle, but they LATCH into the logged block 21 11, which has read the same
+// 020 + 027 since 2026-08 because it was never cleared. Clearing it once per ignition cycle makes
+// each start's 21 11 read show exactly what the PREVIOUS drive logged (020 alone = 3 lamps, 027 =
+// 4 lamps). Never erases what isn't stored: the pre-clear block must reach Influx (204) first.
+// ⚠ A workshop will then only see the last drive, and the per-code counters are lost.
+static bool     slabsClear       = true;   // persisted ("sclear"); /slabsclear
+static bool     slabsClearedBoot = false;  // cleared in THIS ignition cycle (node power = KL15)
+static uint8_t  slabsClearTries  = 0;      // clear attempts this cycle (capped, see slabsExcursion)
 
 // SLABS HOLD (fault-order test, references/test_plan.md T-23). The excursions above prove only that
 // SLABS refuses a NEW StartCommunication once the car has moved — so its CURRENT faults (21 47), the
@@ -454,6 +463,34 @@ static void slabsExcursion() {
       int c = 0; for (int i = 0; i < n; i++) for (int k = 0; k < 8; k++) if (b[i] & (1 << k)) c++;
       slabsFlog = toHex(b, n);                        // also expose to /live for browser decode
       line += ",flog=\"" + slabsFlog + "\",nflog=" + String(c) + "i";
+      // Read-and-clear, once per ignition cycle (see slabsClear). Store first, then erase.
+      if (n >= 16 && slabsClear && !slabsClearedBoot && slabsClearTries < 3) {
+        long ts = epochNow();
+        String pre = String("slabs_clear,vehicle=") + LOG_VEHICLE + " flog_before=\"" +
+                     toHex(b, 16) + "\",nflog_before=" + String(c) + "i";
+        if (ts) { pre += " "; pre += String(ts); }
+        if (influxPost(pre) == 204) {                 // stored → safe to erase
+          slabsClearTries++;
+          bool ack = slabsClearFaults();
+          uint8_t a[80];
+          int m = td5ReadLid(0x11, a, sizeof a);       // verify: should now be empty
+          int c2 = -1;
+          if (m >= 16) {
+            c2 = 0;
+            for (int i = 0; i < 16; i++) for (int k = 0; k < 8; k++) if (a[i] & (1 << k)) c2++;
+            slabsFlog = toHex(a, 16);
+          }
+          // Bits back right after the clear = a fault SLABS sets at power-up (static, not
+          // intermittent): worth knowing on its own.
+          String post = String("slabs_clear,vehicle=") + LOG_VEHICLE + " ack=" + String(ack ? 1 : 0) +
+                        "i,nflog_after=" + String(c2) + "i";
+          if (m >= 16) post += ",flog_after=\"" + slabsFlog + "\"";
+          if (ts) { post += " "; post += String(ts); }   // same timestamp → merges with `pre`
+          if (influxPost(post) != 204) spillLine(post);
+          if (ack || c2 == 0) slabsClearedBoot = true;  // else retry at the next standstill sample
+          Serial.printf("SLABS: logged faults cleared (ack %d, after %d bits)\n", ack ? 1 : 0, c2);
+        }
+      }
     }
     n = td5ReadLid(0x47, b, sizeof b);
     if (n > 0) { slabsFcur = toHex(b, n); line += ",fcur=\"" + slabsFcur + "\""; }  // current
@@ -716,6 +753,8 @@ static void handleData() {
     ",\"bridge\":" + String(bridgeMode ? 1 : 0) +
     ",\"ign_cycle\":" + String(needIgnCycle ? 1 : 0) +
     ",\"slabs_poll\":" + String(slabsPoll ? 1 : 0) +
+    ",\"slabs_clear\":" + String(slabsClear ? 1 : 0) +
+    ",\"slabs_cleared\":" + String(slabsClearedBoot ? 1 : 0) +
     ",\"slabs_hold\":" + String(slabsHold ? 1 : 0) +
     ",\"hold_up\":" + String(holdUp ? 1 : 0) +
     ",\"hold_up_s\":" + String(holdUp ? (millis() - holdSince) / 1000 : 0) +
@@ -862,6 +901,16 @@ static void handleSlabsPoll() {
   }
   server.send(200, "application/json", "{\"slabs_poll\":" + String(slabsPoll ? 1 : 0) + "}");
 }
+// Read-and-clear of SLABS' logged faults at start, on/off (persisted). Switch OFF before a
+// workshop visit if they should see the history.
+static void handleSlabsClear() {
+  if (server.hasArg("on")) {
+    slabsClear = server.arg("on") != "0";
+    prefs.putBool("sclear", slabsClear);
+  }
+  server.send(200, "application/json", "{\"slabs_clear\":" + String(slabsClear ? 1 : 0) +
+              ",\"cleared\":" + String(slabsClearedBoot ? 1 : 0) + "}");
+}
 // SLABS hold on/off. ON: the next logTick tears TD5 down and holds SLABS (establish only succeeds
 // at a standstill after an ignition cycle). OFF: release SLABS and run the normal TD5 recovery.
 static void handleSlabsHold() {
@@ -891,6 +940,7 @@ void setup() {
   slabsPoll = prefs.getBool("slabs", true);  // …default ON (excursion is standstill-only + read-only,
                                              // safe; captures SLABS heights/ABS-V/faults at every stop)
   slabsHold = prefs.getBool("hold", false);  // SLABS hold (fault-order test) — off unless chosen
+  slabsClear = prefs.getBool("sclear", true); // read-and-clear SLABS logged faults once per start
   Serial.printf("Boot reason: %s · slabs_poll %s · slabs_hold %s\n", resetReasonStr(),
                 slabsPoll ? "ON" : "off", slabsHold ? "ON" : "off");
   WiFi.mode(WIFI_STA); WiFi.setHostname(OTA_HOSTNAME); WiFi.setAutoReconnect(true);
@@ -915,6 +965,7 @@ void setup() {
   server.on("/bridge", handleBridge);       // put the node in USB cable mode (or auto on a USB cmd)
   server.on("/slabs", handleSlabsPoll);     // toggle the sparse SLABS excursion
   server.on("/slabshold", handleSlabsHold); // SLABS hold mode (fault-order test, T-23)
+  server.on("/slabsclear", handleSlabsClear); // read-and-clear SLABS logged faults at start
   server.begin();
 
   logEnabled = influxConfigured();          // auto-start logging if a token is set

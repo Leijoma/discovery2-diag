@@ -51,6 +51,21 @@ open"). So on mute the node sends **StopCommunication `82`** once (`stopComm()` 
 the Silence-bus toggle does (`handleLog()` in `kline_node.ino`); on resume it re-clears
 and re-establishes.
 
+### SLABS read-and-clear at start
+
+On by default (Settings → **SLABS clear at start**, `/slabsclear?on=1|0`, persisted). At the
+first successful standstill SLABS sample of each ignition cycle, the node:
+
+1. posts the logged block `21 11` to Influx as `slabs_clear.flog_before`, and goes on only if
+   the server answers 204 (never erase what isn't stored; it retries at the next sample if the
+   uplink isn't up yet);
+2. sends ClearFaults `14 FF FF` and waits for the late `54` (~300 ms, EEPROM write);
+3. re-reads `21 11` → `slabs_clear.ack`, `flog_after`, `nflog_after`.
+
+So each start records what the **previous** drive latched (B-011: `020` alone = 3 amigos, `027`
+= 4). It is the only write the node makes to SLABS. Switch it **off before a workshop visit**,
+because a cleared log shows them only the last drive, and the per-code counters are gone.
+
 ### SLABS hold (fault-order test)
 
 Settings → **SLABS hold** (`/slabshold?on=1|0`, persisted in NVS) switches the node from engine

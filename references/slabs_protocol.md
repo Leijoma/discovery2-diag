@@ -310,7 +310,12 @@ logs raw TX/RX.
   in byte 3 (`0x10`) + byte 10 (`0x10`) = **two faults = baseline's `020` RF sensor +
   `027` shuttle valve**. After clear: all `00`. ⇒ `21 11` IS the logged-fault block.
 - **`21 47`** → 16-byte block = **CURRENT faults** (was `00` = none current now).
-- **`14 FF FF`** → `54` = **ClearFaults** (safe write; reset `21 11`).
+- **`14 FF FF`** → `54` = **ClearFaults** (safe write; reset `21 11`). The `54` comes ~300 ms
+  late (EEPROM write), so read with a wide window. Since 2026-11-12 the ESP node does
+  **read-and-clear once per ignition cycle** (`slabsClearFaults()`, Settings → "SLABS clear at
+  start"). It stores the block in Influx first (`slabs_clear.flog_before`, must get 204), then
+  clears, then re-reads (`flog_after`, `ack`). Each start then shows what the previous drive
+  latched.
 - Byte↔number mapping: 2 bits (byte3.bit4, byte10.bit4) = faults 020+027. More
   anchor points come from the "induce a known fault" technique.
 

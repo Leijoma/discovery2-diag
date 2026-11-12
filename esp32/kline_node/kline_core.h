@@ -290,6 +290,23 @@ static bool slabsEstablish() {
   return findSeq(burst, got, 0xC1, 0x57) >= 0;
 }
 
+// SLABS ClearDiagnosticInformation (14 FF FF → 54): wipes the LOGGED fault block 21 11. The only
+// write the node does to SLABS (documented safe in slabs_protocol.md). Own read window because the
+// ack is DELAYED ~300 ms while SLABS writes its EEPROM (sniff: TX @72560 → RX @72856, the same
+// reason Python clear_faults() reads with gap 0.5 s / overall 2.5 s). kwpRequest's 250 ms window
+// would return only our echo. Returns true if the 54 ack was seen; the caller re-reads 21 11 to verify.
+static bool slabsClearFaults() {
+  uint8_t req[5] = { 0x03, 0x14, 0xFF, 0xFF, 0 };
+  req[4] = checksum(req, 4);                   // 03 14 FF FF 15 — byte-identical to the capture
+  while (Serial2.available()) Serial2.read();
+  if (klineRawTap) klineRawTap("TX", req, 5);
+  Serial2.write(req, 5); Serial2.flush();
+  uint8_t burst[32];
+  size_t got = readBurst(burst, sizeof burst, 2500, 500);
+  if (klineRawTap) klineRawTap("RX", burst, got);
+  return findByte(burst, got, 0x54) >= 0 && findSeq(burst, got, 0x7F, 0x14) < 0;
+}
+
 // One module StartCommunication for the /scan diagnostic page.
 static String kwpStartComm(uint8_t addr, const char *name) {
   stopComm();
