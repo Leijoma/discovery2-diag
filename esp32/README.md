@@ -51,6 +51,66 @@ open"). So on mute the node sends **StopCommunication `82`** once (`stopComm()` 
 the Silence-bus toggle does (`handleLog()` in `kline_node.ino`); on resume it re-clears
 and re-establishes.
 
+### WiFi and uplink (2026-11-12)
+
+Three networks in priority order: home (`WIFI_SSID_1`) → the Pi's AP (`WIFI_SSID_CAR`,
+`Discopi`) → phone hotspot (`WIFI_SSID_2`). The node boots in seconds and the Pi in about 30 s,
+so the Pi's AP is usually missing at boot. `wifiTick()` handles that without blocking the
+K-line: with no link it runs an async scan every 15 s; on the phone it scans every 60 s and
+moves up to `Discopi`; on `Discopi` it looks for home every 5 min. A failed move-up bans that
+network for 10 min. The old boot-time list walk blocked `loop()` for 8 s per network.
+
+- **On `Discopi`** Influx writes go to the Pi's store-and-forward relay
+  (`RELAY_URL`, default `http://192.168.4.1:8086`, same `/api/v2/write` API), and NTP asks
+  `192.168.4.1` first. Everywhere else they go straight to `INFLUX_URL` over WG, so a missing
+  Pi never costs data. The relay must answer 204 only after the line is on disk, because
+  read-and-clear erases on that 204. The spec is in the head unit repo,
+  `HANDOVER-kline-relay.md`.
+- `/data` has `net` (`home|car|phone|none`), and the `node` heartbeat has `net` (0–3).
+- `/wifi?use=car|home|phone|auto` pins a network until reboot, so the relay can be tested
+  indoors. Its `ev` field is a short roaming log (scans, joins, bans). It is there because the
+  serial log can't be read in the field: opening the USB port resets the ESP.
+- **Scan timeout (core 2.0.17).** `scanNetworks()` sets the async scan timeout to 20 × the
+  per-channel time and checks it before the done bit. A scan made while connected takes
+  3.5–6+ s, so the default made every scan from home or the phone fail, and the node never
+  moved up to `Discopi`. The node therefore sets a 30 s timeout after each start (see
+  `ScanTimeout`).
+
+### Demo mode
+
+`/demo?on=1|0`, or **Demo data** in Settings. It is RAM-only, so a reboot or reflash ends it.
+It runs a synthetic 120 s drive (idle, 0–90 km/h, cruise, brake). Coolant warms up over 5 min,
+and TD5 fault bit 0 is on for 20 s of each cycle. Values go through the same
+`appendField`/`appendFuel` path as real data, so `/data` and the Influx line have the real
+shape, but the lines are tagged `vehicle=demo` and are never spilled. Demo mode stays off the
+K-line. The `node` heartbeat says `demo=1i`, and the live page shows a DEMO badge. Use it to
+test a display (the Pi's Car pane) without the car. With `/wifi?use=car` it goes through the
+relay, which keeps the latest point per (measurement, vehicle) for the head unit.
+
+### Fuel
+
+Every `engine` line, real or demo, carries the on-node fuel computer. It uses the same math as
+the Python `_FuelComputer`:
+
+| field | unit | meaning |
+|---|---|---|
+| `fuel_rate` | L/h | instantaneous, from injection quantity × rpm (also at idle) |
+| `economy` | L/100 km | instantaneous, only above 5 km/h |
+| `trip_economy` | L/100 km | average since start, once 0.1 km has been driven |
+| `trip_fuel` | L | burnt since start |
+| `trip_km` | km | driven since start |
+| `trip_min` | min | since the first fuel sample |
+| `trip_avg_kmh` | km/h | average speed since start, after 30 s |
+
+"Start" means the node booting, which happens when the key is turned on, since the node is fed
+from accessory power. Demo on also counts as a start. The trip totals are sent every cycle, so a
+display that comes up late still gets the whole trip.
+
+The heartbeat also carries `bridge`, `ign_cycle` and `logging` (ints), so a reader of the
+pushed lines needs nothing from `/data`. It beats from the main loop, so it keeps beating while
+muted and in demo, and it beats at once on a demo, mute or cable-mode toggle. In cable mode the
+node doesn't beat, except for one `bridge=1i` beat when cable mode is entered from the web.
+
 ### SLABS read-and-clear at start
 
 On by default (Settings → **SLABS clear at start**, `/slabsclear?on=1|0`, persisted). At the

@@ -74,7 +74,7 @@ const $=s=>document.querySelector(s);
 // Fault codes: the ESP reports RAW blocks; the dictionaries live in the repo and are fetched from
 // GitHub (the phone hotspot has data) + cached in localStorage for offline use. TD5 (21 3B) and
 // SLABS (logged 21 11 / current 21 47).
-let FMAP=null, SMAP=null, FAULTS_NOW=[], SLABSPOLL=0, SLABSHOLD=0, SLABSCLEAR=0, SLABSCLEARED=0;
+let FMAP=null, SMAP=null, FAULTS_NOW=[], SLABSPOLL=0, SLABSHOLD=0, SLABSCLEAR=0, SLABSCLEARED=0, DEMO=0;
 const RAW='https://raw.githubusercontent.com/Leijoma/discovery2-diag/main/src/d2diag/';
 async function loadMap(url,key){
  try{const r=await fetch(url);if(r.ok){const j=await r.json();localStorage.setItem(key,JSON.stringify(j));return j;}}catch(e){}
@@ -142,12 +142,14 @@ function openSettings(){
   <button class=btn onclick=cable()>Cable mode</button>
   <button class=btn onclick=toggleSlabs()>SLABS poll: ${SLABSPOLL?'ON':'off'}</button>
   <button class=btn onclick=toggleHold()>SLABS hold: ${SLABSHOLD?'ON':'off'}</button>
+  <button class=btn onclick=toggleDemo()>Demo data: ${DEMO?'ON':'off'}</button>
   <button class=btn onclick=toggleClear()>SLABS clear at start: ${SLABSCLEAR?'ON':'off'}${SLABSCLEARED?' (done)':''}</button>
-  <div class=foot>Mute frees the K-line bus. Cable mode = USB K-line cable for the diagnostic tool. SLABS poll briefly samples SLABS at a standstill (pauses live data a couple of seconds). SLABS hold = fault-order test: NO engine data; holds one SLABS session through the drive and logs every fault onset. Switch it on at a standstill right after an ignition cycle. SLABS clear at start = log SLABS' logged faults, then erase them, once per start, so each start shows what the previous drive logged. Turn it off before a workshop visit.</div>
+  <div class=foot>Mute frees the K-line bus. Cable mode = USB K-line cable for the diagnostic tool. SLABS poll briefly samples SLABS at a standstill (pauses live data a couple of seconds). SLABS hold = fault-order test: NO engine data; holds one SLABS session through the drive and logs every fault onset. Switch it on at a standstill right after an ignition cycle. SLABS clear at start = log SLABS' logged faults, then erase them, once per start, so each start shows what the previous drive logged. Turn it off before a workshop visit. Demo data = a synthetic 2-minute drive cycle (tagged vehicle=demo in Influx) for testing displays without the car; stays off the K-line; a reboot ends it.</div>
   <button class=btn style=opacity:.7 onclick=closeSettings()>Close</button></div></div>`;
 }
 async function toggleSlabs(){closeSettings();await hit('/slabs?on='+(SLABSPOLL?0:1));setTimeout(tick,200);}
 async function toggleClear(){closeSettings();await hit('/slabsclear?on='+(SLABSCLEAR?0:1));setTimeout(tick,200);}
+async function toggleDemo(){closeSettings();await hit('/demo?on='+(DEMO?0:1));setTimeout(tick,200);}
 async function toggleHold(){closeSettings();await hit('/slabshold?on='+(SLABSHOLD?0:1));setTimeout(tick,200);}
 // SLABS hold view: session state + the current/logged SLABS faults, decoded via the SLABS faultmap.
 function renderHold(d){
@@ -175,6 +177,8 @@ function transition(lbl){closeSettings();$('#main').innerHTML=`<div class=state>
 function act(name){const a=ACT[name];pending=name;pendingSince=Date.now();transition(a.lbl);hit(a.u);setTimeout(tick,300);}
 function mute(){act('mute')} function unmute(){act('unmute')} function cable(){act('cable')} function backToLive(){act('live')}
 function header(d){
+ DEMO=d.demo||0;
+ if(DEMO&&!pending){$('#dot').style.background='var(--blue)';$('#sub').textContent='DEMO data · '+d.rssi+' dBm';return;}
  const live=d.session&&d.age_ms<3000;
  $('#dot').style.background=pending?'var(--blue)':(d.bridge?'var(--blue)':(!d.logging?'var(--yellow)':(live?'var(--green)':'var(--yellow)')));
  if(d.slabs_hold&&!pending&&!d.bridge&&d.logging) $('#dot').style.background=d.hold_up?'var(--green)':'var(--yellow)';

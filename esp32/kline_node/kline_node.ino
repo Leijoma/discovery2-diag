@@ -1,8 +1,9 @@
 // kline_node.ino — ESP32 K-line node: WiFi + OTA + web + K-line + InfluxDB logging.
 //
 // Standalone node firmware. ESP32 Arduino core only.
-//   - WiFi: multi-network with PRIORITY — WIFI_SSID_1 (SurfsUp) first, then
-//     WIFI_SSID_2 (Surfs, phone hotspot). Mirrors the Pi's wlan1 fallback chain.
+//   - WiFi: multi-network with PRIORITY — WIFI_SSID_1 (home), then WIFI_SSID_CAR (the
+//     Pi's own AP, discopi), then WIFI_SSID_2 (phone hotspot). Non-blocking roaming: it
+//     keeps scanning and moves up when a better network appears (see wifiTick()).
 //   - OTA: after the first USB flash, later flashes go over WiFi (password-gated).
 //   - WireGuard: fixed tunnel IP so the node is reachable from the phone regardless
 //     of the hotspot DHCP address (see hardware/README.md).
@@ -36,6 +37,7 @@
 #include <time.h>
 #include <LittleFS.h>            // on-device spill for offline logging (store-and-forward)
 #include <Preferences.h>         // NVS — persist slabs_poll across reboots
+#include <lwip/netif.h>         // re-assert the WG netif as default route after a roam
 #include <esp_system.h>          // esp_reset_reason() — why did we boot? (brownout/panic/wdt)
 #include "secrets.h"
 #include "kline_core.h"          // K-line/KWP2000/Td5 comms core (no WiFi/Influx/web)
@@ -45,6 +47,36 @@ static WebServer server(80);
 static Preferences prefs;              // NVS store for persisted settings (slabs_poll)
 static WireGuard wg;
 static bool wgUp = false;
+// WiFi roaming state lives in the WiFi section; these two are needed earlier (uplink choice).
+static const int WIFI_CAR = 1;                 // NETS index of the Pi's AP (Discopi)
+static int wifiCur = -1;                       // NETS index we're on, -1 = none
+// On the Pi's AP, Influx lines go to the Pi's store-and-forward relay instead of over WG
+// to the home server: the Pi keeps them on disk and forwards when it has an uplink. Same
+// /api/v2/write API, so only the base URL changes. NTP comes from the Pi too (GPS time).
+#ifndef RELAY_URL
+#define RELAY_URL "http://192.168.4.1:8086"
+#endif
+#ifndef CAR_NTP
+#define CAR_NTP "192.168.4.1"
+#endif
+static bool onCarNet() { return wifiCur == WIFI_CAR && WiFi.status() == WL_CONNECTED; }
+// Can a POST to Influx (or the relay) get anywhere right now?
+static bool uplinkReady() {
+  if (WiFi.status() != WL_CONNECTED) return false;
+  return onCarNet() || wgUp;                   // off the car net, 10.9.0.1 is only reachable over WG
+}
+// configTime() restarts SNTP and its first request goes out only after a startup delay,
+// so calling it again on every network change / WG retry kept resetting it before it
+// answered (first boot with the roaming code: "NTP failed"). Reconfigure only when the
+// server set actually changes.
+static int ntpMode = -1;                       // -1 never · 0 internet · 1 car (Pi first)
+static void ntpStart() {
+  int m = onCarNet() ? 1 : 0;
+  if (m == ntpMode) return;
+  ntpMode = m;
+  if (m) configTime(0, 0, CAR_NTP, "pool.ntp.org", "time.nist.gov");
+  else   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+}
 static WiFiUDP kaUdp;
 static uint32_t bootMs = 0;
 
@@ -91,11 +123,16 @@ static uint32_t estabFails   = 0;
 static double   tripFuel     = 0.0;    // litres, this trip
 static double   tripDist     = 0.0;    // km, this trip
 static uint32_t lastFuelMs   = 0;      // last integration tick (0 = not started)
+static uint32_t tripStartMs  = 0;      // first integration tick of this trip (0 = no trip yet)
 // Latest decoded snapshot as JSON — drives the local /live page (and later an on-device
 // screen). Updated each cycle in logCycle; read by the web handlers. All on the loop, so
 // no locking needed.
 static String   latestJson;            // {"rpm":763,...}
 static uint32_t latestMs = 0;          // millis() of the last snapshot
+// Demo mode (/demo?on=1): synthetic drive data for testing a UI without the car. RAM only, so
+// a reboot always returns to real logging. It stays off K-line entirely and tags its points
+// vehicle=demo, so they never mix with the real vehicle's series in Influx.
+static bool     demoMode = false;
 static String   faultsHex;             // raw 21 3B fault block (hex) — browser decodes via faultmap.json
 static uint8_t  faultTick = 0;         // counter: read the fault block ~every 10th cycle
 static uint8_t  prevFaults[35];        // last fault block, for edge detection (onset/clear events)
@@ -204,10 +241,10 @@ static bool influxConfigured() {
   return strlen(INFLUX_TOKEN) > 20 && strncmp(INFLUX_TOKEN, "influx-write", 12) != 0;
 }
 static int influxPost(const String &body) {
-  if (!wgUp) return -3;                        // no route to 10.9.0.1 without the tunnel
   if (WiFi.status() != WL_CONNECTED) return -1;
+  if (!uplinkReady()) return -3;               // no route to 10.9.0.1 without the tunnel
   HTTPClient http;
-  String url = String(INFLUX_URL) + "/api/v2/write?org=" + INFLUX_ORG +
+  String url = String(onCarNet() ? RELAY_URL : INFLUX_URL) + "/api/v2/write?org=" + INFLUX_ORG +
                "&bucket=" + INFLUX_BUCKET + "&precision=s";
   // Keep these SHORT: this POST runs on the K-line poll thread, so a slow uplink stalls
   // both live reads (rpm lag) and control clicks (mute/bridge). Fail fast → spill instead;
@@ -239,7 +276,7 @@ static void spillLine(const String &line) {
 // once drained. Idempotent: on reboot spillOffset resets to 0 and we re-send from the start
 // (Influx overwrites same tag+timestamp points).
 static void flushSpill() {
-  if (!fsReady || !wgUp || WiFi.status() != WL_CONNECTED) return;
+  if (!fsReady || !uplinkReady()) return;
   File f = LittleFS.open(SPILL_PATH, FILE_READ);
   if (!f) return;
   size_t sz = f.size();
@@ -292,6 +329,42 @@ static void postFaultEvent(int off, int bit, int state) {
   long ts = epochNow();
   if (ts) { line += " "; line += String(ts); }
   influxPost(line);
+}
+
+// Fuel computer — derived at the source. L/h = inj[mg] * INJ_PER_REV * rpm * 60 / 1e6 /
+// (density g/mL); economy L/100km = rate/speed*100 when moving; trip integrates over time.
+// Same math + generated constants as Python _FuelComputer (signals_td5.h). Shared by the
+// real logCycle and demoTick so the demo exercises exactly the same derived fields.
+static void appendFuel(String &line, String &js, bool &first, int rpm, float injMg, float speedKmh) {
+  float rate = NAN;
+  if (!isnan(injMg) && rpm > 0)
+    rate = injMg * INJ_PER_REV * (float)rpm * 60.0f / 1e6f / (DIESEL_G_PER_L / 1000.0f);
+  uint32_t nowMs = millis();
+  if (lastFuelMs != 0 && !isnan(rate)) {
+    uint32_t dtms = nowMs - lastFuelMs;
+    if (dtms > 3000) dtms = 3000;               // cap 3 s → no spike after a pause/reconnect
+    float dt_h = dtms / 3600000.0f;
+    tripFuel += (double)rate * dt_h;
+    if (!isnan(speedKmh) && speedKmh > 0) tripDist += (double)speedKmh * dt_h;
+  }
+  lastFuelMs = nowMs;
+  if (!isnan(rate)) {
+    appendField(line, js, first, "fuel_rate", rate);                        // L/h
+    if (!isnan(speedKmh) && speedKmh > 5.0f)
+      appendField(line, js, first, "economy", rate / speedKmh * 100.0f);    // L/100km (moving)
+  }
+  if (tripDist > 0.1) appendField(line, js, first, "trip_economy", (float)(tripFuel / tripDist * 100.0));
+  // Trip totals since start (= since the node powered on with the key, or since demo on):
+  // litres burnt, km driven, minutes, and average speed. Sent every cycle so a display that
+  // comes up late (the Pi boots ~30 s after the node) still gets the whole trip.
+  if (!isnan(rate) && tripStartMs == 0) tripStartMs = nowMs;
+  if (tripStartMs) {
+    float tmin = (nowMs - tripStartMs) / 60000.0f;
+    appendField(line, js, first, "trip_fuel", (float)tripFuel);              // L
+    appendField(line, js, first, "trip_km", (float)tripDist);                // km
+    appendField(line, js, first, "trip_min", tmin);                          // minutes
+    if (tmin > 0.5f) appendField(line, js, first, "trip_avg_kmh", (float)(tripDist / (tmin / 60.0f)));
+  }
 }
 
 // Read the curated LIDs, decode, and POST one `engine` line. Returns false if the
@@ -369,27 +442,7 @@ static bool logCycle() {
   appendField(line, js, first, "nfaults", (float)nFaults);   // fault count — see fault onset in Grafana
   if (!isnan(speedKmh)) lastSpeedKmh = speedKmh;             // remember speed for the SLABS excursion
 
-  // Fuel computer — derived at the source. L/h = inj[mg] * INJ_PER_REV * rpm * 60 / 1e6 /
-  // (density g/mL); economy L/100km = rate/speed*100 when moving; trip integrates over time.
-  // Same math + generated constants as Python _FuelComputer (signals_td5.h).
-  float rate = NAN;
-  if (!isnan(injMg) && rpm > 0)
-    rate = injMg * INJ_PER_REV * (float)rpm * 60.0f / 1e6f / (DIESEL_G_PER_L / 1000.0f);
-  uint32_t nowMs = millis();
-  if (lastFuelMs != 0 && !isnan(rate)) {
-    uint32_t dtms = nowMs - lastFuelMs;
-    if (dtms > 3000) dtms = 3000;               // cap 3 s → no spike after a pause/reconnect
-    float dt_h = dtms / 3600000.0f;
-    tripFuel += (double)rate * dt_h;
-    if (!isnan(speedKmh) && speedKmh > 0) tripDist += (double)speedKmh * dt_h;
-  }
-  lastFuelMs = nowMs;
-  if (!isnan(rate)) {
-    appendField(line, js, first, "fuel_rate", rate);                        // L/h
-    if (!isnan(speedKmh) && speedKmh > 5.0f)
-      appendField(line, js, first, "economy", rate / speedKmh * 100.0f);    // L/100km (moving)
-  }
-  if (tripDist > 0.1) appendField(line, js, first, "trip_economy", (float)(tripFuel / tripDist * 100.0));
+  appendFuel(line, js, first, rpm, injMg, speedKmh);
 
   if (first) return true;                       // reads ok but nothing decoded — keep session
   js += "}"; latestJson = js; latestMs = millis();   // publish the snapshot for /live + a screen
@@ -423,8 +476,17 @@ static void nodeHeartbeat() {
                 " rssi=" + String(WiFi.RSSI()) +
                 ",uptime=" + String((millis() - bootMs) / 1000) +
                 ",wg=" + String(wgUp ? 1 : 0) +
+                // uplink: 0 none · 1 home · 2 car (Discopi → Pi relay) · 3 phone
+                ",net=" + String(WiFi.status() == WL_CONNECTED && wifiCur >= 0 ? wifiCur == 0 ? 1 : wifiCur == WIFI_CAR ? 2 : 3 : 0) + "i" +
                 ",session=" + String(sessionUp ? 1 : 0) +
                 ",hold=" + String(slabsHold ? (holdUp ? 2 : 1) : 0) +   // 0 off · 1 waiting · 2 SLABS held
+                ",demo=" + String(demoMode ? 1 : 0) + "i" +
+                // The node's states that explain missing engine data, so a reader of the pushed
+                // lines (the Pi's Car pane) needs nothing from /data. bridge=1 is only ever sent
+                // once, on entering cable mode from the web: in cable mode the node doesn't beat.
+                ",bridge=" + String(bridgeMode ? 1 : 0) + "i" +
+                ",ign_cycle=" + String(needIgnCycle ? 1 : 0) + "i" +
+                ",logging=" + String(logEnabled ? 1 : 0) + "i" +
                 ",reset=\"" + resetReasonStr() + "\"" +
                 ",points=" + String(pointsSent);
   long ts = epochNow();
@@ -603,7 +665,6 @@ static void holdTick() {
 static const uint32_t RAW_FLUSH_MS = 3000;      // ship raw batches every ~3 s
 static void logTick() {
   uint32_t now = millis();
-  if (now - lastBeat > BEAT_INTERVAL_MS) { lastBeat = now; nodeHeartbeat(); }
   if (now - lastSpillFlush > SPILL_FLUSH_MS) { lastSpillFlush = now; flushSpill(); }  // drain offline backlog
   if (rawOn && now - lastRawFlush > RAW_FLUSH_MS) { lastRawFlush = now; rawFlush(); }
   if (slabsHold) { holdTick(); return; }        // hold mode owns the bus: no TD5, no excursions
@@ -652,7 +713,7 @@ static void logTick() {
 static void wgStart() {
   if (strlen(WG_PRIVATE_KEY) < 40) { Serial.println("WG: no key set — skipping"); return; }
   Serial.println("WG: syncing time (NTP) ...");
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  ntpStart();
   uint32_t t0 = millis();
   while (time(nullptr) < 1700000000 && millis() - t0 < 8000) delay(200);
   if (time(nullptr) < 1700000000) { Serial.println("WG: NTP failed — skipping"); return; }
@@ -663,25 +724,194 @@ static void wgStart() {
 }
 
 // ---------------- WiFi ----------------
+// Priority order, best first: home (direct uplink, OTA from the Mac), then the Pi's own
+// access point (in the car: no phone needed, the Pi NATs it out — NetworkManager
+// method=shared), then the phone hotspot. The node boots in seconds and the Pi in ~30 s,
+// so the Pi's AP is usually NOT there at boot: the node must keep looking and move up to
+// it later. Hence a non-blocking roaming loop (wifiTick) instead of a boot-time list walk:
+//   - link down: async scan every WIFI_SCAN_DOWN_MS, join the best known SSID heard;
+//   - link up on anything but the best: async scan every WIFI_SCAN_UP_MS, and move up if a
+//     better known SSID is heard at >= WIFI_MIN_RSSI (leaving home → SurfsUp drops → the
+//     scan finds discopi; on the phone → discopi comes up → the node moves to it).
+// The old walk blocked loop() 8 s per network on every retry, which stalled the K-line.
+#ifndef WIFI_SSID_CAR                   // the Pi's AP; older secrets.h files lack it
+#define WIFI_SSID_CAR ""
+#define WIFI_PW_CAR   ""
+#endif
 struct WifiNet { const char *ssid; const char *pw; };
-static const WifiNet NETS[] = { {WIFI_SSID_1, WIFI_PW_1}, {WIFI_SSID_2, WIFI_PW_2} };
+static const WifiNet NETS[] = { {WIFI_SSID_1, WIFI_PW_1}, {WIFI_SSID_CAR, WIFI_PW_CAR},
+                                {WIFI_SSID_2, WIFI_PW_2} };
+static const int NNETS = sizeof NETS / sizeof NETS[0];
+static const uint32_t WIFI_JOIN_MS      = 12000;   // give up on one association after this
+static const uint32_t WIFI_SCAN_DOWN_MS = 15000;   // no link: look this often
+static const uint32_t WIFI_SCAN_UP_MS   = 60000;   // on the phone: look for discopi this often
+static const uint32_t WIFI_SCAN_CAR_MS  = 300000;  // on discopi: look for home only rarely
+static const int      WIFI_MIN_RSSI     = -82;     // don't move up to a network barely heard
+static int      wifiTry = -1;                      // NETS index being joined, -1 = none
+static uint32_t wifiTryAt = 0, wifiNextScan = 0;
+static bool     wifiScanning = false;
+static bool     wifiTryUp = false;                 // the join in progress is a move-up
+static uint32_t wifiBanUntil[NNETS] = {0};         // skip a network that just failed to join
+static const uint32_t WIFI_BAN_UP_MS   = 600000;   // failed move-up (wrong PSK?): leave it 10 min,
+static const uint32_t WIFI_BAN_DOWN_MS = 30000;    // or a move-up would drop the phone every minute
+static uint32_t lastWgTry = 0;
+static int      wifiForce = -1;                    // /wifi?use=…: stay on this one (not persisted)
 
-static bool wifiConnect() {
-  for (auto &n : NETS) {
-    if (!n.ssid || !*n.ssid) continue;
-    Serial.printf("WiFi: trying %s ...\n", n.ssid);
-    WiFi.begin(n.ssid, n.pw);
-    uint32_t t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) delay(200);
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.printf("WiFi: connected to %s  IP %s  RSSI %d dBm\n",
-                    n.ssid, WiFi.localIP().toString().c_str(), WiFi.RSSI());
-      return true;
-    }
-    WiFi.disconnect(true); delay(200);
+static int wifiIndex(const String &ssid) {
+  for (int i = 0; i < NNETS; i++)
+    if (NETS[i].ssid && *NETS[i].ssid && ssid == NETS[i].ssid) return i;
+  return -1;
+}
+// Last few roaming events, newest last, exposed on /wifi: the serial log can't be read in the
+// field (opening the USB port resets the ESP on macOS).
+static String wifiEv;
+// Core 2.0.17 has no setScanTimeout(); the field is protected, so reach it through a subclass.
+struct ScanTimeout : WiFiScanClass { static void set(uint32_t ms) { _scanTimeout = ms; } };
+static uint32_t wifiScanAt = 0;
+static void wifiNote(const String &m) {
+  wifiEv += String((millis() - bootMs) / 1000) + "s " + m + "; ";
+  if (wifiEv.length() > 600) wifiEv = wifiEv.substring(wifiEv.length() - 500);
+  Serial.println("WiFi: " + m);
+}
+static void wifiBegin(int i) {
+  Serial.printf("WiFi: joining %s ...\n", NETS[i].ssid);
+  if (WiFi.status() == WL_CONNECTED) {
+    // Moving up from a live link: let the disconnect finish first. On core 2.0.x a begin()
+    // straight after disconnect() can be refused while the old link is still tearing down.
+    WiFi.disconnect(false);
+    for (uint32_t t0 = millis(); WiFi.status() == WL_CONNECTED && millis() - t0 < 1500; ) delay(20);
   }
-  Serial.println("WiFi: no known network in range");
-  return false;
+  wl_status_t r = WiFi.begin(NETS[i].ssid, NETS[i].pw);
+  wifiNote(String("join ") + NETS[i].ssid + " -> " + String((int)r));
+  wifiTry = i; wifiTryAt = millis();
+}
+// A new network means a new local IP. The WG tunnel is deliberately LEFT UP: WireGuard
+// roams by design (the next handshake/keepalive goes out from the new address and the
+// server follows the endpoint). Tearing it down with wg.end() + begin() was tried
+// 2026-11-12: once a panic at the switch, once a "tunnel up" that routed nothing
+// (10.9.0.1 "Host is unreachable"). If WG was never up, loop() retries it at once.
+// WireGuard-ESP32 makes its netif the default route at begin(). On every new DHCP lease
+// esp_netif makes the STA netif default again, so after a roam 10.9.0.x traffic went out
+// plain — on Discopi straight into the Pi's own wg0 — and the node's tunnel went silent:
+// the server never learned its new endpoint and 10.9.0.9 stopped answering (2026-11-12).
+static void wgReassertDefault() {
+  if (!wgUp) return;
+  struct netif *n;
+  NETIF_FOREACH(n) {
+    if (n->name[0] == 'w' && n->name[1] == 'g') { if (netif_default != n) netif_set_default(n); return; }
+  }
+}
+static void wifiChanged() {
+  lastWgTry = millis() - 30000;
+  wgReassertDefault();
+  if (WiFi.status() == WL_CONNECTED) ntpStart();   // on Discopi: the Pi's clock first
+}
+// Pick the best known SSID from a finished scan (or -1), then free the scan results.
+// Best known network in the scan. With a pin (/wifi?use=…) the pinned one wins when it is
+// usable, but if it is missing or banned the node falls back to the normal order rather than
+// sitting with no network at all. Measured 2026-11-12: pinned to car, one failed Discopi join
+// banned it for 10 min and the node went dark (no home either) until the ban ran out.
+static int wifiBestFromScan(int n) {
+  int best = -1;
+  bool forcedOk = false;
+  for (int k = 0; k < n; k++) {
+    int i = wifiIndex(WiFi.SSID(k));
+    if (i < 0 || WiFi.RSSI(k) < WIFI_MIN_RSSI) continue;
+    if ((int32_t)(millis() - wifiBanUntil[i]) < 0) continue;
+    if (i == wifiForce) forcedOk = true;
+    if (best < 0 || i < best) best = i;
+  }
+  WiFi.scanDelete();
+  return forcedOk ? wifiForce : best;
+}
+static void wifiTick() {
+  uint32_t now = millis();
+  bool up = WiFi.status() == WL_CONNECTED;
+  if (wifiTry >= 0) {                                // an association is in progress
+    if (up && WiFi.SSID() == NETS[wifiTry].ssid) {     // the NEW network, not a stale old link
+      wifiCur = wifiTry; wifiTry = -1;
+      wifiNote(String("up ") + NETS[wifiCur].ssid + " " + WiFi.localIP().toString() + " " + String(WiFi.RSSI()));
+      wifiChanged();
+      wifiNextScan = now + (wifiCur == WIFI_CAR ? WIFI_SCAN_CAR_MS : WIFI_SCAN_UP_MS);
+    } else if (now - wifiTryAt > WIFI_JOIN_MS) {
+      wifiNote(String(NETS[wifiTry].ssid) + " did not associate, banned");
+      // A pinned network is retried sooner: the pin says the user wants exactly that one.
+      wifiBanUntil[wifiTry] = now + (wifiTry == wifiForce ? WIFI_BAN_DOWN_MS
+                                     : wifiTryUp ? WIFI_BAN_UP_MS : WIFI_BAN_DOWN_MS);
+      wifiTry = -1; wifiCur = -1; wifiNextScan = now;
+    }
+    return;
+  }
+  if (!up && wifiCur >= 0) {                         // lost the link (e.g. drove away from home)
+    wifiNote(String("lost ") + NETS[wifiCur].ssid);
+    wifiCur = -1; wifiNextScan = now; wifiChanged();
+  }
+  if (up && wifiCur < 0) wifiCur = wifiIndex(WiFi.SSID());   // joined outside our bookkeeping
+  if (up && wifiCur == (wifiForce >= 0 ? wifiForce : 0)) return;   // already on the best/forced one
+  if (!wifiScanning) {
+    if ((int32_t)(now - wifiNextScan) < 0) return;
+    // Async: WiFi runs on core 0, so the K-line on core 1 keeps going.
+    // Core 2.0.17 sets the async scan timeout to 20 x the per-channel time inside
+    // scanNetworks() and checks it before the done bit. A scan made while CONNECTED is much
+    // slower (the radio keeps going back to the home channel): measured 2026-11-12 still
+    // running after 6.3 s at 300 ms/channel, so every scan from home read back as
+    // WIFI_SCAN_FAILED and the node never moved up to Discopi. Widen the timeout AFTER the
+    // start, since scanNetworks() overwrites it.
+    int r = WiFi.scanNetworks(true, false, false, 120);
+    ScanTimeout::set(30000);
+    wifiScanAt = now;
+    if (r == WIFI_SCAN_FAILED) {
+      wifiNote("scan start failed");
+      wifiNextScan = now + WIFI_SCAN_DOWN_MS; return;
+    }
+    wifiScanning = true; return;
+  }
+  int bits = WiFi.getStatusBits();
+  int n = WiFi.scanComplete();
+  if (n == WIFI_SCAN_RUNNING) return;
+  wifiScanning = false;
+  wifiNote(String("scan ") + (now - wifiScanAt) + "ms" + (n < 0 ? String(" bits=0x") + String(bits, HEX) : String("")));
+  int best = n > 0 ? wifiBestFromScan(n) : -1;
+  if (n < 0) WiFi.scanDelete();
+  wifiNote(String("scan n=") + n + " best=" + best);
+  if (up) wifiNextScan = now + (wifiCur == WIFI_CAR ? WIFI_SCAN_CAR_MS : WIFI_SCAN_UP_MS);
+  else    wifiNextScan = now + WIFI_SCAN_DOWN_MS;
+  bool better = wifiForce >= 0 ? best == wifiForce : best < wifiCur;
+  if (best < 0 || (up && !better)) return;           // nothing (better) in range
+  if (up) Serial.printf("WiFi: %s heard, moving up from %s\n", NETS[best].ssid, NETS[wifiCur].ssid);
+  wifiBegin(best);
+  wifiTryUp = up;
+}
+// Boot: one blocking scan + join so WG/OTA come up in setup() as before. If nothing is
+// in range, wifiTick() takes over from loop() without blocking it.
+static void wifiBoot() {
+  int n = WiFi.scanNetworks(false, false, false, 120);
+  int best = n > 0 ? wifiBestFromScan(n) : -1;
+  if (best < 0) { Serial.println("WiFi: no known network in range (will keep looking)"); return; }
+  wifiBegin(best); wifiTryUp = false;
+  while (WiFi.status() != WL_CONNECTED && millis() - wifiTryAt < WIFI_JOIN_MS) delay(200);
+  wifiTick();                                        // records success, or schedules a rescan
+}
+
+// "home" | "car" | "phone" | "none" — which uplink the node is on (for /data and the head unit).
+static String wifiNetName() {
+  if (WiFi.status() != WL_CONNECTED || wifiCur < 0) return "none";
+  return wifiCur == 0 ? "home" : wifiCur == WIFI_CAR ? "car" : "phone";
+}
+// /wifi?use=car|home|phone|auto — pin the node to one network until reboot (not persisted),
+// e.g. to test the Pi relay indoors where home WiFi would otherwise win. auto = priority.
+static void handleWifi() {
+  String u = server.arg("use");
+  if (u.length()) {
+    int f = u == "home" ? 0 : u == "car" ? WIFI_CAR : u == "phone" ? 2 : -1;
+    if (f >= 0 && !(NETS[f].ssid && *NETS[f].ssid)) f = -1;   // not configured → stay auto
+    wifiForce = f; wifiBanUntil[0] = wifiBanUntil[1] = wifiBanUntil[2] = 0;
+    wifiNextScan = millis();
+  }
+  server.send(200, "application/json",
+    String("{\"net\":\"") + wifiNetName() + "\",\"ssid\":\"" + WiFi.SSID() +
+    "\",\"use\":\"" + (wifiForce < 0 ? "auto" : wifiForce == 0 ? "home" : wifiForce == WIFI_CAR ? "car" : "phone") +
+    "\",\"ip\":\"" + WiFi.localIP().toString() + "\",\"ev\":\"" + wifiEv + "\"}");
 }
 
 // ---------------- Web ----------------
@@ -734,6 +964,7 @@ static void handleStatus() {
     ",\"logging\":" + String(logEnabled ? 1 : 0) +
     ",\"bridge\":" + String(bridgeMode ? 1 : 0) +
     ",\"session\":" + String(sessionUp ? 1 : 0) +
+    ",\"demo\":" + String(demoMode ? 1 : 0) +
     ",\"ign_cycle\":" + String(needIgnCycle ? 1 : 0) +
     ",\"points\":" + String(pointsSent) +
     ",\"estab_fails\":" + String(estabFails) +
@@ -748,7 +979,8 @@ static void handleStatus() {
 static void handleData() {
   server.send(200, "application/json",
     "{\"age_ms\":" + String(latestMs ? (uint32_t)(millis() - latestMs) : 0) +
-    ",\"session\":" + String(sessionUp ? 1 : 0) +
+    ",\"session\":" + String(sessionUp || demoMode ? 1 : 0) +
+    ",\"demo\":" + String(demoMode ? 1 : 0) +
     ",\"logging\":" + String(logEnabled ? 1 : 0) +
     ",\"bridge\":" + String(bridgeMode ? 1 : 0) +
     ",\"ign_cycle\":" + String(needIgnCycle ? 1 : 0) +
@@ -760,6 +992,7 @@ static void handleData() {
     ",\"hold_up_s\":" + String(holdUp ? (millis() - holdSince) / 1000 : 0) +
     ",\"hold_lost_s\":" + String(holdLostAfterS) +
     ",\"rssi\":" + String(WiFi.RSSI()) +
+    ",\"net\":\"" + wifiNetName() + "\"" +
     ",\"faults\":\"" + faultsHex + "\"" +
     ",\"slabs_flog\":\"" + slabsFlog + "\"" +
     ",\"slabs_fcur\":\"" + slabsFcur + "\"" +
@@ -779,6 +1012,85 @@ static void handleScan() {
   recoveryCleared = false; estabTries = 0; needIgnCycle = false;
   server.send(200, "text/plain", out);
 }
+// ---------------- Demo mode ----------------
+// A 120 s synthetic drive cycle: idle → pull away through the gears → 90 km/h cruise → brake →
+// idle, with the coolant warming up over the first ~5 min and one TD5 fault bit raised for
+// 20 s of each cycle (so a fault list/badge can be tested too). Values sit in each signal's
+// realistic range and go through the same appendField/appendFuel path as real data, so the
+// Influx line and /data JSON have exactly the real shape. Posted once a second; never spilled.
+static uint32_t demoStart = 0, demoLast = 0;
+static float demoNoise(float a) { return a * ((float)(esp_random() % 2001) / 1000.0f - 1.0f); }
+static void demoTick() {
+  uint32_t now = millis();
+  if (now - demoLast < LOG_INTERVAL_MS) return;
+  demoLast = now;
+  float t = fmodf((now - demoStart) / 1000.0f, 120.0f);
+  float warm = (now - demoStart) / 300000.0f; if (warm > 1) warm = 1;
+  float speed, rpm, load;                          // load 0..1 drives throttle/boost/fuel
+  if (t < 15)       { speed = 0; rpm = 760; load = 0.05f; }
+  else if (t < 45)  { float u = (t - 15) / 30;     // 0→90 km/h through 4 gears
+                      speed = 90 * u; float g = fmodf(u * 4, 1.0f);
+                      rpm = 1100 + 1700 * g; load = 0.75f; }
+  else if (t < 90)  { speed = 90 + 3 * sinf(t / 4); rpm = 2100 + 60 * sinf(t / 4); load = 0.35f; }
+  else if (t < 110) { float u = (t - 90) / 20; speed = 90 * (1 - u); rpm = 2100 - 1340 * u; load = 0.02f; }
+  else              { speed = 0; rpm = 760; load = 0.05f; }
+  rpm += demoNoise(8); if (speed > 0) speed += demoNoise(0.5f); if (speed < 0) speed = 0;
+  float inj = 6 + 50 * load + demoNoise(0.5f);
+  float map = 1.01f + 1.1f * load + demoNoise(0.01f);
+
+  String line = String("engine,vehicle=demo ");
+  String js = "{"; bool first = true;
+  appendField(line, js, first, "rpm", roundf(rpm));
+  appendField(line, js, first, "speed", roundf(speed));
+  appendField(line, js, first, "battery", 14.1f + demoNoise(0.05f));
+  appendField(line, js, first, "coolant_c", 40 + 48 * warm + demoNoise(0.2f));
+  appendField(line, js, first, "air_c", 18 + 10 * load + demoNoise(0.2f));
+  appendField(line, js, first, "fuel_c", 25 + 15 * warm);
+  appendField(line, js, first, "throttle_v", 0.5f + 3.5f * load);
+  appendField(line, js, first, "map_bar", map);
+  appendField(line, js, first, "maf", 300 + rpm * 0.25f * map + demoNoise(5));
+  appendField(line, js, first, "maf_raw", 1800 + 900 * load);
+  appendField(line, js, first, "inj_mg", inj);
+  appendField(line, js, first, "egr_pct", load < 0.4f ? 40 : 0);
+  appendField(line, js, first, "wastegate_pct", 20 + 60 * load);
+  appendField(line, js, first, "rpm_error", roundf(demoNoise(15)));
+  appendField(line, js, first, "ambient_bar", 1.013f);
+  appendField(line, js, first, "balance_1", roundf(demoNoise(5)));
+  appendField(line, js, first, "balance_2", roundf(demoNoise(5)));
+  appendField(line, js, first, "balance_3", roundf(demoNoise(5)));
+  appendField(line, js, first, "balance_4", roundf(demoNoise(5)));
+  appendField(line, js, first, "balance_5", roundf(demoNoise(5)));
+  bool fault = t >= 60 && t < 80;
+  faultsHex = fault ? String("01") : String("00");
+  for (int i = 1; i < 35; i++) faultsHex += "00";
+  appendField(line, js, first, "nfaults", fault ? 1 : 0);
+  appendFuel(line, js, first, (int)rpm, inj, speed);
+  js += "}"; latestJson = js; latestMs = millis();
+  long ts = epochNow();
+  if (ts) { line += " "; line += String(ts); }
+  lastPost = influxPost(line);                     // no spill: demo data isn't worth keeping
+}
+static void demoStop() {
+  demoMode = false; latestJson = ""; latestMs = 0; faultsHex = "";
+  tripFuel = tripDist = 0; lastFuelMs = 0; tripStartMs = 0;
+  // Fresh recovery, as on unmute: endSession → silence → init.
+  sessionUp = false; quietUntil = 0; recoveryCleared = false; estabTries = 0; needIgnCycle = false;
+  holdNextTry = 0;
+}
+static void handleDemo() {
+  if (server.hasArg("on")) {
+    bool on = server.arg("on") != "0";
+    if (on && !demoMode) {
+      // Get off the bus the same way mute does (82 releases a TD5 or held SLABS link).
+      sessionUp = false; holdDrop(); endSession(); recoveryCleared = true;
+      demoMode = true; demoStart = millis(); demoLast = 0;
+      tripFuel = tripDist = 0; lastFuelMs = 0; tripStartMs = 0; latestJson = ""; faultsHex = "";
+    } else if (!on && demoMode) demoStop();
+  }
+  lastBeat = 0;                                    // tell the Pi at once
+  server.send(200, "application/json", "{\"demo\":" + String(demoMode ? 1 : 0) + "}");
+}
+
 static void handleLog() {
   if (server.hasArg("on")) {
     logEnabled = server.arg("on") != "0";
@@ -793,6 +1105,7 @@ static void handleLog() {
       holdNextTry = 0;                          // hold mode: re-establish SLABS right away
     }
   }
+  lastBeat = 0;                                // tell the Pi at once
   server.send(200, "application/json",
     "{\"logging\":" + String(logEnabled ? 1 : 0) + "}");
 }
@@ -889,9 +1202,10 @@ static void serviceBridgeSerial() {
 static void handleBridge() {
   if (server.hasArg("on")) {
     if (server.arg("on") != "0") { bridgeEnter(); bridgeSticky = true; }  // hold until Back to live
-    else bridgeExit();                                                    // back to autonomous logging
+    else { bridgeExit(); lastBeat = 0; }                                  // back to autonomous logging
   }
   server.send(200, "application/json", "{\"bridge\":" + String(bridgeMode ? 1 : 0) + "}");
+  if (bridgeMode && bridgeSticky) nodeHeartbeat();   // the only beat cable mode gets: bridge=1
 }
 static void handleSlabsPoll() {
   if (server.hasArg("on")) {
@@ -943,8 +1257,10 @@ void setup() {
   slabsClear = prefs.getBool("sclear", true); // read-and-clear SLABS logged faults once per start
   Serial.printf("Boot reason: %s · slabs_poll %s · slabs_hold %s\n", resetReasonStr(),
                 slabsPoll ? "ON" : "off", slabsHold ? "ON" : "off");
-  WiFi.mode(WIFI_STA); WiFi.setHostname(OTA_HOSTNAME); WiFi.setAutoReconnect(true);
-  wifiConnect();
+  // Auto-reconnect off: it would keep retrying the lost network and fight the roaming
+  // scan. wifiTick() rejoins the same network itself when that is still the best one.
+  WiFi.mode(WIFI_STA); WiFi.setHostname(OTA_HOSTNAME); WiFi.setAutoReconnect(false);
+  wifiBoot();
   wgStart();                                 // fixed WG IP, reachable via the tunnel
 
   ArduinoOTA.setHostname(OTA_HOSTNAME);
@@ -965,7 +1281,9 @@ void setup() {
   server.on("/bridge", handleBridge);       // put the node in USB cable mode (or auto on a USB cmd)
   server.on("/slabs", handleSlabsPoll);     // toggle the sparse SLABS excursion
   server.on("/slabshold", handleSlabsHold); // SLABS hold mode (fault-order test, T-23)
-  server.on("/slabsclear", handleSlabsClear); // read-and-clear SLABS logged faults at start
+  server.on("/slabsclear", handleSlabsClear);
+  server.on("/demo", handleDemo);           // ?on=1|0 — synthetic drive data, RAM only
+  server.on("/wifi", handleWifi);           // ?use=car|home|phone|auto — pin a network (testing) // read-and-clear SLABS logged faults at start
   server.begin();
 
   logEnabled = influxConfigured();          // auto-start logging if a token is set
@@ -977,9 +1295,7 @@ void setup() {
                 rawOn ? "ON" : "off", OTA_HOSTNAME);
 }
 
-static uint32_t lastWifiCheck = 0;
 static uint32_t lastKeepalive = 0;
-static uint32_t lastWgTry = 0;
 void loop() {
   ArduinoOTA.handle();
   server.handleClient();
@@ -989,11 +1305,9 @@ void loop() {
     if (!bridgeSticky && (int32_t)(millis() - bridgeIdleUntil) > 0) bridgeExit();
     return;                                  // bus belongs to the host; skip WiFi churn + logging
   }
-  if (WiFi.status() != WL_CONNECTED && millis() - lastWifiCheck > 10000) {
-    lastWifiCheck = millis();
-    Serial.println("WiFi: link down, reconnecting ...");
-    wifiConnect();
-  }
+  // Heartbeat on the loop, not in logTick, so it also runs while muted and in demo mode.
+  if (millis() - lastBeat > BEAT_INTERVAL_MS) { lastBeat = millis(); nodeHeartbeat(); }
+  wifiTick();                                // non-blocking roaming: rejoin / move up to discopi
   // WG can miss at boot if NTP was slow over the hotspot's CGNAT. Retry while WiFi is
   // up so the tunnel (and thus Influx logging to 10.9.0.1) recovers without a reboot.
   if (!wgUp && WiFi.status() == WL_CONNECTED && millis() - lastWgTry > 30000) {
@@ -1005,9 +1319,11 @@ void loop() {
   // the server can reach us at 10.9.0.9 even when idle.
   if (wgUp && millis() - lastKeepalive > 20000) {
     lastKeepalive = millis();
+    wgReassertDefault();                     // a DHCP renew can hand the default back to STA
     kaUdp.beginPacket(IPAddress(10, 9, 0, 1), 51820);  // any WG-net IP → routes via wg → NAT refresh
     kaUdp.write((uint8_t)0);
     kaUdp.endPacket();
   }
-  if (logEnabled) logTick();
+  if (demoMode) demoTick();
+  else if (logEnabled) logTick();
 }
