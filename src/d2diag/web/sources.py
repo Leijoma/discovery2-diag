@@ -45,6 +45,22 @@ def _transport(port: str, raw_log_path: "str | None"):
     return inner
 
 
+def _release_quietly(session) -> None:
+    """Tear down a half-built session after a failed establish: ``82`` + close the port.
+
+    Without this the serial handle leaked on every failed connect. macOS/Linux let the
+    next attempt open the port again regardless, so it went unnoticed; Windows COM ports
+    are exclusive, so every retry after the first failure died with ``PermissionError(13,
+    'Access is denied')`` (seen on Windows/COM4, 2026-11-23)."""
+    try:
+        session.release()
+    except Exception:  # noqa: BLE001 — best-effort; the port must still be closed
+        try:
+            session.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 # Full reference tool coverage: also read LIDs the reference tool polls but we haven't mapped yet, so
 # the raw log captures ALL available data — then unmapped fields can be found from a normal
 # drive (that's how MAF was found in 1D 2026-08-21). "Don't throw away the bytes we haven't named."
@@ -366,7 +382,11 @@ class Td5DataSource(DataSource):
         port = resolve_serial_port(self._port)  # auto-detect on every attempt
         td5 = Td5(KWP2000(KLine(_transport(port, self._raw_log_path)), tolerant=True))
         td5.open()
-        td5.establish(progress=self.on_progress, **_sleep_kw(self.on_sleep))
+        try:
+            td5.establish(progress=self.on_progress, **_sleep_kw(self.on_sleep))
+        except BaseException:
+            _release_quietly(td5)
+            raise
         return td5
 
     def disconnect(self) -> None:
@@ -636,7 +656,11 @@ class SlabsDataSource(DataSource):
         slabs = Slabs(KWP2000(KLine(_transport(port, self._raw_log_path), target=SLABS_ADDRESS),
                               tolerant=True))
         slabs.open()
-        slabs.establish(progress=self.on_progress, **_sleep_kw(self.on_sleep))
+        try:
+            slabs.establish(progress=self.on_progress, **_sleep_kw(self.on_sleep))
+        except BaseException:
+            _release_quietly(slabs)
+            raise
         # The other LIDs the store cares about (the 0x54 heights are read every cycle; the rest
         # are rotated ONE per cycle so traffic stays at ~1 Hz). A new mapping in
         # slabs.json → a new field in the UI without a code change.

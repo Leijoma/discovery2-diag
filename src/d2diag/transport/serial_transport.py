@@ -20,6 +20,9 @@ from .base import Transport
 # KWP2000 over K-Line runs 10400 baud, 8N1.
 DEFAULT_URL = "/dev/ttyUSB0"
 DEFAULT_BAUDRATE = 10400
+# Windows fast-init: extra wait after the pulse byte's frame time before the baudrate is
+# restored (USB hand-off slack). See fast_init_low.
+_WIN_PULSE_MARGIN = 0.004
 
 
 class SerialTransport(Transport):
@@ -123,13 +126,25 @@ class SerialTransport(Transport):
             self.send_break(low_seconds)
             return 0.0  # no stop bit to compensate for — the break is pure low time
 
+        # ⚠️ WINDOWS: flush() returns once the byte is handed to the FTDI driver, NOT when
+        # it has left the UART. Restoring the baudrate right away re-clocks the byte
+        # mid-transmission and cuts the pulse short. Measured in the car 2026-11-23
+        # (FT232R, COM4): low_ms 6.2 and never C1; waiting for the byte's full frame time
+        # (10 bits) + 4 ms before restoring gave C1 and a 10 A0 session on the first attempt.
+        windows = sys.platform == "win32"
         original = ser.baudrate
         try:
             ser.baudrate = baud
             ser.write(b"\x00")
-            ser.flush()  # block until the byte is physically sent (incl. the stop bit)
+            ser.flush()  # macOS: blocks until the byte is physically sent (incl. stop bit)
+            if windows:
+                time.sleep(10 / baud + _WIN_PULSE_MARGIN)
         finally:
             ser.baudrate = original
+        if windows:
+            ser.reset_input_buffer()  # discard the echo of the pulse byte
+            # The probe that worked on the car returned the margin as "already high".
+            return _WIN_PULSE_MARGIN
         # Everything FROM HERE is time when the line is already high: the stop bit plus what
         # the baudrate reset and buffer flush cost (measured 10–20 ms over USB).
         # If it's not counted, TiniH becomes systematically too long — and that was exactly

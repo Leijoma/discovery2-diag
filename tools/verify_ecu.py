@@ -39,6 +39,17 @@ def _kwp(port: str, target: "int | None" = None, esp: bool = False) -> KWP2000:
     return KWP2000(kline, tolerant=True)
 
 
+def _optional(label: str, fn) -> None:
+    """Print an informational read; a reject must not abort the fault read that follows.
+
+    Seen on Windows 2026-11-23: Td5 answered `33 C0` with 7F 33 10 and SLABS answered
+    `1A` with 7F 1A 10 — both right after a clean session, before the faults were read."""
+    try:
+        print(f"  {label}:", fn())
+    except Exception as exc:  # noqa: BLE001
+        print(f"  {label}: (not available — {type(exc).__name__}: {exc})")
+
+
 def verify_td5(port: str, buzzer: bool = False, esp: bool = False) -> int:
     from d2diag.td5 import Td5
     t = Td5(_kwp(port, esp=esp))
@@ -47,7 +58,7 @@ def verify_td5(port: str, buzzer: bool = False, esp: bool = False) -> int:
         print("TD5: establishing (fast init 0x13 → session A0 → security)…")
         c1 = t.establish()
         print("  ✓ established, C1:", _hex(c1))
-        print("  immobiliser status:", t.security_status(), "(0x03 = not immobilised)")
+        _optional("immobiliser status (0x03 = not immobilised)", t.security_status)
         print("\nFault codes (21 3B):")
         for f in t.read_faults() or ["(none)"]:
             print("  -", f)
@@ -55,7 +66,7 @@ def verify_td5(port: str, buzzer: bool = False, esp: bool = False) -> int:
         for k, v in sorted(t.read_all().items()):
             print(f"  {k:16} = {round(v, 3)}")
     finally:
-        t.close()
+        t.release()  # 20/82 + close — never leave the link open
     return 0
 
 
@@ -67,8 +78,8 @@ def verify_slabs(port: str, buzzer: bool = False, esp: bool = False) -> int:
         print("SLABS: establishing (fast init 0x29)…")
         c1 = s.establish()
         print("  ✓ established, C1:", _hex(c1))
-        print("  VIN:", s.read_vin())
-        print("  versions:", ", ".join(s.read_software_versions()))
+        _optional("VIN", s.read_vin)
+        _optional("versions", lambda: ", ".join(s.read_software_versions()))
         f = s.read_faults()
         print("\nFault codes:")
         print("  logged:", f["loggade"] or "(none)")
@@ -89,7 +100,7 @@ def verify_slabs(port: str, buzzer: bool = False, esp: bool = False) -> int:
                 s.buzzer()
                 print("  buzzer sent ✓")
     finally:
-        s.close()
+        s.release()  # 20/82 + close — never leave the link open
     return 0
 
 
@@ -106,7 +117,7 @@ def verify_bcu(port: str, buzzer: bool = False, esp: bool = False) -> int:
             txt = "".join(chr(c) if 32 <= c < 127 else "." for c in v)
             print(f"    1A {k} = {_hex(v):32}  {txt!r}")
     finally:
-        b.close()
+        b.release()  # 20/82 + close — never leave the link open
     return 0
 
 
@@ -123,7 +134,7 @@ def verify_airbag(port: str, buzzer: bool = False, esp: bool = False) -> int:
         for f in a.read_faults() or ["(none)"]:
             print("  -", f)
     finally:
-        a.close()
+        a.release()  # 20/82 + close — never leave the link open
     return 0
 
 

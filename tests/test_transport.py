@@ -1,4 +1,6 @@
 """Tests for the transport layer. Runs without hardware via pyserial's ``loop://``."""
+import time
+
 from d2diag.transport import LoggingTransport, SerialTransport
 
 
@@ -85,6 +87,22 @@ def test_serial_fast_init_low_uses_break_on_linux(monkeypatch):
     assert calls.get("dur") == 0.025    # the low pulse came via break
     assert already_high == 0.0          # no stop bit to compensate for
     assert t.baudrate == 10400          # baud untouched
+
+
+def test_serial_fast_init_low_waits_out_the_byte_on_windows(monkeypatch):
+    # Windows flush() returns before the byte has left the FTDI, so the baud must not be
+    # restored until the pulse byte's full frame time has passed (car 2026-11-23: 6 ms
+    # pulse → no C1; waiting it out → C1 + session).
+    import d2diag.transport.serial_transport as st
+    monkeypatch.setattr(st.sys, "platform", "win32")
+    with SerialTransport(url="loop://", baudrate=10400, timeout=0.3) as t:
+        t0 = time.perf_counter()
+        already_high = t.fast_init_low(0.025)
+        elapsed = time.perf_counter() - t0
+        assert t.baudrate == 10400
+        assert t.receive(1, timeout=0.05) == b""
+    assert elapsed >= 10 / 360           # at least the whole 0x00 frame at ~360 baud
+    assert already_high == st._WIN_PULSE_MARGIN
 
 
 def test_logging_transport_delegates_serial_hooks():

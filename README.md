@@ -154,6 +154,15 @@ pass the port explicitly.
   **latency timer to 1 ms** (`/sys/bus/usb-serial/devices/ttyUSB0/latency_timer`, or
   a udev rule) for snappy K-line timing.
 
+### Serial port on Windows
+
+- Pass the port explicitly (`--serial COM4`) — auto-detection covers macOS/Linux only. Find it
+  in Device Manager → Ports (COM & LPT). Only one program can hold a COM port at a time.
+- **Fast-init gotcha:** `flush()` returns before the pulse byte has left the FTDI, so the
+  transport waits out the byte before restoring the baud rate (proven in the car with an
+  FT232R, 2026-11-23). Td5 and SLABS verified.
+- If port 8080 is taken (`WinError 10013`), use `--port 8090`.
+
 ## Safety
 
 K-line is a shared bus and this tool can *write* to ECUs. The design is

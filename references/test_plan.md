@@ -485,6 +485,18 @@ rows with a `comms_glitch` marker and classify in the analysis. Detail in `TODO.
 Move items here with the date and what actually settled them — including the ones that
 came back inconclusive, so we do not re-run them blind.
 
+- **2026-11-23 — Windows (FT232R, COM4): Td5 fast init failed every attempt.** Probe at the
+  car: the baud-drop pulse measured `low_ms 6.2` and never got `C1` — on Windows `flush()`
+  returns before the byte leaves the FTDI, so restoring the baud cut the pulse short. Waiting
+  10 bit-times + 4 ms before restoring gave `c1 57 8f` and `50` to `10 A0` on the first try →
+  now the Windows path in `SerialTransport.fast_init_low`. The UART-break variant was
+  **inconclusive** (the previous session was still open: Td5 answered `7F 82 10` to `82`
+  while in session, then `7F 81 10` to the next init). Also fixed: a failed connect leaked
+  the serial handle, which Windows (exclusive COM ports) turned into `Access is denied` on
+  every retry. Same day, same Windows path: SLABS connected on the first attempt
+  (`c1 57 8f`) and read faults + live LIDs, so the Windows pulse is inside the stricter
+  Wabco window too. On this second car Td5 `33 C0` and SLABS `1A` both answered
+  `7F xx 10`; `verify_ecu.py` now treats those info reads as optional.
 - **2026-08-29 — SLABS diagnostics are STANDSTILL-ONLY (does it really die at speed?).** The ESP
   node sampled SLABS while driving 0–71 km/h, logging whether `81 29 F7 81` got a reply. SLABS
   answered `C1` at a standstill right after an ignition cycle, then went **silent the instant the

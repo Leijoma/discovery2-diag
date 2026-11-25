@@ -736,3 +736,27 @@ def test_fuel_computer_rate_trip_economy():
     assert abs(r["fuel_rate"] - 7.21) < 0.1        # L/h
     assert 6 < r["economy"] < 10                    # momentary L/100km
     assert 6 < r["trip_economy"] < 10               # trip average
+
+
+@pytest.mark.parametrize("kind", ["td5", "slabs"])
+def test_failed_establish_closes_port(monkeypatch, kind):
+    """A failed connect must release the serial port. Windows COM ports are exclusive,
+    so a leaked handle made every later retry fail with 'Access is denied'."""
+    from d2diag.kwp2000 import KWP2000Error
+    from d2diag.slabs import Slabs
+    from d2diag.td5 import Td5
+    from d2diag.web import sources
+    from tests.fakes import FakeKLineEcu
+
+    fake = FakeKLineEcu({})
+    monkeypatch.setattr(sources, "_transport", lambda port, raw: fake)
+
+    def _boom(self, **kw):
+        raise KWP2000Error("no session")
+
+    cls, src = ((Td5, sources.Td5DataSource(port="x")) if kind == "td5"
+                else (Slabs, sources.SlabsDataSource(port="x", read_faults=False)))
+    monkeypatch.setattr(cls, "establish", _boom)
+    with pytest.raises(KWP2000Error):
+        src._connect()
+    assert not fake._is_open
