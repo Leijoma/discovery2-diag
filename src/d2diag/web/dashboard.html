@@ -544,14 +544,14 @@
     wheel_speed_fr:{g:"Wheels",d:"Front-right wheel speed. Raw ~124 baseline stationary (not km/h). Driving straight all four should read equal; flutter or 0 while moving trips the Three Amigos (ABS/TC/HDC)."},
     abs_sensor_fr:{g:"Wheels",d:"Front-right ABS wheel-sensor voltage."},
     ecu_supply:{g:"Electrical",d:"Internal SLABS ECU supply voltage."},
-    wheel_speed_fl:{g:"Wheels",d:"Front-left wheel speed. Raw ~124 baseline stationary (not km/h); all four equal driving straight. ⚠ Wheel-to-field order is an unconfirmed guess."},
-    wheel_speed_fr:{g:"Wheels",d:"Front-right wheel speed. Raw ~124 baseline stationary (not km/h). ⚠ Wheel-to-field order unconfirmed."},
-    wheel_speed_rl:{g:"Wheels",d:"Rear-left wheel speed. Raw ~124 baseline stationary. ⚠ Wheel-to-field order unconfirmed."},
-    wheel_speed_rr:{g:"Wheels",d:"Rear-right wheel speed. Raw ~124 baseline stationary. ⚠ Wheel-to-field order unconfirmed."},
-    abs_sensor_fl:{g:"Wheels",d:"Front-left ABS sensor voltage (~2.3 V). ⚠ Wheel-to-field order unconfirmed."},
-    abs_sensor_fr:{g:"Wheels",d:"Front-right ABS sensor voltage (~2.3 V). ⚠ Wheel-to-field order unconfirmed."},
-    abs_sensor_rl:{g:"Wheels",d:"Rear-left ABS sensor voltage (~2.3 V). ⚠ Wheel-to-field order unconfirmed."},
-    abs_sensor_rr:{g:"Wheels",d:"Rear-right ABS sensor voltage (~2.3 V). ⚠ Wheel-to-field order unconfirmed."},
+    wheel_speed_fl:{g:"Wheels",d:"Front-left wheel speed. Raw ~124 baseline stationary (not km/h); all four equal driving straight. ⚠ Wheel order assumed from the ABS sensor voltages, not yet tested on wheel speed."},
+    wheel_speed_fr:{g:"Wheels",d:"Front-right wheel speed. Raw ~124 baseline stationary (not km/h). ⚠ Wheel order assumed, not yet tested on wheel speed."},
+    wheel_speed_rl:{g:"Wheels",d:"Rear-left wheel speed. Raw ~124 baseline stationary. ⚠ Wheel order assumed, not yet tested on wheel speed."},
+    wheel_speed_rr:{g:"Wheels",d:"Rear-right wheel speed. Raw ~124 baseline stationary. ⚠ Wheel order assumed, not yet tested on wheel speed."},
+    abs_sensor_fl:{g:"Wheels",d:"Front-left ABS sensor voltage (~2.3 V). 0 = sensor unplugged or open circuit."},
+    abs_sensor_fr:{g:"Wheels",d:"Front-right ABS sensor voltage (~2.3 V). 0 = sensor unplugged or open circuit."},
+    abs_sensor_rl:{g:"Wheels",d:"Rear-left ABS sensor voltage (~2.3 V). 0 = sensor unplugged or open circuit."},
+    abs_sensor_rr:{g:"Wheels",d:"Rear-right ABS sensor voltage (~2.3 V). 0 = sensor unplugged or open circuit."},
   };
   function groupOf(n){ return (META[n]&&META[n].g) || "Other"; }
   // Build tooltip text: description + normal range (from limits) + confidence.

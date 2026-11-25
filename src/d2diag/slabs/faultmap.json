@@ -3,6 +3,10 @@
   "block_len": 16,
   "bits": {
     "3.4": "020: right front wheel speed sensor — output too low",
-    "10.4": "027: shuttle valve switch — electrical failure"
+    "10.4": "027: shuttle valve switch — electrical failure",
+    "5.4": "064: front right wheel speed sensor — electrical failure",
+    "5.5": "065: rear left wheel speed sensor — electrical failure",
+    "5.6": "066: front left wheel speed sensor — electrical failure",
+    "5.7": "067: rear right wheel speed sensor — electrical failure"
   }
 }

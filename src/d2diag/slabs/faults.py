@@ -21,6 +21,15 @@ FAULT_BLOCK_LEN = 16
 SLABS_FAULT_BITS: "dict[tuple[int, int], tuple[str, str]]" = {
     (3, 4): ("020", "right front wheel speed sensor — output too low"),
     (10, 4): ("027", "shuttle valve switch — electrical failure"),
+    # Sensor electrical failures, one bit per wheel in the module's sensor index order (FR, RL,
+    # FL, RR, the same as 21 50). Found by unplugging one sensor at a time and diffing the block
+    # (1999/2000 D2 V8, GitHub issue #3, 2026-11-25). The numbers are RSW Solutions'. The
+    # reference tool's own numbers for these have not been seen, and its 020 is RSW's 044, so the
+    # two schemes differ (references/slabs_fault_codes.md).
+    (5, 4): ("064", "front right wheel speed sensor — electrical failure"),
+    (5, 5): ("065", "rear left wheel speed sensor — electrical failure"),
+    (5, 6): ("066", "front left wheel speed sensor — electrical failure"),
+    (5, 7): ("067", "rear right wheel speed sensor — electrical failure"),
 }
 
 

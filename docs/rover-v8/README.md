@@ -26,6 +26,10 @@ Everything is 🟡 or 🔴. Nothing has been read on a car by us yet.
 - 🟡 **Generic OBD-II.** The same Land Rover document covers it for OBD. Owners report reading
   engine codes with ELM327 + Torque, with mixed results ("cannot connect to ECU" for some).
   Which generic protocol it uses (ISO 9141-2 or ISO 14230) is not stated anywhere we found.
+  🟢 **Confirmed by a community report** (GitHub issue #2, D2 4.0 V8): a self-built WiFi ELM327
+  tool read the engine code **P1590**, the generic "rough-road signal" fault that the ECU sets
+  when SLABS reports an ABS problem. So generic OBD reaches the M5.2.1. The protocol the ELM327
+  picked was not reported.
 - 🔴 **Land Rover-specific channel** (what Testbook/Nanocom/Lynx/Faultmate use for live data
   and adaptations). There is no open source for the address, init, services or LID map. Other
   Bosch ECUs use 0x10/0x11/0x01 (VAG ME7), but that is not evidence for this ECU.

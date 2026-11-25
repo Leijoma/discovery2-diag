@@ -71,7 +71,7 @@
     "source": "21 44 byte13 u8×0.0625 V. PROVEN 2026-08-20: same as battery (13.5 V engine on, 12.0 V off)."
   },
   {
-    "name": "wheel_speed_fl",
+    "name": "wheel_speed_fr",
     "lid": "43",
     "offset": 0,
     "kind": "u16le",
@@ -80,10 +80,10 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@0 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). ⚠ WHEEL order (which offset = which wheel) not confirmed — all equally stationary cannot be told apart. Requires a spin-ONE-wheel test. CANDIDATE until then."
+    "source": "21 43@0 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). Wheel order ASSUMED to be the module's sensor index FR, RL, FL, RR, as proven for 21 50 (issue #3). Not tested on 21 43 itself; a spin-one-wheel test is still needed. CANDIDATE."
   },
   {
-    "name": "wheel_speed_fr",
+    "name": "wheel_speed_rl",
     "lid": "43",
     "offset": 2,
     "kind": "u16le",
@@ -92,10 +92,10 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@2 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). ⚠ WHEEL order (which offset = which wheel) not confirmed — all equally stationary cannot be told apart. Requires a spin-ONE-wheel test. CANDIDATE until then."
+    "source": "21 43@2 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). Wheel order ASSUMED to be the module's sensor index FR, RL, FL, RR, as proven for 21 50 (issue #3). Not tested on 21 43 itself; a spin-one-wheel test is still needed. CANDIDATE."
   },
   {
-    "name": "wheel_speed_rl",
+    "name": "wheel_speed_fl",
     "lid": "43",
     "offset": 4,
     "kind": "u16le",
@@ -104,7 +104,7 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@4 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). ⚠ WHEEL order (which offset = which wheel) not confirmed — all equally stationary cannot be told apart. Requires a spin-ONE-wheel test. CANDIDATE until then."
+    "source": "21 43@4 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). Wheel order ASSUMED to be the module's sensor index FR, RL, FL, RR, as proven for 21 50 (issue #3). Not tested on 21 43 itself; a spin-one-wheel test is still needed. CANDIDATE."
   },
   {
     "name": "wheel_speed_rr",
@@ -116,52 +116,52 @@
     "unit": "",
     "confidence": "kandidat",
     "limits": null,
-    "source": "21 43@6 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). ⚠ WHEEL order (which offset = which wheel) not confirmed — all equally stationary cannot be told apart. Requires a spin-ONE-wheel test. CANDIDATE until then."
+    "source": "21 43@6 u16le. Decoding PROVEN in the car 2026-08-20 (all four read 124 stationary, ≠ km/h). Wheel order ASSUMED to be the module's sensor index FR, RL, FL, RR, as proven for 21 50 (issue #3). Not tested on 21 43 itself; a spin-one-wheel test is still needed. CANDIDATE."
   },
   {
-    "name": "abs_sensor_fl",
+    "name": "abs_sensor_fr",
     "lid": "50",
     "offset": 0,
     "kind": "u8",
     "scale": 0.02,
     "bias": 0.0,
     "unit": "V",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       1.5,
       3.0
     ],
-    "source": "21 50@0 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). ⚠ WHEEL order not confirmed. CANDIDATE."
+    "source": "21 50@0 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). Wheel order FR, RL, FL, RR, from a sensor-unplug test on a 1999/2000 D2 V8 (GitHub issue #3, kiwi6068, 2026-11-25). 21 50 baseline 72 72 71 72; FR unplugged → @0 = 00; FL → @2 = 00; RR → @3 = 00; RL @1 by elimination. It is the same index order as the sensor fault bits 5.4–5.7 (064–067) and RSW's sensor code numbering."
   },
   {
-    "name": "abs_sensor_fr",
+    "name": "abs_sensor_rl",
     "lid": "50",
     "offset": 1,
     "kind": "u8",
     "scale": 0.02,
     "bias": 0.0,
     "unit": "V",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       1.5,
       3.0
     ],
-    "source": "21 50@1 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). ⚠ WHEEL order not confirmed. CANDIDATE."
+    "source": "21 50@1 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). Wheel order FR, RL, FL, RR, from a sensor-unplug test on a 1999/2000 D2 V8 (GitHub issue #3, kiwi6068, 2026-11-25). 21 50 baseline 72 72 71 72; FR unplugged → @0 = 00; FL → @2 = 00; RR → @3 = 00; RL @1 by elimination. It is the same index order as the sensor fault bits 5.4–5.7 (064–067) and RSW's sensor code numbering. @1 is RL by elimination only; an isolated RL unplug would close it."
   },
   {
-    "name": "abs_sensor_rl",
+    "name": "abs_sensor_fl",
     "lid": "50",
     "offset": 2,
     "kind": "u8",
     "scale": 0.02,
     "bias": 0.0,
     "unit": "V",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       1.5,
       3.0
     ],
-    "source": "21 50@2 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). ⚠ WHEEL order not confirmed. CANDIDATE."
+    "source": "21 50@2 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). Wheel order FR, RL, FL, RR, from a sensor-unplug test on a 1999/2000 D2 V8 (GitHub issue #3, kiwi6068, 2026-11-25). 21 50 baseline 72 72 71 72; FR unplugged → @0 = 00; FL → @2 = 00; RR → @3 = 00; RL @1 by elimination. It is the same index order as the sensor fault bits 5.4–5.7 (064–067) and RSW's sensor code numbering."
   },
   {
     "name": "abs_sensor_rr",
@@ -171,11 +171,11 @@
     "scale": 0.02,
     "bias": 0.0,
     "unit": "V",
-    "confidence": "kandidat",
+    "confidence": "belagt",
     "limits": [
       1.5,
       3.0
     ],
-    "source": "21 50@3 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). ⚠ WHEEL order not confirmed. CANDIDATE."
+    "source": "21 50@3 u8×0.02 V. Decoding PROVEN 2026-08-20 (all ~2.3 V steady). Wheel order FR, RL, FL, RR, from a sensor-unplug test on a 1999/2000 D2 V8 (GitHub issue #3, kiwi6068, 2026-11-25). 21 50 baseline 72 72 71 72; FR unplugged → @0 = 00; FL → @2 = 00; RR → @3 = 00; RL @1 by elimination. It is the same index order as the sensor fault bits 5.4–5.7 (064–067) and RSW's sensor code numbering."
   }
 ]

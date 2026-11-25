@@ -275,3 +275,12 @@ def test_clear_faults_reads_the_delayed_54_ack():
     with slabs:
         slabs.clear_faults()   # should not raise
     assert encode(b"\x14\xff\xff", addressed=False) in ecu.sent
+
+
+def test_sensor_electrical_fault_bits_follow_the_sensor_index():
+    """Byte 5 bits 4–7 = FR, RL, FL, RR sensor electrical failure (GitHub issue #3)."""
+    block = bytearray(16)
+    block[5] = 0x40  # bit 6
+    assert decode_fault_block(bytes(block)) == ["066: front left wheel speed sensor — electrical failure"]
+    block[5] = 0xF0
+    assert [f[:3] for f in decode_fault_block(bytes(block))] == ["064", "065", "066", "067"]

@@ -165,6 +165,14 @@ handbrake, engine running, SLABS connected), spin it by hand, see which field mo
 Repeat for a second wheel → then the byte order is proven. Without jacking, it stays a
 candidate — do not promote it on plausibility.
 
+**Update 2026-11-25.** `21 50` (sensor voltage) is settled by a sensor-unplug test on a D2 V8
+(GitHub issue #3): FR, RL, FL, RR, with RL by elimination. The store now assumes the same index
+for `21 43`, so this test now only checks `21 43`.
+- **Decision rule.** The spun wheel's field moves, and it is the one the store names → `21 43`
+  is proven. Any other field moves → the two LIDs use different orders; fix `21 43` alone.
+- **A cheap RL check without a jack.** Unplug only the RL sensor and read `21 50`. Byte 1 = `00`
+  proves RL. The fault bit 5.5 should also set (clear it afterwards).
+
 #### T-23 `[idle]` `[drive]` — SLABS hold: does a held session survive driving? (fault onset order)
 **Why.** The owner's "four amigos" (ABS/TC/HDC + red brake lamp) light intermittently on most
 drives and clear at the next ignition cycle. The logged block `21 11` has read `020` + `027` on

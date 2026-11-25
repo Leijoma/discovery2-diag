@@ -125,23 +125,38 @@ Everything the tool actually decodes today, straight from
 | `any_door` | `21 56` @0 bit 0 | bit (0 = closed, 1 = open) | — | 🟢 Proven | `21 56` byte0 bit0 = any-door; confirmed via differential 2026-08-08 (`00` closed / `01` open). |
 | `battery` | `21 44` @12 | u8 × 0.0625 | V | 🟢 Proven | `21 44` byte12. Confirmed in the car 2026-08-20: 13.5 V engine running (charging), 12.0 V engine off — tracks system voltage correctly. |
 | `ecu_supply` | `21 44` @13 | u8 × 0.0625 | V | 🟢 Proven | `21 44` byte13. Confirmed 2026-08-20: same as battery (13.5 V engine on, 12.0 V off). |
-| `wheel_speed_fl` | `21 43` @0 | u16le | — | 🟡 Assumed | `21 43`@0. Decoding confirmed in car 2026-08-20 (all four read 124 stationary, ≠ km/h). ⚠ **Wheel order** (which offset = which wheel) unconfirmed — all equally still, can't be told apart; needs a spin-one-wheel test. |
-| `wheel_speed_fr` | `21 43` @2 | u16le | — | 🟡 Assumed | `21 43`@2. As above. |
-| `wheel_speed_rl` | `21 43` @4 | u16le | — | 🟡 Assumed | `21 43`@4. As above. |
+| `wheel_speed_fr` | `21 43` @0 | u16le | — | 🟡 Assumed | `21 43`@0. Decoding confirmed in car 2026-08-20 (all four read 124 stationary, ≠ km/h). ⚠ **Wheel order** assumed to be the sensor index proven for `21 50` (FR, RL, FL, RR). Not tested on `21 43` itself; needs a spin-one-wheel test. |
+| `wheel_speed_rl` | `21 43` @2 | u16le | — | 🟡 Assumed | `21 43`@2. As above. |
+| `wheel_speed_fl` | `21 43` @4 | u16le | — | 🟡 Assumed | `21 43`@4. As above. |
 | `wheel_speed_rr` | `21 43` @6 | u16le | — | 🟡 Assumed | `21 43`@6. As above. |
-| `abs_sensor_fl` | `21 50` @0 | u8 × 0.02 | V | 🟡 Assumed | `21 50`@0. Decoding confirmed 2026-08-20 (all ~2.3 V steady). ⚠ Wheel order unconfirmed. |
-| `abs_sensor_fr` | `21 50` @1 | u8 × 0.02 | V | 🟡 Assumed | `21 50`@1. As above. |
-| `abs_sensor_rl` | `21 50` @2 | u8 × 0.02 | V | 🟡 Assumed | `21 50`@2. As above. |
-| `abs_sensor_rr` | `21 50` @3 | u8 × 0.02 | V | 🟡 Assumed | `21 50`@3. As above. |
+| `abs_sensor_fr` | `21 50` @0 | u8 × 0.02 | V | 🟢 Proven | `21 50`@0. Unplugging the FR sensor drops this byte to `00` (issue #3, D2 V8). |
+| `abs_sensor_rl` | `21 50` @1 | u8 × 0.02 | V | 🟢 Proven | `21 50`@1. RL by elimination (the other three were isolated). |
+| `abs_sensor_fl` | `21 50` @2 | u8 × 0.02 | V | 🟢 Proven | `21 50`@2. Unplugging FL → `00`. |
+| `abs_sensor_rr` | `21 50` @3 | u8 × 0.02 | V | 🟢 Proven | `21 50`@3. Unplugging RR → `00`. |
 
-### Wheel-order caveat (🟡)
+### Wheel order: the sensor index is FR, RL, FL, RR
 
-For the four wheel-speeds (`21 43`) and four ABS sensor voltages (`21 50`), the
-**scale/decoding is proven** but the **wheel-to-offset mapping is not**. Standing
-still, all four channels read the same value, so there is nothing to tell them
-apart. The assumed order follows the factory-tool screen order **FR/FL/RR/RL**
-and the modulator bit-mask order (see [Actuators](#actuators-startroutine-31-xx)),
-but confirming it needs a spin-one-wheel test. Until then these stay 🟡 Assumed.
+A community test on a 1999/2000 Discovery 2 **V8** (GitHub issue #3, 2026-11-25) unplugged one
+wheel sensor at a time with the ignition on and read `21 50`:
+
+| state | `21 50` |
+|---|---|
+| baseline | `72 72 71 72` |
+| FR unplugged | `00 72 72 72` |
+| FL unplugged | `71 71 00 72` |
+| RR unplugged | `72 72 72 00` |
+
+So the byte order is **FR, RL, FL, RR**. RL is position 1 by elimination. This is **not** the
+FR/FL/RR/RL screen order we had assumed, and not the FL/FR/RL/RR the store had either. Three
+things agree on it: the sensor fault bits found in the same test (byte 5 bits 4–7 = FR, RL, FL,
+RR electrical failure), and RSW Solutions' sensor code numbering (044–047 and 064–067 run FR, RL,
+FL, RR). The **valves** use a different order: the `31 22` mask and RSW's valve codes run FR,
+FL, RR, RL.
+
+`21 43` (wheel speeds) is assumed to use the same sensor index, but standing still it can't be
+checked. It stays 🟡 until a spin-one-wheel test is done.
+
+The same test confirms that SLABS is the same module on the V8 as on the Td5.
 
 ## Full reference tool / factory-tool input LID set
 
@@ -290,8 +305,8 @@ The web layer exposes these as actuator actions `bleed_power_on`,
 - 🔴 **`21 44` valve voltages** — the 8 inlet/outlet valve voltages and pump
   relay/monitor bytes in the rich analog block are not labelled (only battery @12
   and ECU supply @13 are proven).
-- 🟡 **Wheel order** for `21 43` (speeds) and `21 50` (sensor V) — assumed
-  FR/FL/RR/RL, needs a spin-one-wheel test to confirm.
+- 🟡 **Wheel order** for `21 43` (speeds): assumed to be the sensor index FR, RL, FL, RR,
+  which is proven for `21 50`. A spin-one-wheel test would confirm it.
 - 🟡 **Settings pairing** — which of `21 45/46/49/59` is which setting (test
   status / transport / ECU calibrated / suspension type) is unsolved; solve by
   differential (toggle one, watch one byte).

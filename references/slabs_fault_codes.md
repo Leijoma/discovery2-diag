@@ -10,6 +10,24 @@ rsw lists more numbered entries (012–114) — probably including link-/engine-
 > by **sniffing the reference tool** while it reads SLABS fault codes (capture both the raw bytes
 > and the displayed code at the same time). Only then can the `d2diag` SLABS decoder be built.
 
+## Raw bit ↔ code anchors (2026-11-25)
+
+| Bit (byte.bit) | Code | Text | Source |
+|---|---|---|---|
+| 3.4 | 020 (reference tool) | right front wheel speed sensor, output too low | sniff 2026-08-07, tool screen |
+| 10.4 | 027 (reference tool) | shuttle valve switch, electrical failure | sniff 2026-08-07, tool screen |
+| 5.4 | 064 (RSW) | front right sensor, electric fail | sensor unplugged, D2 V8, GitHub issue #3 |
+| 5.5 | 065 (RSW) | rear left sensor, electric fail | same (RL by elimination) |
+| 5.6 | 066 (RSW) | front left sensor, electric fail | same |
+| 5.7 | 067 (RSW) | rear right sensor, electric fail | same |
+
+**Two numbering schemes.** The reference tool shows the FR "output too low" fault as **020**,
+while RSW lists it as **044**, and RSW's own 020 is "No Batt Supply Voltage". So RSW's numbers
+are not the tool's. Bits 5.4–5.7 carry RSW numbers because that is how they were found. The
+sensor index in the bits is FR, RL, FL, RR, the same as RSW's sensor rows and `21 50`.
+Byte 3 bits 5–7 are therefore good candidates for "output too low" RL, FL and RR. That is a
+guess from the pattern and has not been tested.
+
 ## Systematic structure (important clue)
 The codes are regular → the raw indices likely map systematically. Per **8 valves**
 (4 wheels × in/out) and per **fault type** there is a code:
