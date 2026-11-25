@@ -1,0 +1,82 @@
+[
+  {
+    "name": "asd asd",
+    "lid": "D8",
+    "offset": 1,
+    "kind": "bit",
+    "bit": 4,
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "states": {
+      "0": "off",
+      "1": "on"
+    },
+    "source": "differential map (GUI) — bcu 21 D8 b1.4"
+  },
+  {
+    "name": "front drivers door",
+    "lid": "D8",
+    "offset": 1,
+    "kind": "bit",
+    "bit": 5,
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "states": {
+      "0": "off",
+      "1": "on"
+    },
+    "source": "differential map (GUI) — bcu 21 D8 b1.5"
+  },
+  {
+    "name": "driver door?",
+    "lid": "21",
+    "offset": 0,
+    "kind": "bit",
+    "bit": 0,
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "states": {
+      "0": "off",
+      "1": "on"
+    },
+    "source": "differential map (GUI) — bcu 21 21 b0.0"
+  },
+  {
+    "name": "driver door?",
+    "lid": "21",
+    "offset": 4,
+    "kind": "bit",
+    "bit": 0,
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "states": {
+      "0": "off",
+      "1": "on"
+    },
+    "source": "differential map (GUI) — bcu 21 21 b4.0"
+  },
+  {
+    "name": "driver door",
+    "lid": "21",
+    "offset": 4,
+    "kind": "bit",
+    "bit": 1,
+    "scale": 1.0,
+    "bias": 0.0,
+    "unit": "",
+    "confidence": "kandidat",
+    "states": {
+      "0": "off",
+      "1": "on"
+    },
+    "source": "differential map (GUI) — bcu 21 21 b4.1"
+  }
+]

@@ -153,3 +153,21 @@ def test_slabs_store_has_belagt_heights_and_door():
     assert by["height_left"].confidence == "belagt"
     assert by["height_right"].confidence == "belagt"
     assert by["any_door"].kind == "bit" and by["any_door"].states == {0: "closed", 1: "open"}
+
+
+def test_offset_by_len_picks_layout_from_answer_length():
+    """`21 1B` differs between ECU variants: our NNN answers 8 data bytes (supply @6), a 1999
+    Defender MSB answers 10 (supply @8, @6 = 00 00). Both must read the 5 V supply."""
+    sup = next(s for s in load_signals("td5") if s.name == "accel_supply")
+    ours = bytes.fromhex("0286112100001392")          # capture 20260808
+    defender = bytes.fromhex("036310501388000013a3")  # openhood issue #1
+    assert sup.fits(ours) and sup.fits(defender)
+    assert sup.decode(ours) == pytest.approx(5.010)
+    assert sup.decode(defender) == pytest.approx(5.027)
+    # An unlisted length falls back to the plain offset.
+    assert sup.offset_for(bytes(12)) == 6
+
+
+def test_offset_by_len_absent_keeps_plain_offset():
+    s = Signal("x", 0x1B, 2, "u16")
+    assert s.offset_for(bytes(10)) == 2 and s.decode(b"\x00\x00\x01\x00") == 256

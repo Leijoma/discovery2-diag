@@ -60,8 +60,82 @@ static int wifiCur = -1;                       // NETS index we're on, -1 = none
 #define CAR_NTP "192.168.4.1"
 #endif
 static bool onCarNet() { return wifiCur == WIFI_CAR && WiFi.status() == WL_CONNECTED; }
+
+// ---------------- USB uplink (node on the Pi's USB port) ----------------
+// When the node is powered from discopi's USB port, the same cable carries its Influx writes and
+// the Pi's GPS time, so in the car it needs neither WiFi nor NTP. WiFi stays as the fallback.
+// Lines from the Pi start with '@', so they never collide with the cable-mode commands
+// (PING/INIT/TX/…, see the bridge section) or with the node's own debug prints:
+//   Pi → node  "@T <epoch>"  keep-alive every ~5 s; epoch only while the Pi's clock is
+//                            synchronised (GPS/chrony), else "@T 0" (host present, no time)
+//              "@A <seq>"    the write that ended in "@E <seq>" is committed to the relay's disk
+//   node → Pi  "@L <line>"   one line-protocol line, precision=s, exactly as on the HTTP path
+//              "@E <seq>"    end of one write; the Pi commits all "@L" since the last "@E"
+// "@A" means exactly what the relay's 204 means (the lines are on disk), because the SLABS
+// read-and-clear erases on it. No "@A" within USB_ACK_MS → the host counts as gone until its
+// next "@T", and the write falls back to WiFi or the flash spill.
+static const uint32_t USB_HOST_TTL_MS = 15000;  // host gone after this long without a "@T"
+static const uint32_t USB_ACK_MS      = 1500;
+static bool     usbSeen   = false;
+static uint32_t usbHostAt = 0;                  // millis() of the last line from the Pi
+static uint32_t usbSeq    = 0;
+static String   usbLine;                        // partial line being assembled
+static String   usbPending;                     // a cable-mode command that came during an ack wait
+static bool usbHost() { return usbSeen && millis() - usbHostAt < USB_HOST_TTL_MS; }
+// Non-blocking line reader for the USB port. True once a whole line is in `out`.
+static bool usbReadLine(String &out) {
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\n') { out = usbLine; usbLine = ""; out.trim(); return true; }
+    if (usbLine.length() < 300) usbLine += c;
+  }
+  return false;
+}
+// Handle one '@' line from the Pi. Returns the acked seq for "@A", else 0.
+static uint32_t usbHandle(const String &line) {
+  usbSeen = true; usbHostAt = millis();
+  if (line.startsWith("@T")) {
+    long t = line.substring(2).toInt();
+    time_t now = time(nullptr);
+    // Step only on a real difference, so the Pi and SNTP (if any) don't fight over the clock.
+    if (t > 1700000000 && (now < 1700000000 || labs((long)now - t) > 2)) {
+      struct timeval tv = { (time_t)t, 0 };
+      settimeofday(&tv, nullptr);
+    }
+    return 0;
+  }
+  if (line.startsWith("@A")) return (uint32_t)line.substring(2).toInt();
+  return 0;
+}
+static int usbPost(const String &body) {
+  uint32_t seq = ++usbSeq;
+  int from = 0, L = body.length();
+  while (from < L) {
+    int nl = body.indexOf('\n', from);
+    if (nl < 0) nl = L;
+    if (nl > from) {
+      Serial.print("@L ");
+      Serial.write((const uint8_t *)body.c_str() + from, nl - from);
+      Serial.print('\n');
+    }
+    from = nl + 1;
+  }
+  Serial.printf("@E %lu\n", (unsigned long)seq);
+  uint32_t t0 = millis();
+  String line;
+  while (millis() - t0 < USB_ACK_MS) {
+    if (usbReadLine(line)) {
+      if (line.startsWith("@")) { if (usbHandle(line) == seq) return 204; }
+      else if (line.length()) usbPending = line;   // run it from the loop, after this write
+    } else delay(1);
+  }
+  usbSeen = false;                                 // no ack: host gone until its next "@T"
+  return -4;
+}
+
 // Can a POST to Influx (or the relay) get anywhere right now?
 static bool uplinkReady() {
+  if (usbHost()) return true;                  // the Pi's relay over USB
   if (WiFi.status() != WL_CONNECTED) return false;
   return onCarNet() || wgUp;                   // off the car net, 10.9.0.1 is only reachable over WG
 }
@@ -185,6 +259,15 @@ static const uint32_t SLABS_SETTLE_MS = 900;      // bus-silent gap after TD5 te
 static bool     slabsClear       = true;   // persisted ("sclear"); /slabsclear
 static bool     slabsClearedBoot = false;  // cleared in THIS ignition cycle (node power = KL15)
 static uint8_t  slabsClearTries  = 0;      // clear attempts this cycle (capped, see slabsExcursion)
+// The ONE window per ignition cycle: SLABS answers only until the car first moves. Waiting the
+// normal 60 s sample interval after boot missed it twice on 2026-11-14 (a power dip at cranking
+// rebooted the node right at 60 s, and the car was rolling before the next try). So: the first
+// excursion runs before TD5 is even up, and until one succeeds the node retries every
+// SLABS_FIRST_RETRY_MS at a standstill — until the car has moved, after which SLABS is gone anyway.
+static bool     slabsTriedCycle  = false;  // first excursion of this cycle has run
+static bool     slabsOkCycle     = false;  // SLABS answered at least once this cycle
+static bool     movedCycle       = false;  // TD5 speed has been >= SLABS_STILL_KMH this cycle
+static const uint32_t SLABS_FIRST_RETRY_MS = 10000;
 
 // SLABS HOLD (fault-order test, references/test_plan.md T-23). The excursions above prove only that
 // SLABS refuses a NEW StartCommunication once the car has moved — so its CURRENT faults (21 47), the
@@ -241,6 +324,7 @@ static bool influxConfigured() {
   return strlen(INFLUX_TOKEN) > 20 && strncmp(INFLUX_TOKEN, "influx-write", 12) != 0;
 }
 static int influxPost(const String &body) {
+  if (usbHost() && usbPost(body) == 204) return 204;   // USB first; on a missed ack, try WiFi
   if (WiFi.status() != WL_CONNECTED) return -1;
   if (!uplinkReady()) return -3;               // no route to 10.9.0.1 without the tunnel
   HTTPClient http;
@@ -262,32 +346,76 @@ static long epochNow() {
   time_t t = time(nullptr);
   return (t > 1700000000) ? (long)t : 0;      // 0 → let Influx stamp server time
 }
-// Append one failed engine line to the on-device spill (bounded). Newest is dropped when full
-// (the oldest, flushed first, is kept — a drive's start survives; a very long gap loses the tail).
-static void spillLine(const String &line) {
-  if (!fsReady || epochNow() == 0) return;    // need FS + a real timestamp to be useful later
+// Append one failed line to the on-device spill (bounded). Newest is dropped when full (the
+// oldest, flushed first, is kept — a drive's start survives; a very long gap loses the tail).
+// Returns true once the line is on flash — the SLABS read-and-clear erases only after that.
+// The node is fed from KL15, so it boots with no clock, and the uplink (and NTP) can take 30 s
+// or more on Discopi. A line captured before the clock is set gets the suffix " @<boot>:<ms>"
+// instead of an epoch; flushSpill turns it into a real timestamp once NTP is in, if it is still
+// the same boot (bootId counts boots in NVS). `atMs` is when the data was captured.
+static uint32_t bootId = 0;
+static bool spillLine(const String &line, uint32_t atMs) {
+  if (!fsReady) return false;
   File f = LittleFS.open(SPILL_PATH, FILE_APPEND);
-  if (!f) return;
-  if (f.size() < SPILL_MAX) { f.print(line); f.print('\n'); }
-  else spillDropped++;
+  if (!f) return false;
+  bool ok = false;
+  if (f.size() < SPILL_MAX) {
+    f.print(line);
+    if (epochNow() == 0) { f.print(" @"); f.print(bootId); f.print(':'); f.print(atMs); }
+    f.print('\n');
+    ok = true;
+  } else spillDropped++;
   f.close();
+  return ok;
+}
+static bool spillLine(const String &line) { return spillLine(line, millis()); }
+// A spilled line ready to send: "" = hold it for now, "-" = drop it. Lines with a real epoch go
+// as they are. A " @<boot>:<ms>" line from this boot gets its epoch once the clock is set. From an
+// earlier boot its time is lost: the slabs/mark lines (few, and their content matters) go without
+// a timestamp so Influx stamps them on arrival; 1 Hz engine/node lines would all land on the same
+// second and overwrite each other, so those are dropped.
+static String spillReady(const String &l) {
+  int at = l.lastIndexOf(" @");
+  if (at < 0) return l;
+  int colon = l.indexOf(':', at);
+  if (colon < 0) return "-";
+  uint32_t boot = (uint32_t)strtoul(l.c_str() + at + 2, nullptr, 10);
+  uint32_t ms = (uint32_t)strtoul(l.c_str() + colon + 1, nullptr, 10);
+  String body = l.substring(0, at);
+  if (boot == bootId) {
+    long now = epochNow();
+    if (!now) return "";
+    return body + " " + String(now - (long)((millis() - ms) / 1000));
+  }
+  return (body.startsWith("slabs") || body.startsWith("mark")) ? body : String("-");
 }
 // Send a chunk of the spill backlog to Influx and advance the read offset; delete the file
 // once drained. Idempotent: on reboot spillOffset resets to 0 and we re-send from the start
 // (Influx overwrites same tag+timestamp points).
 static void flushSpill() {
-  if (!fsReady || !uplinkReady()) return;
+  // exists() first: opening a missing file for read logs a vfs error, every 2 s on the USB port.
+  if (!fsReady || !uplinkReady() || !LittleFS.exists(SPILL_PATH)) return;
   File f = LittleFS.open(SPILL_PATH, FILE_READ);
   if (!f) return;
   size_t sz = f.size();
   if (spillOffset >= sz) { f.close(); LittleFS.remove(SPILL_PATH); spillOffset = 0; return; }
   f.seek(spillOffset);
   String chunk; chunk.reserve(SPILL_CHUNK + 256);
-  while (f.available() && chunk.length() < SPILL_CHUNK) chunk += (char)f.read();
-  while (f.available()) { char c = f.read(); chunk += c; if (c == '\n') break; }  // whole lines only
-  size_t consumed = f.position() - spillOffset;
+  size_t consumed = 0;
+  while (f.available() && chunk.length() < SPILL_CHUNK) {     // whole lines only
+    String l = f.readStringUntil('\n');
+    String r = spillReady(l);
+    if (r.length() == 0) break;                               // not stampable yet → wait for NTP
+    consumed += l.length() + 1;
+    if (r != "-") { chunk += r; chunk += '\n'; }
+  }
   f.close();
-  if (chunk.length() == 0) return;
+  if (consumed == 0) return;
+  if (chunk.length() == 0) {                                     // only dropped lines
+    spillOffset += consumed;
+    if (spillOffset >= sz) { LittleFS.remove(SPILL_PATH); spillOffset = 0; }
+    return;
+  }
   if (influxPost(chunk) == 204) {
     spillOffset += consumed;
     if (spillOffset >= sz) { LittleFS.remove(SPILL_PATH); spillOffset = 0; }
@@ -441,13 +569,19 @@ static bool logCycle() {
 
   appendField(line, js, first, "nfaults", (float)nFaults);   // fault count — see fault onset in Grafana
   if (!isnan(speedKmh)) lastSpeedKmh = speedKmh;             // remember speed for the SLABS excursion
+  if (!isnan(speedKmh) && speedKmh >= SLABS_STILL_KMH) movedCycle = true;
 
   appendFuel(line, js, first, rpm, injMg, speedKmh);
 
   if (first) return true;                       // reads ok but nothing decoded — keep session
   js += "}"; latestJson = js; latestMs = millis();   // publish the snapshot for /live + a screen
   long ts = epochNow();
-  if (ts) { line += " "; line += String(ts); }
+  // No clock yet (KL15 boot, Pi still booting or without a GPS fix): keep the line in flash with
+  // its boot-relative time, and flushSpill stamps it once the clock arrives. Posting it unstamped
+  // would only land in the relay's quarantine, since only the relay paths (Discopi, USB) are up
+  // without a clock; WG to Influx needs one.
+  if (!ts) { spillLine(line); return true; }
+  line += " "; line += String(ts);
   server.handleClient();                 // honour a pending mute/bridge click BEFORE the blocking POST
   lastPost = influxPost(line);
   if (lastPost == 204) pointsSent++;
@@ -487,10 +621,15 @@ static void nodeHeartbeat() {
                 ",bridge=" + String(bridgeMode ? 1 : 0) + "i" +
                 ",ign_cycle=" + String(needIgnCycle ? 1 : 0) + "i" +
                 ",logging=" + String(logEnabled ? 1 : 0) + "i" +
+                // SLABS this ignition cycle: 0 not read yet · 1 read · 2 read + logged faults cleared
+                ",slabs_rd=" + String(slabsClearedBoot ? 2 : slabsOkCycle ? 1 : 0) + "i" +
+                // 1 = the Pi is on the USB port and this beat goes over it (see USB uplink)
+                ",usb=" + String(usbHost() ? 1 : 0) + "i" +
                 ",reset=\"" + resetReasonStr() + "\"" +
                 ",points=" + String(pointsSent);
   long ts = epochNow();
-  if (ts) { line += " "; line += String(ts); }
+  if (!ts) { spillLine(line); return; }       // stamped from flash once the clock is in (see above)
+  line += " "; line += String(ts);
   influxPost(line);
 }
 // Brief SLABS excursion: leave TD5, read heights/ABS-sensor-V/wheel-speeds, log them + whether
@@ -510,6 +649,8 @@ static void slabsExcursion() {
     if (i) { stopComm(); busQuiet(SLABS_SETTLE_MS); }
     ok = slabsEstablish();
   }
+  uint32_t atMs = millis();                       // capture time, for a spill made before NTP
+  if (ok) slabsOkCycle = true;
   String line = String("slabs,vehicle=") + LOG_VEHICLE + " reachable=" + (ok ? "1i" : "0i");
   if (!isnan(lastSpeedKmh)) { line += ",speed="; line += String(lastSpeedKmh, 1); }
   if (!ok) { line += ",sb=\"" + klineLastBurst + "\""; }   // diagnostic: what did SLABS StartComm return?
@@ -531,7 +672,10 @@ static void slabsExcursion() {
         String pre = String("slabs_clear,vehicle=") + LOG_VEHICLE + " flog_before=\"" +
                      toHex(b, 16) + "\",nflog_before=" + String(c) + "i";
         if (ts) { pre += " "; pre += String(ts); }
-        if (influxPost(pre) == 204) {                 // stored → safe to erase
+        // Stored → safe to erase. Stored = Influx (or the Pi relay) said 204, or the line is in
+        // the flash spill. At boot the uplink is usually not up yet, and this is the only window.
+        bool stored = influxPost(pre) == 204 || spillLine(pre, atMs);
+        if (stored) {
           slabsClearTries++;
           bool ack = slabsClearFaults();
           uint8_t a[80];
@@ -548,7 +692,7 @@ static void slabsExcursion() {
                         "i,nflog_after=" + String(c2) + "i";
           if (m >= 16) post += ",flog_after=\"" + slabsFlog + "\"";
           if (ts) { post += " "; post += String(ts); }   // same timestamp → merges with `pre`
-          if (influxPost(post) != 204) spillLine(post);
+          if (influxPost(post) != 204) spillLine(post, atMs);
           if (ack || c2 == 0) slabsClearedBoot = true;  // else retry at the next standstill sample
           Serial.printf("SLABS: logged faults cleared (ack %d, after %d bits)\n", ack ? 1 : 0, c2);
         }
@@ -559,7 +703,7 @@ static void slabsExcursion() {
   }
   stopComm();                                     // release SLABS
   long ts = epochNow(); if (ts) { line += " "; line += String(ts); }
-  influxPost(line);
+  if (influxPost(line) != 204) spillLine(line, atMs);   // the boot sample is often pre-uplink
   sessionUp = false; recoveryCleared = true;      // bus is clean → fast TD5 re-establish (skip the long idle)
   quietUntil = millis() + 600; lastFuelMs = 0;
 }
@@ -672,6 +816,12 @@ static void logTick() {
   lastCycle = now;
   if (!sessionUp) {
     if (now < BOOT_QUIET_MS) return;              // skip the crank/immobiliser window at ignition-on
+    if (slabsPoll && !slabsTriedCycle) {          // SLABS first: its window closes when the car moves
+      slabsTriedCycle = true;
+      lastSlabs = now;
+      slabsExcursion();
+      return;
+    }
     if (!recoveryCleared) {                        // ONE clean teardown per recovery episode...
       endSession();                                // ...StopDiagnosticSession (20) + StopCommunication (82)
       recoveryCleared = true;
@@ -690,8 +840,12 @@ static void logTick() {
     return;
   }
   // SLABS excursion (opt-in) — ONLY while stationary, where SLABS actually answers.
-  if (slabsPoll && (isnan(lastSpeedKmh) || lastSpeedKmh < SLABS_STILL_KMH)
-      && millis() - lastSlabs > SLABS_STILL_MS) {
+  // Once the car has moved, SLABS refuses every new connection until the next ignition cycle
+  // (2026-08-29, and again every post-move sample on 2026-11-14/17). Each failed try froze live
+  // data ~7 s at every stop, so stop trying until the next cycle.
+  uint32_t slabsEvery = slabsOkCycle ? SLABS_STILL_MS : SLABS_FIRST_RETRY_MS;
+  if (slabsPoll && !movedCycle && (isnan(lastSpeedKmh) || lastSpeedKmh < SLABS_STILL_KMH)
+      && millis() - lastSlabs > slabsEvery) {
     lastSlabs = millis();
     slabsExcursion();
     return;
@@ -710,13 +864,14 @@ static void logTick() {
 
 // Bring up the WireGuard tunnel so the node has a fixed WG IP. The handshake needs
 // valid wall-clock time → NTP first. Skipped if WG_PRIVATE_KEY is the placeholder.
+// Never waits for NTP: it used to block up to 8 s for it, and loop() retried every 30 s. On
+// Discopi the node gets no NTP answer, so live data froze for 9 s every 30 s (2026-11-17 drive,
+// seen as dropouts on the Pi's Car pane). Now it asks for time and returns; loop() comes back
+// once the clock is set.
 static void wgStart() {
   if (strlen(WG_PRIVATE_KEY) < 40) { Serial.println("WG: no key set — skipping"); return; }
-  Serial.println("WG: syncing time (NTP) ...");
   ntpStart();
-  uint32_t t0 = millis();
-  while (time(nullptr) < 1700000000 && millis() - t0 < 8000) delay(200);
-  if (time(nullptr) < 1700000000) { Serial.println("WG: NTP failed — skipping"); return; }
+  if (time(nullptr) < 1700000000) return;           // no clock yet → try again later
   IPAddress ip; ip.fromString(WG_LOCAL_IP);
   Serial.printf("WG: connecting, local %s ...\n", WG_LOCAL_IP);
   wgUp = wg.begin(ip, WG_PRIVATE_KEY, WG_ENDPOINT, WG_PEER_PUBKEY, (uint16_t)WG_PORT);
@@ -952,7 +1107,7 @@ static void handleRoot() {
 }
 static void handleStatus() {
   uint32_t spillPending = 0;
-  if (fsReady) {
+  if (fsReady && LittleFS.exists(SPILL_PATH)) {
     File sf = LittleFS.open(SPILL_PATH, FILE_READ);
     if (sf) { uint32_t s = sf.size(); spillPending = s > spillOffset ? s - spillOffset : 0; sf.close(); }
   }
@@ -983,10 +1138,12 @@ static void handleData() {
     ",\"demo\":" + String(demoMode ? 1 : 0) +
     ",\"logging\":" + String(logEnabled ? 1 : 0) +
     ",\"bridge\":" + String(bridgeMode ? 1 : 0) +
+    ",\"usb\":" + String(usbHost() ? 1 : 0) +
     ",\"ign_cycle\":" + String(needIgnCycle ? 1 : 0) +
     ",\"slabs_poll\":" + String(slabsPoll ? 1 : 0) +
     ",\"slabs_clear\":" + String(slabsClear ? 1 : 0) +
     ",\"slabs_cleared\":" + String(slabsClearedBoot ? 1 : 0) +
+    ",\"slabs_rd\":" + String(slabsClearedBoot ? 2 : slabsOkCycle ? 1 : 0) +
     ",\"slabs_hold\":" + String(slabsHold ? 1 : 0) +
     ",\"hold_up\":" + String(holdUp ? 1 : 0) +
     ",\"hold_up_s\":" + String(holdUp ? (millis() - holdSince) / 1000 : 0) +
@@ -1193,11 +1350,14 @@ static bool bridgeHandle(const String &line) {
   if (line.startsWith("STOP")) { bridgeEnter(); stopComm(); Serial.println("OK"); return true; }
   return false;                             // not a bridge command (host banner / stray input)
 }
+// The USB port carries both the cable-mode commands and the Pi uplink's '@' lines.
 static void serviceBridgeSerial() {
-  if (!Serial.available()) return;
-  String line = Serial.readStringUntil('\n');
-  line.trim();
-  if (line.length()) bridgeHandle(line);
+  String line;
+  if (usbPending.length()) { line = usbPending; usbPending = ""; }
+  else if (!usbReadLine(line)) return;
+  if (!line.length()) return;
+  if (line[0] == '@') { usbHandle(line); return; }
+  bridgeHandle(line);
 }
 static void handleBridge() {
   if (server.hasArg("on")) {
@@ -1245,6 +1405,22 @@ static void handleSlabsHold() {
     "{\"slabs_hold\":" + String(slabsHold ? 1 : 0) + ",\"hold_up\":" + String(holdUp ? 1 : 0) + "}");
 }
 
+// /mark?lamps=3|4 — the driver's "amigos just lit" button (B-011). The lamps stay lit until the
+// next ignition cycle, so only the first onset per cycle can be marked; it lands in Influx next to
+// the engine data as `mark,vehicle=…,src=node amigos=1i,lamps=<n>i`. The Pi's Car pane writes the
+// same line with src=pi into its relay. lamps=0 = count not given. Spilled if the uplink is down.
+static void handleMark() {
+  int lamps = server.arg("lamps").toInt();
+  if (lamps < 0 || lamps > 9) lamps = 0;
+  // In demo mode the mark is tagged vehicle=demo, so testing a display never leaves a mark in the car's series.
+  String line = String("mark,vehicle=") + (demoMode ? "demo" : LOG_VEHICLE) + ",src=node amigos=1i,lamps=" + String(lamps) + "i";
+  long ts = epochNow();
+  if (ts) { line += " "; line += String(ts); }
+  int code = influxPost(line);
+  const char *st = code == 204 ? "sent" : spillLine(line) ? "spilled" : "lost";
+  server.send(200, "application/json", String("{\"mark\":\"") + st + "\",\"lamps\":" + String(lamps) + "}");
+}
+
 void setup() {
   Serial.begin(115200); Serial.setTimeout(80); delay(300); bootMs = millis();
   Serial.println("\n== K-line node: WiFi + OTA + web + K-line + Influx ==");
@@ -1255,13 +1431,22 @@ void setup() {
                                              // safe; captures SLABS heights/ABS-V/faults at every stop)
   slabsHold = prefs.getBool("hold", false);  // SLABS hold (fault-order test) — off unless chosen
   slabsClear = prefs.getBool("sclear", true); // read-and-clear SLABS logged faults once per start
+  bootId = prefs.getUInt("boots", 0) + 1;    // tells a pre-NTP spill line from this boot apart
+  prefs.putUInt("boots", bootId);
   Serial.printf("Boot reason: %s · slabs_poll %s · slabs_hold %s\n", resetReasonStr(),
                 slabsPoll ? "ON" : "off", slabsHold ? "ON" : "off");
   // Auto-reconnect off: it would keep retrying the lost network and fight the roaming
   // scan. wifiTick() rejoins the same network itself when that is still the best one.
   WiFi.mode(WIFI_STA); WiFi.setHostname(OTA_HOSTNAME); WiFi.setAutoReconnect(false);
   wifiBoot();
-  wgStart();                                 // fixed WG IP, reachable via the tunnel
+  // WG needs NTP, and wgStart waits up to 8 s for it. With no network that wait only delays the
+  // first K-line contact (and the SLABS window with it); loop() retries WG once WiFi is up.
+  if (WiFi.status() == WL_CONNECTED) {             // fixed WG IP, reachable via the tunnel
+    ntpStart();
+    uint32_t t0 = millis();                         // boot only: a short wait, so WG is up at once
+    while (time(nullptr) < 1700000000 && millis() - t0 < 3000) delay(100);   // at home
+    wgStart();
+  }
 
   ArduinoOTA.setHostname(OTA_HOSTNAME);
   ArduinoOTA.setPassword(OTA_PASSWORD);
@@ -1282,6 +1467,7 @@ void setup() {
   server.on("/slabs", handleSlabsPoll);     // toggle the sparse SLABS excursion
   server.on("/slabshold", handleSlabsHold); // SLABS hold mode (fault-order test, T-23)
   server.on("/slabsclear", handleSlabsClear);
+  server.on("/mark", handleMark);           // ?lamps=3|4 — driver marks the amigos lighting
   server.on("/demo", handleDemo);           // ?on=1|0 — synthetic drive data, RAM only
   server.on("/wifi", handleWifi);           // ?use=car|home|phone|auto — pin a network (testing) // read-and-clear SLABS logged faults at start
   server.begin();
@@ -1306,13 +1492,17 @@ void loop() {
     return;                                  // bus belongs to the host; skip WiFi churn + logging
   }
   // Heartbeat on the loop, not in logTick, so it also runs while muted and in demo mode.
-  if (millis() - lastBeat > BEAT_INTERVAL_MS) { lastBeat = millis(); nodeHeartbeat(); }
+  // Beat at once when slabs_rd changes: the Pi's "Wait — reading SLABS" hint clears on the beat.
+  static uint8_t beatSlabsRd = 0;
+  uint8_t rd = slabsClearedBoot ? 2 : slabsOkCycle ? 1 : 0;
+  if (rd != beatSlabsRd) { beatSlabsRd = rd; lastBeat = 0; }
+  if (lastBeat == 0 || millis() - lastBeat > BEAT_INTERVAL_MS) { lastBeat = millis(); nodeHeartbeat(); }
   wifiTick();                                // non-blocking roaming: rejoin / move up to discopi
   // WG can miss at boot if NTP was slow over the hotspot's CGNAT. Retry while WiFi is
   // up so the tunnel (and thus Influx logging to 10.9.0.1) recovers without a reboot.
-  if (!wgUp && WiFi.status() == WL_CONNECTED && millis() - lastWgTry > 30000) {
+  if (!wgUp && WiFi.status() == WL_CONNECTED && millis() - lastWgTry > 5000) {
     lastWgTry = millis();
-    wgStart();
+    wgStart();                               // non-blocking until the clock is set
   }
   // WG persistent keepalive: the lib has none, and the node sits behind the hotspot's
   // NAT — send a tiny packet into the tunnel every 20 s so the mapping stays open and

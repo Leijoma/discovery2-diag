@@ -73,6 +73,10 @@ def build_header() -> str:
         sig = by_name.get(store_name)
         if sig is None:
             raise SystemExit(f"gen_signal_header: '{store_name}' not in signals/td5.json")
+        if sig.offset_by_len:
+            # The C table has one fixed offset per field; a length-dependent layout would be
+            # decoded wrong on the other variant, so refuse rather than silently pick one.
+            raise SystemExit(f"gen_signal_header: '{store_name}' has offset_by_len, unsupported")
         if sig.kind not in _KIND:
             raise SystemExit(f"gen_signal_header: kind '{sig.kind}' ({store_name}) unsupported")
         rows.append(

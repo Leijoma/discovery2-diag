@@ -64,27 +64,39 @@ class Signal:
     bit: "int | None" = None                       # for kind="bit"
     states: "dict[int, str] | None" = None          # raw value → label (bit/state)
     source: str = ""
+    # Data-field length → offset, for LIDs whose answer layout differs between ECU variants.
+    # A length not listed falls back to ``offset``. E.g. ``21 1B`` answers 8 data bytes on our
+    # NNN (supply @6) but 10 on a 1999 Defender MSB (supply @8, @6 = 00 00) — openhood issue #1.
+    offset_by_len: "dict[int, int] | None" = None
+
+    def offset_for(self, data: bytes) -> int:
+        """The offset that applies to this answer (``offset_by_len`` keyed on ``len(data)``)."""
+        if self.offset_by_len:
+            return self.offset_by_len.get(len(data), self.offset)
+        return self.offset
 
     def decode(self, data: bytes) -> float:
         """Numeric value (bit → 0.0/1.0) so the ``dict[str, float]`` contract holds."""
+        o = self.offset_for(data)
         if self.kind == "bit":
-            raw = (data[self.offset] >> (self.bit or 0)) & 1
+            raw = (data[o] >> (self.bit or 0)) & 1
         else:
-            raw = _READERS[self.kind](data, self.offset)
+            raw = _READERS[self.kind](data, o)
         return raw * self.scale + self.bias
 
     def decode_named(self, data: bytes) -> "str | None":
         """State label from ``states`` (for the UI), otherwise ``None``."""
         if not self.states:
             return None
+        o = self.offset_for(data)
         if self.kind == "bit":
-            raw = (data[self.offset] >> (self.bit or 0)) & 1
+            raw = (data[o] >> (self.bit or 0)) & 1
         else:
-            raw = int(_READERS.get(self.kind, _u8)(data, self.offset))
+            raw = int(_READERS.get(self.kind, _u8)(data, o))
         return self.states.get(raw)
 
     def fits(self, data: bytes) -> bool:
-        return len(data) >= self.offset + _WIDTH.get(self.kind, 2)
+        return len(data) >= self.offset_for(data) + _WIDTH.get(self.kind, 2)
 
 
 # ---- load / save -------------------------------------------------------- #
@@ -93,6 +105,7 @@ def _record_to_signal(r: dict) -> Signal:
     if states:
         states = {int(k): v for k, v in states.items()}
     limits = r.get("limits")
+    by_len = r.get("offset_by_len")
     return Signal(
         name=r["name"],
         lid=int(r["lid"], 16) if isinstance(r["lid"], str) else int(r["lid"]),
@@ -106,6 +119,7 @@ def _record_to_signal(r: dict) -> Signal:
         bit=r.get("bit"),
         states=states or None,
         source=r.get("source", ""),
+        offset_by_len={int(k): int(v) for k, v in by_len.items()} if by_len else None,
     )
 
 

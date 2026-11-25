@@ -231,6 +231,123 @@ data during the run.
 - **Next:** one more run where the amigos light *during* the drive. If the session is already
   dead by then, close T-23 on branch 1 and rely on read-and-clear per start.
 
+#### T-24 `[drive]` — Which SLABS code latches per segment, and is Td5 bit 25.5 the amigos?
+**Question.** The amigos stay lit until the ignition is cycled, so the driver sees only the
+first onset per cycle. Two things are open:
+- Which SLABS code latches in each segment (020 = 3 lamps, 027 = 4).
+- Whether the unnamed Td5 fault bit `25.5` (byte 25 = road speed / cruise) has anything to do
+  with the lamps.
+
+On 2026-11-14, `25.5` came on at 15:36:30, the one onset with a known time. But it also came
+on 9 times over two drives, nearly always below ~25 km/h after slowing, and again after the
+ignition cycle at 15:41 without the lamps. It has toggled on almost every drive since
+September.
+
+`25.5` is not peculiar to this car. openhood (github.com/tuffjocke/openhood, issue #1,
+2026-11-24) found it **set on a 1999 Defender** with an early MSB ECU. The Defender also had
+`15.6` and `23.7` set, and no source names any of the three. So it is a normal state of the
+road-speed input on at least one other Td5, not a fault peculiar to this SLABS. That weakens
+"`25.5` is the amigos" but fits "`25.5` reacts to a weak or missing wheel-speed signal" equally
+well. The Defender's ABS layout differs, so this doesn't change the decision rule. A
+Nanocom/Testbook reading that names the bit would settle it.
+
+**Setup.** Node firmware from 2026-11-15:
+- SLABS read ~12 s after boot, before TD5.
+- Read-and-clear stored even without an uplink (flash spill).
+- `slabs_rd` in the heartbeat.
+- **Amigos** button: `mark,src=node|pi` with `lamps`.
+
+SLABS clear at start must be ON.
+
+**Procedure.**
+1. Normal driving. When the amigos light, press **Amigos** with the lamp count.
+2. At the next stop, cycle the ignition and stand still until `slabs_rd` ≥ 1 (~15 s).
+3. Repeat for at least 5 marked onsets.
+
+**Decision rule (written 2026-11-15, before the data).**
+- **Per segment.** Each `slabs_clear.flog_before` belongs to the segment that ended at that
+  ignition cycle.
+  - 020 alone + 3-lamp mark → the lamp count is the code, as B-011 assumes.
+  - 027 in a segment marked 3 → that assumption is wrong.
+  - A code set again in a segment with no mark → it recurred while the lamps were already lit.
+- **Td5 25.5.**
+  - It is linked to the lamps if ≥ 4 of 5 marks fall within 10 s after a `25.5` ON edge.
+  - It is not linked if fewer than 2 of 5 do.
+  - Anything in between is inconclusive.
+  - Account for the base rate: `25.5` is ON a large share of low-speed time, so compare
+    against random timestamps in the same drives.
+
+**Progress 2026-11-17 (evening; local CET = UTC+1, driver's times ±1 min).** Two onsets of
+4 lamps, no button marks (times from the driver's log).
+- **Segment 19:39–~19:48** (onset 19:44, 4 lamps). Read-and-clear at the 19:39 key-on found
+  the log empty. The read at the ~19:48 key-on (5 min idle) found **020 alone**. That
+  record was spilled without a clock and reached Influx stamped on arrival at 20:03:16. So
+  this was 4 lamps with 020 alone, against B-011's "020 alone = 3".
+  - Td5 `25.5` went ON at 19:44:14 while slowing 40 → 23 km/h. That is 2 of 2 known
+    onsets so far, but it also went ON at 20:05 and 20:06 with no lamps reported.
+- **Segment ~19:48–20:03** (onset 19:57, 4 lamps). The read at the 20:03 key-on found the
+  log **empty**, so no SLABS code latched for this onset. Either the lamps came from a
+  non-latching condition, or from another module.
+  - Td5 data for 19:46–20:03 never reached Influx: the node was on `Discopi` without a
+    clock. **The relay's quarantine has it** (read-only read on 2026-11-22), but only in Pi-clock
+    time, which runs from a restored, unsynced clock. Anchoring on the arrival stop (last row,
+    speed 3) against the 20:03 key-on after the 4-min stop puts real time at about Pi-clock
+    + 2 min (±1 min).
+    - One node boot (poweron, `slabs_rd=2`) stood ~10 min, with SLABS reads every 60 s, all
+      zero after the clear. It then drove ~3 min.
+    - `25.5` went ON at Pi 18:54:38, about 19:56:40 local, shortly after moving off. That fits
+      the 19:57 onset within the ±1 min anchor.
+    - `5.0` + `17.2` went ON at about 19:58:40. `nfaults` moves with these bits.
+- Cranking after the 4-min stop gave a `wdt` reset at 20:04:47, as on 2026-11-14.
+  (Re-read after 2026-11-21: this could also have been the loose charger, see below.)
+
+**Progress 2026-11-21 (first drive, local 18:55–19:21).** The driver saw 4 lamps twice. Each
+time they stopped soon after and cycled the ignition. Influx has no exact times, and the Pi
+marks are stuck in the relay's quarantine (no Pi clock).
+- The engine was off at 19:00:45–19:02:26. The read at the 19:02:33 key-on found **020
+  alone**. The log was last cleared empty at 17:51:45.
+- The next key-on was probably the 19:03:53 boot. SLABS was silent there (old firmware). The
+  read at 19:44:22 found **020 alone** again, latched during the rest of drive 1.
+- So **3 of 3** four-lamp onsets with a SLABS code have 020 alone, and one (11-17 19:57) had
+  none. Per the decision rule, the "020 = 3 lamps, 027 = 4" assumption is wrong; the lamp count
+  does not identify the code.
+- Td5 `25.5` went ON at 19:03:26 (~23 km/h, slowing), shortly before the second stop. Without
+  marks this cannot be scored.
+- **Caveat on ignition cycles.** On 2026-11-21 the node rebooted five times while driving (drive
+  2, 20–75 km/h): the USB charger feeding it had a loose contact. Before that was fixed, a node
+  boot is not proof of an ignition cycle. Here the 19:00:45 engine-off and the driver's account
+  carry the segmentation.
+
+#### T-25 `[key-on]` — SLABS silent since 2026-11-12: the node or the module?
+**Question.** SLABS has not answered a single StartCommunication since 2026-11-12 13:54Z.
+That covers 3 drive days and every attempt, including 2026-11-17 at 10, 20 and 31 s after
+key-on with the car standing still. The `sb` field shows only our own echo `81 29 F7 81 22`,
+so TX and the bus are fine and TD5 answers as usual. Before 11-12, SLABS answered at most
+standstill samples (69 on 2026-10-29).
+
+The node's init code (`klineFastInit`, `slabsEstablish`) has not changed since 2026-08-29.
+What changed since 11-12:
+- Firmware: WiFi roaming with async scans, the Pi relay, the read-and-clear (it never ran),
+  and the early SLABS sample.
+- Car side: the T-23 held session on 11-12, and more amigos onsets.
+
+SLABS has a narrower fast-init window than TD5 (`slabs_init_problem_brief.md`: TiniH must be
+25 ± 1 ms). The node's TiniH is `delay(25)` + `Serial2.begin()` + write latency, and has never
+been measured.
+
+**Procedure.** Key-on, engine off, car never moved this cycle.
+1. Node muted (Settings → Mute).
+2. `PYTHONPATH=src python3 tools/verify_ecu.py slabs auto` with the KKL cable. Do 3 attempts.
+3. If KKL fails too, cycle the ignition and try once more.
+
+**Decision rule (written 2026-11-17, before the test).**
+- KKL connects (C1 57 8F) → the module is fine and the node is the problem. Next: measure the
+  node's TiniH on a scope or logic analyser, and make the pulse exact (busy-wait, keep the UART
+  attached).
+- KKL is silent as well → SLABS (car side) has stopped answering diagnostics. Route it to B-011
+  in the car journal, with the amigos history.
+- KKL connects only on a second ignition cycle → inconclusive; repeat on another day.
+
 #### T-15 `[idle]` — ABS bleed commands, first live run
 ⚠️ **Brake system. Only during an actual brake bleed.** `abs_power_bleed(True/False)` and
 `abs_module_bleed()` are proven from the sniff but have never been run from our code.
@@ -238,6 +355,40 @@ Verify each replies `71 22 20`. If only verifying without bleeding: pulse power_
 on→off, confirm the ack, and do **not** run the full module sequence.
 
 ### P4 — Other modules
+
+#### T-26 `[key-on]` — V8 engine ECU (Bosch Motronic M5.2.1): which bus and protocol?
+**Question.** The Discovery 2 V8 and the Range Rover P38 4.0/4.6 (1999–2002) use a Bosch
+Motronic M5.2.1. No open source gives its address, init or services
+(`docs/rover-v8/README.md`). Dealer-type tools (Nanocom/Blackbox, Lynx, Faultmate) read it,
+and owners report mixed results with ELM327 generic OBD. Which of the standard ways does it
+answer, and does anything open a Land Rover-specific channel? A tester with a V8 and an FTDI
+KKL cable is available. SLABS, the airbag module and the BCU are the same modules as on our
+Td5, so the existing `verify_ecu.py` covers those on his car.
+
+**Procedure.** Ignition ON (position II), engine off, car stationary, nothing else on the OBD
+port.
+1. `PYTHONPATH=src python3 tools/verify_ecu.py airbag auto`. This proves that the cable and the
+   bus work on that car.
+2. `PYTHONPATH=src python3 tools/v8_probe.py auto` (~1.5 min, read only). Send back
+   `logs/v8_probe_<time>.txt`.
+3. If step 2 finds nothing at all, cycle the ignition, wait 30 s and run it once more.
+
+**Decision rule (written 2026-11-25, before the test).**
+- **5-baud 0x33 gives `08 08` / `94 94`** → generic OBD is ISO 9141-2. Positive `01 00` → a
+  generic OBD source (PIDs + `03` codes) can be built straight away. Check the `48 6B <ecu>`
+  source byte: that is the ECU's physical address, and the first one to try for an LR channel.
+- **5-baud 0x33 gives `xx 8F`, or the functional fast init `C1 33` answers** → generic OBD is
+  ISO 14230. The same applies, and the physical address comes from the reply header.
+- **A physical fast init answers C1** (0x10/0x11/0x12/0x01) → our KWP2000 stack carries over
+  directly. Positive `21 01` → start a LID sweep like the Td5's. `7F 21 33` → reads need
+  SecurityAccess, and we need a sniff of a dealer-type tool. `7F 21 12/11` → no `21` service
+  there; try `18`/`1A` next.
+- **Only DS2 answers (`12 xx A0 …`)** → it is BMW DS2, and openhood's `bmw-ds2` profile shows
+  the frame format.
+- **Airbag answers but the probe finds nothing** → the M5.2.1 is not on pin 7 with any of these
+  inits. Next: ask the tester to borrow a Nanocom/Lynx and passively sniff a session (a second
+  cable as listener).
+- **Airbag is silent too** → it is the cable or the connection, not the ECU. Repeat T-25's checks.
 
 #### T-16 `[key-on]` — BCU: map the read-only auth boundary
 **Question.** How much of the BCU is legible **without** SecurityAccess? First contact,

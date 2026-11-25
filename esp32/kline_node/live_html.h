@@ -65,6 +65,7 @@ main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column}
   <div><div class=htitle>Discovery 2 · live</div><div class=hsub id=sub>connecting…</div></div>
   <span class=spacer></span>
   <button class=chip id=fbtn style="display:none;border-color:var(--bd-red);color:var(--red)" onclick=showFaults()>&#9888; <span id=fn>0</span></button>
+  <button class=chip id=abtn style="border-color:var(--yellow);color:var(--yellow)" onclick=openAmigos()>Amigos</button>
   <button class=chip onclick=openSettings()>&#9881; Settings</button></header>
  <main id=main></main>
 </div>
@@ -163,6 +164,22 @@ function renderHold(d){
   <button class="btn accent" onclick=toggleHold()>Back to engine logging</button></div>`;
 }
 function closeSettings(){$('#sheet').innerHTML='';}
+// "Amigos just lit" — timestamps the onset in Influx (mark, src=node) next to the engine data.
+// Only the first onset per ignition cycle is visible: the lamps stay lit until the key is cycled.
+function openAmigos(){
+ $('#sheet').innerHTML=`<div class=sheet onclick="if(event.target===this)closeSettings()"><div class=panel>
+  <h3>Amigos lit now</h3>
+  <button class="btn accent" onclick=mark(3)>3 lamps (ABS · TC · HDC)</button>
+  <button class="btn accent" onclick=mark(4)>4 lamps (+ brake)</button>
+  <button class=btn onclick=mark(0)>Lit, not sure how many</button>
+  <div class=foot>Press as soon as they light. The time goes to Influx next to the engine data. Cycle the ignition at the next stop and stand still for ~15 s, so the node can read which SLABS fault latched.</div>
+  <button class=btn style=opacity:.7 onclick=closeSettings()>Close</button></div></div>`;
+}
+async function mark(n){
+ let r={};try{r=await(await fetch('/mark?lamps='+n)).json();}catch(e){}
+ const b=$('#abtn');b.textContent=r.mark?('Marked · '+r.mark):'Mark failed';closeSettings();
+ setTimeout(()=>{b.textContent='Amigos';},4000);
+}
 const hit=u=>fetch(u).catch(()=>{});
 // A control action shows an INSTANT transition screen (spinner), fires the request, and
 // holds that screen until /data confirms the new state — the node can be mid K-line poll

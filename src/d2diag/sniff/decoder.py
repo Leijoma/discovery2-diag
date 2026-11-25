@@ -71,10 +71,10 @@ def decode_known(module: str, lid: int, data: bytes) -> "list[dict]":
         named = s.decode_named(data)
         if named is not None:
             kind = f"bit{s.bit}" if s.kind == "bit" else s.kind
-            out.append({"name": s.name, "offset": s.offset, "kind": kind,
+            out.append({"name": s.name, "offset": s.offset_for(data), "kind": kind,
                         "value": named, "unit": s.unit})
         else:
-            out.append({"name": s.name, "offset": s.offset, "kind": s.kind,
+            out.append({"name": s.name, "offset": s.offset_for(data), "kind": s.kind,
                         "value": round(s.decode(data), 3), "unit": s.unit})
     return out
 

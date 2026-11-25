@@ -161,3 +161,36 @@ session 2:  27 01 → 04 67 01 4A 4D 03   → seed = 4A 4D
 - **Conclusion: stop chasing EKA via SecurityAccess.** The code is known and stored in
   the sister project. The protocol is fully documented here should it ever be
   needed; the only thing missing is `f(seed)`, which cannot be derived from our data.
+
+
+## Read-only auth-boundary — the open question (test T-16)
+
+Everything above settled *EKA*: it is gated behind SecurityAccess, the seed rolls, the
+seed→key is unknown, and we have stopped chasing it. What is **not** settled is how much
+of the *rest* of the BCU is readable without auth. The reference tool ran SecurityAccess
+before every read (2026-08-09 sniff), so the sniff cannot distinguish "needs auth" from
+"the tool always authed". We have only ever probed `1A xx` (fixed identity block) and
+`21 CC` (returns the rolling seed) unauthenticated — never the live inputs or settings.
+
+**Hypothesis worth a cheap read-only test:** only EKA/key-programming is gated, and the
+input/lighting/door LIDs (`21 D8..E9`, `21 2C`, `21 2D`) read fine without a key. If so,
+the BCU gives us live body data (door states, key-in, locking, indicators) for the
+dashboard at zero auth cost.
+
+**Tool:** `tools/bcu_scan.py` (read-only; replaces the removed `bcu_probe.py`). It sweeps
+the known LID set twice in shuffled order and classifies each response into
+DATA / SEED-DECOY / DENIED / NRC / NO-RESPONSE / INCONSISTENT, flags the `21 CC` seed
+decoy against a freshly fetched seed, and with `--stimulus` runs a differential (change
+one input → see which LIDs' bytes move) to prove a positive response is *real* live data
+and not a placeholder. It sends only `21`/`1A`/`27 01` — no writes, no key, no actuators.
+
+Fill in after the next session:
+
+| LID(s) | Role | Bucket (no auth) | Moves on stimulus? | Conclusion |
+|---|---|---|---|---|
+| `21 D8..E9` | inputs (switch/door/lighting) | ? | ? | ? |
+| `21 2C`, `21 2D` | inputs | ? | ? | ? |
+| `21 C6..EB` | settings | ? | ? | ? |
+| `21 CC` | EKA | SEED-DECOY (known) | n/a | gated, decoy = seed |
+| `1A 80..9B` | identity | DATA (known, fixed) | n/a | `11 99 07 01 01 01 01 0a eb` |
+

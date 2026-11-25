@@ -85,7 +85,7 @@ Confirms mappings and names fields we don't read yet.
 | Accel Track 1 | `21 1B@0` | proven (0.3→4.7 V) |
 | Accel Track 2 | `21 1B@2` | proven (INVERTED 4.7→0.3 V) |
 | Accel Track 3 | `21 1B@4` | candidate — **Euro 3 (NNN) only**; 0 on Euro 2 |
-| Accel Supply | `21 1B@6` | proven (5.0 V ±0.1) |
+| Accel Supply | `21 1B@6` (8-byte answer) / `@8` (10-byte, MSB Defender) | proven @6 (5.0 V ±0.1); @8 candidate |
 | Idle Speed Error | `21 21` rpm_error | proven |
 
 ### Still UNMAPPED live fields (reference tool screen 5) — next capture goal

@@ -62,6 +62,7 @@ infrastructure only.
       but the only way to measure the **physical** edges (we only see our software side)
       and a more stable alternative to USB-KKL.
 - [ ] OBD splitter with pin 7 wired through for continued sniffing.
+- [ ] **ESP32 node bus-sharing (mute) polish** — practical TODOs kept in `esp32/README.md` (kline_node): listen-before-talk, passive sniff while muted, and confirming the `82` StopCommunication lands before yielding the bus. The core mute (release link `82` -> hold TxD idle) already works.
 
 ## Roadmap — data-hub direction (discussion 2026-08-23, not scheduled)
 

@@ -95,6 +95,13 @@ is `main/KLine.cpp`, ~300 lines, with the LID→field mapping in plain sight.
   right for this car — but a portable reader must sniff the length, not assume @6.
   (Note this cuts against the "way3 active ⇒ NNN" reading in the signal store;
   their length heuristic and our variant label disagree. Harmless for us, unclear in general.)
+  **Settled the other way round (2026-11-25):** openhood (github.com/tuffjocke/openhood,
+  issue #1) read a **1999 Defender with an early MSB ECU (EU2)**, which gave the **14-byte**
+  form: `03 63 10 50 13 88 00 00 13 A3`, supply@8 = 5.03 V and @6 = `00 00`. So the long form
+  is on an MSB and our short form is on an NNN, which is the reverse of that code's labels. Either way,
+  choose by length, not by variant. The signal store now does that: `accel_supply` carries
+  `offset_by_len {8: 6, 10: 8}` (data bytes after the LID). The 10-byte form is kandidat
+  for us; we have never seen it on our own car.
 
 ## The MAF question — this is the interesting part
 This is not a new offset for us: `1C`@4 was in the signal store as `maf_raw`

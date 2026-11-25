@@ -162,7 +162,11 @@
       4.9,
       5.1
     ],
-    "source": "21 1B@6 u16/1000 V (5V reference). Should sit rock-solid at 5.0 V ±0.1; a dip = short in the pedal wiring. Verified 5.01 V."
+    "source": "21 1B u16/1000 V (5V reference). Should sit rock-solid at 5.0 V ±0.1; a dip = short in the pedal wiring. Verified 5.01 V on our NNN, whose answer is 8 data bytes with supply @6 (capture 20260808: 02 86 11 21 00 00 13 92). A 1999 Defender (early MSB, EU2) answers 10 data bytes, 03 63 10 50 13 88 00 00 13 A3, supply @8 = 5.03 V and @6 = 0 (openhood, GitHub tuffjocke/openhood issue #1; td5-carplay-gauge agrees) — hence offset_by_len. The 10-byte form is kandidat for us.",
+    "offset_by_len": {
+      "8": 6,
+      "10": 8
+    }
   },
   {
     "name": "manifold_press",

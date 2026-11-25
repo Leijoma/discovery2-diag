@@ -116,15 +116,99 @@ node doesn't beat, except for one `bridge=1i` beat when cable mode is entered fr
 On by default (Settings → **SLABS clear at start**, `/slabsclear?on=1|0`, persisted). At the
 first successful standstill SLABS sample of each ignition cycle, the node:
 
-1. posts the logged block `21 11` to Influx as `slabs_clear.flog_before`, and goes on only if
-   the server answers 204 (never erase what isn't stored; it retries at the next sample if the
-   uplink isn't up yet);
+1. stores the logged block `21 11` as `slabs_clear.flog_before`, and goes on only once it is
+   stored: Influx (or the Pi relay) answered 204, or the line is in the flash spill. Never
+   erase what isn't stored;
 2. sends ClearFaults `14 FF FF` and waits for the late `54` (~300 ms, EEPROM write);
 3. re-reads `21 11` → `slabs_clear.ack`, `flog_after`, `nflog_after`.
 
 So each start records what the **previous** drive latched (B-011: `020` alone = 3 amigos, `027`
 = 4). It is the only write the node makes to SLABS. Switch it **off before a workshop visit**,
 because a cleared log shows them only the last drive, and the per-code counters are gone.
+
+**The window is short.** SLABS answers only until the car first moves after an ignition cycle.
+So the first SLABS sample runs before the TD5 session, about 12 s after boot. Until one
+succeeds, the node retries every 10 s at a standstill, until the car has moved. Once the car
+has moved there are no more SLABS samples this cycle: SLABS refuses them anyway, and each failed
+try froze live data for ~7 s at every stop. The old fixed
+60 s after boot missed the window on both drives of 2026-11-14. `slabs_rd` in the heartbeat and
+`/data` shows how far it got this cycle: 0 not read, 1 read, 2 read + cleared. When cycling the
+ignition at a stop, stand still until it is ≥ 1.
+
+**Without a clock.** The node boots with no clock (KL15 power) and gets NTP only once the uplink
+is up. A line spilled before that carries ` @<boot>:<ms>` instead of an epoch, and gets its epoch
+when it is flushed in the same boot. From an earlier boot, `slabs*`/`mark` lines go without a
+timestamp (Influx stamps them on arrival), and engine/node lines are dropped. The boot counter is
+in NVS (`boots`).
+
+**Engine lines and beats wait for the clock (2026-11-22).** With no clock, these go straight to the
+spill instead of being posted unstamped. Only the relay paths (`Discopi`, USB) work without a
+clock, and there an unstamped line only lands in quarantine. So in the car the node buffers while
+the Pi boots and finds its GPS fix. The Pi's `@T` (or NTP) then sets the clock, the backlog flushes
+with real timestamps, and the relay stores everything until it has an uplink. Data is lost only if
+the ignition goes off before the Pi has a fix.
+
+**WG never blocks the loop.** `wgStart()` asks for NTP and returns at once if the clock isn't
+set. `loop()` retries every 5 s and brings the tunnel up once it is. It used to wait up to 8 s
+for NTP, retried every 30 s, and on `Discopi` (no NTP answer) that froze live data for 9 s every
+30 s: the dropouts seen on the Pi's Car pane on 2026-11-17. `setup()` waits at most 3 s, and only
+when WiFi is already up.
+
+**`reset=wdt` in the heartbeat is usually a power dip, not a hang.** On 2026-11-14 it came at
+engine cranking with ignition on (11.8 V), and the other `wdt` boots line up with short ignition
+cycles at a stop. A clean power-off gives `poweron`. Both mark an ignition cycle in the data, **but
+not always**. On 2026-11-21 (second drive) the node gave five `wdt` boots while driving at 20–75 km/h
+with the engine running (18:48:48, 18:57:37, 18:58:50, 19:02:21, 19:04:56Z), so a `wdt` boot is not
+proof of an ignition cycle. `ESP_RST_WDT` is the RTC/other watchdog, not `task_wdt`/`int_wdt`/`panic`,
+which points at a supply interruption rather than a software hang. The driver then found a loose
+contact in the USB charger that feeds the node, which matches.
+
+### USB uplink to the Pi (2026-11-22)
+
+The node can be powered from a USB port on discopi. The same cable then carries its Influx writes
+and the Pi's GPS time, so the car needs neither WiFi nor NTP, and the loose-charger resets of
+2026-11-21 go away. WiFi stays as the fallback. The protocol uses the cable-mode port (115200 8N1,
+`\n`-terminated). The Pi's lines start with `@`, so they never collide with the cable-mode
+commands or the debug prints:
+
+| direction | line | meaning |
+|---|---|---|
+| Pi → node | `@T <epoch>` | keep-alive every ~5 s. The epoch is sent only while the Pi's clock is synchronised (GPS/chrony), otherwise `@T 0` |
+| Pi → node | `@A <seq>` | everything since the previous `@E` is committed to the relay's disk |
+| node → Pi | `@L <line>` | one line-protocol line, `precision=s`, the same as the HTTP body |
+| node → Pi | `@E <seq>` | end of one write |
+
+- **The node uses USB first.** It does so when it has heard any `@` line within 15 s. With no
+  `@A` within 1.5 s, it marks the host as gone until the next `@T`, and the write goes over WiFi
+  or to the flash spill.
+- **`@A` must mean what the relay's 204 means** (the lines are on disk), because the SLABS
+  read-and-clear erases on it.
+- **`@T`:** the node steps its clock only when it is unset or more than 2 s off.
+- **The heartbeat and `/data` carry `usb` (0/1).** The Pi stamps lines that have no timestamp on
+  arrival, the same as on the HTTP path.
+- **Opening the port must not reset the ESP.** The DTR/RTS auto-reset would reboot the node
+  ~30 s after key-on, in the middle of the SLABS window. Use a **plain**
+  `serial.Serial(path, 115200)`. The kernel raises DTR and RTS together on open, and HUPCL drops
+  them together on close, so EN never goes low. Do **not** set `dtr=False`/`rts=False` before
+  `open()`: pyserial applies them one at a time, and the moment when DTR≠RTS *is* a reset. The Pi
+  agent measured this on 2026-11-22: three opens gave three boots that way, and four plain opens
+  gave none.
+- **Cable mode still works over the same port.** A host that wants the K-line sends the bridge
+  commands (`PING`, `INIT`, …), and the node stops logging until it goes idle. The Pi then has to
+  stop the uplink while it does.
+- **Flashing over the Pi:** `esp32/flash_via_pi.sh <pio build dir> [--full]`. It copies the image
+  to discopi and runs esptool under `/data/kline-relay/node-port`, which takes the port from the
+  relay and hands it back afterwards. It writes `boot_app0.bin` too, because after an OTA update
+  the node boots from app1, and writing only 0x10000 would be ignored. Tested 2026-11-22 (app only,
+  17 s at 460800 baud). An esptool hard reset reports `reset=poweron`. OTA over WiFi still works.
+
+### Amigos mark
+
+The **Amigos** chip in the live page's header (or `/mark?lamps=3|4|0`) writes
+`mark,vehicle=RDL016,src=node amigos=1i,lamps=<n>i`, spilled if the uplink is down. In demo mode
+it is tagged `vehicle=demo`. The Pi's Car pane writes the same line with `src=pi` into its relay.
+The lamps stay lit until the next ignition cycle, so only the first onset per cycle can be marked.
+The per-segment SLABS read-and-clear above tells which code latched (test plan T-24).
 
 ### SLABS hold (fault-order test)
 
